@@ -13,7 +13,7 @@ against an EX4650 (Junos 23.4R2). Extracted values are stored as native LibreNMS
 and graphs. The web UI has a NETCONF status page, a per-device page (credentials, test
 connection, discover/poll now), a device overview panel, metric tables with graphs, a port
 tab with the per-port counters and a "run a show command" form. Remaining before a release:
-packaging on Packagist and the Tier 2 definitions. The
+packaging on Packagist. The
 definition engine and the poller/discovery module follow in the next phases
 (see `NETCONF_PLUGIN_PLAN.md` in the development notes).
 
@@ -159,6 +159,30 @@ Shipped (Junos):
 | `junos-interface-queues` | `show interfaces extensive` | per port/queue queued, transmitted and dropped packets; opt-in per device via attribute `netconf_queues=1` |
 | `junos-srx-cluster` | `show chassis cluster status` | state sensors per redundancy group and node (primary/secondary/…), monitor failures, failover counters; only on hardware matching `/srx/i` |
 | `junos-alarms` | `show system alarms`, `show chassis alarms` | major/minor alarm counts (`limit: 0` for major) |
+| `junos-ntp` | `show ntp status`, `show ntp associations` | state sensor synchronised/unsynchronised, stratum (`limit: 15`), reachable peers (`limit_low: 1`); metrics for offset, root delay/dispersion, jitter, frequency and per peer |
+| `junos-system` | `show system uptime`, `show system commit`, `show krt queue` | KRT queue length (`warn_limit: 100`); metrics for uptime, seconds since last commit, last commit epoch/user/client, load averages, per KRT queue |
+| `junos-license` | `show system license usage` | features in use without a valid license (`warn_limit: 0`); metrics per feature |
+| `junos-lacp` | `show lacp interfaces` | state sensor per LAG member (mux state), count of members not distributing per LAG (`limit: 0`) |
+| `junos-ldp` | `show ldp neighbor`, `show ldp session` | neighbour count, sessions not operational (`limit: 0`), state sensor per session |
+| `junos-rpki` | `show validation session`, `show validation statistics` | state sensor per cache session, sessions not up (`limit: 0`), invalid origin count; metrics per session (flaps, prefixes) and the validation statistics |
+| `junos-vrrp` | `show vrrp summary` | state sensor per interface/group (master, backup, init), groups neither master nor backup (`limit: 0`) |
+
+Commands whose subsystem is not running ("LDP instance is not running", "vrrp subsystem
+not running") are recognised and skipped without creating sensors, so every definition can
+be shipped enabled. The LDP, RPKI and VRRP element paths come from junos_exporter's
+collectors and were not yet verified on a device running those protocols; the other
+definitions are verified on an EX4650.
+
+Alert-rule examples beyond the sensor limits, using the JSON columns of `netconf_metrics`:
+
+```sql
+-- configuration committed in the last 10 minutes (junos-system/uptime)
+SELECT * FROM netconf_metrics WHERE netconf_metrics.device_id = ? AND mapping = 'uptime'
+  AND JSON_EXTRACT(`values`, '$.config_age') < 600
+-- BGP peer not established (junos-routing/bgp-peer)
+SELECT * FROM netconf_metrics WHERE netconf_metrics.device_id = ? AND mapping = 'bgp-peer'
+  AND JSON_UNQUOTE(JSON_EXTRACT(labels, '$.state')) != 'Established'
+```
 
 ### Schema
 
@@ -230,7 +254,9 @@ metrics:
 ```
 
 Namespaces are stripped before evaluation, so paths never need prefixes; attributes keep
-their local name (`elapsed-time/@seconds`). Rows inside `multi-routing-engine-results`
+their local name (`elapsed-time/@seconds`). Prefer `string(...)` over `number(...)` for
+values that may carry a sign or a unit (`+0.325`, `1,234 bps`): XPath's `number()` turns
+those into NaN, while the plugin parses strings itself. Rows inside `multi-routing-engine-results`
 (Virtual Chassis) are matched by `//` expressions like any other and expose `{re}`.
 
 ```bash

@@ -6,7 +6,8 @@ use DOMNode;
 
 /**
  * Text templates for descriptions and indexes: {index}, {re}, {n}, {row:<xpath>} and
- * {device:<fact>} (hostname etc., supplied by the caller).
+ * {device:<fact>} (hostname etc., supplied by the caller). {re:system} falls back to
+ * "system" when the row is not inside a multi-routing-engine wrapper.
  */
 final class Template
 {
@@ -31,7 +32,12 @@ final class Template
             return self::stringify($value);
         }, $template) ?? $template;
 
-        $out = preg_replace_callback('/\{(index|re|n)\}/', fn (array $m) => $vars[$m[1]] ?? '', $out) ?? $out;
+        // {re} / {index} / {n}, optionally with a fallback for empty values: {re:system}
+        $out = preg_replace_callback('/\{(index|re|n)(?::([^{}]*))?\}/', function (array $m) use ($vars) {
+            $value = $vars[$m[1]] ?? '';
+
+            return $value !== '' ? $value : ($m[2] ?? '');
+        }, $out) ?? $out;
         $out = preg_replace_callback('/\{device:([a-z_]+)\}/i', fn (array $m) => $vars['device.' . strtolower($m[1])] ?? '', $out) ?? $out;
 
         return trim(preg_replace('/\s+/', ' ', $out) ?? $out);

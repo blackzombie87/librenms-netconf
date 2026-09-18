@@ -13,3 +13,11 @@ File names follow `FixtureReplay::slug(command)` (`show route summary` → `show
 directory can be replayed with `lnms netconf:validate --replay=tests/fixtures/junos`; variants carry a
 suffix (`show-chassis-cluster-status-not-enabled.xml`). The duplicate-MAC, L3-context and chassis-alarm
 samples are the empty/none cases.
+
+Tier 2 samples (2026-09-18): `show-ntp-status.xml`, `show-ntp-associations.xml` (peer renamed),
+`show-krt-queue.xml`, `show-system-license-usage.xml`, `show-system-commit.xml` (four entries, user
+renamed), `show-system-uptime.xml` (multi-RE), `show-lacp-interfaces.xml` (two aggregates) are
+captures from the EX4650. `show-ldp-neighbor.xml`, `show-ldp-session.xml`, `show-validation-session.xml`,
+`show-validation-statistics.xml` and `show-vrrp-summary.xml` are **synthetic**, built from the element
+names in junos_exporter's `pkg/features/{ldp,rpki,vrrp}/rpc.go` (MIT) — the leaf runs none of these
+protocols; the `-not-running.xml` variants are its real `<output>` / `<xnm:warning>` replies.

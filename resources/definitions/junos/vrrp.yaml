@@ -1,0 +1,48 @@
+# VRRP group state per interface (VRRP-MIB is not polled by LibreNMS).
+name: junos-vrrp
+description: VRRP state per interface and group
+
+match:
+  os: junos
+
+commands:
+  summary:
+    cli: show vrrp summary
+    optional: true          # "vrrp subsystem not running"
+
+sensors:
+  - id: state
+    class: state
+    command: summary
+    rows: //vrrp-interface
+    index: concat(interface, '/', group)
+    descr: 'VRRP {row:interface} group {row:group}'
+    value: string(vrrp-state)
+    group: VRRP
+    states:
+      Master: { match: '/^master/i', value: 1, generic: 0 }
+      Backup: { match: '/^backup/i', value: 2, generic: 0 }
+      Init:   { match: '/^init/i',   value: 3, generic: 1 }
+      Other:  { match: '/.*/',       value: 4, generic: 2, default: true }
+
+  - id: groups-degraded
+    class: count
+    command: summary
+    index: "'total'"
+    descr: VRRP groups neither master nor backup
+    value: count(//vrrp-interface[not(contains('master backup', translate(vrrp-state, 'MASTERBACKUP', 'masterbackup')))])
+    group: VRRP
+    limit: 0
+
+metrics:
+  - id: group
+    command: summary
+    rows: //vrrp-interface
+    index: concat(interface, '/', group)
+    descr: 'VRRP {row:interface} group {row:group}'
+    fields:
+      master:   number(translate(vrrp-state, 'MASTER', 'master') = 'master')
+      state:    string(vrrp-state)
+      mode:     string(vrrp-mode)
+      vip:      string(virtual-ip-address)
+      if_state: string(interface-state)

@@ -125,3 +125,26 @@ it('honours every: and dedupes commands shared by definitions', function () {
     $result = $collector->collect([$mk('one', 3)], pollNumber: 0);
     expect($result->sensors())->toHaveCount(1);
 });
+
+it('treats text-only and warning replies as unavailable commands', function () {
+    $def = (new DefinitionParser)->parse([
+        'name' => 'na', 'commands' => ['ldp' => ['cli' => 'show ldp session', 'optional' => true], 'vrrp' => 'show vrrp summary'],
+        'sensors' => [
+            ['class' => 'count', 'command' => 'ldp', 'index' => "'s'", 'descr' => 'LDP sessions', 'value' => 'count(//ldp-session)'],
+            ['class' => 'count', 'command' => 'vrrp', 'index' => "'v'", 'descr' => 'VRRP groups', 'value' => 'count(//vrrp-interface)'],
+        ],
+    ], 'na.yaml');
+    $transport = new FakeTransport([
+        'show ldp session' => fixture('junos/show-ldp-session-not-running.xml'),
+        'show vrrp summary' => fixture('junos/show-vrrp-summary-not-running.xml'),
+    ]);
+
+    $result = (new Collector($transport))->collect([$def]);
+
+    expect($result->sensors())->toBe([])
+        ->and($result->commands['cli:show ldp session']->status)->toBe(CommandRun::SKIPPED)
+        ->and($result->commands['cli:show ldp session']->message)->toBe('LDP instance is not running')
+        ->and($result->commands['cli:show vrrp summary']->status)->toBe(CommandRun::ERROR)
+        ->and($result->commands['cli:show vrrp summary']->message)->toBe('vrrp subsystem not running - not needed by configuration.')
+        ->and($result->definitions['na']->skippedMappings)->toBe(['sensor1', 'sensor2']);
+});

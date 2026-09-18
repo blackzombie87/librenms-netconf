@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <commit-information>
+    <commit-history>
+      <sequence-number>0</sequence-number>
+      <user>netadmin</user>
+      <client>netconf</client>
+      <date-time junos:seconds="1789636652">2026-09-17 11:17:32 CEST</date-time>
+    </commit-history>
+    <commit-history>
+      <sequence-number>1</sequence-number>
+      <user>netadmin</user>
+      <client>netconf</client>
+      <date-time junos:seconds="1789636646">2026-09-17 11:17:26 CEST</date-time>
+      <comment>commit confirmed, rollback in 5mins</comment>
+      <log>configured by junos_config</log>
+    </commit-history>
+    <commit-history>
+      <sequence-number>2</sequence-number>
+      <user>netadmin</user>
+      <client>netconf</client>
+      <date-time junos:seconds="1785416486">2026-07-30 15:01:26 CEST</date-time>
+    </commit-history>
+    <commit-history>
+      <sequence-number>3</sequence-number>
+      <user>netadmin</user>
+      <client>netconf</client>
+      <date-time junos:seconds="1785416480">2026-07-30 15:01:20 CEST</date-time>
+      <comment>commit confirmed, rollback in 5mins</comment>
+      <log>configured by junos_config</log>
+    </commit-history>
+    
+    <rescue-configuration>
+      <user>netadmin</user>
+      <client>netconf</client>
+      <date-time junos:seconds="1789636654">2026-09-17 11:17:34 CEST</date-time>
+    </rescue-configuration>
+  </commit-information>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>

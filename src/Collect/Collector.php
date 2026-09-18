@@ -85,6 +85,15 @@ class Collector
             $reply = $spec->isRpc() ? $this->transport->rpc((string) $spec->rpc) : $this->transport->run((string) $spec->cli);
             $document = XmlDocument::fromReply($reply);
 
+            // Junos answers "daemon not running" style conditions with plain text (<output>) or an
+            // <xnm:warning> instead of data; treat that like a failed command
+            $unavailable = self::unavailableMessage($document);
+            if ($unavailable !== null) {
+                $status = $spec->optional ? CommandRun::SKIPPED : CommandRun::ERROR;
+
+                return new CommandRun($identity, $spec->label(), $status, microtime(true) - $t, strlen($reply->raw), message: $unavailable);
+            }
+
             return new CommandRun($identity, $spec->label(), CommandRun::OK, microtime(true) - $t, strlen($reply->raw), $document);
         } catch (RpcErrorException|ProtocolException $e) {
             // the device answered, but not usefully: only this command is affected
@@ -98,6 +107,27 @@ class Collector
 
             return new CommandRun($identity, $spec->label(), CommandRun::ERROR, microtime(true) - $t, message: $e->getMessage());
         }
+    }
+
+    /**
+     * Text of a reply that carries no XML data: <output>text</output> (e.g. "LDP instance is
+     * not running") or <warning><message>…</message></warning> ("vrrp subsystem not running").
+     */
+    public static function unavailableMessage(XmlDocument $document): ?string
+    {
+        $root = $document->root();
+        if ($root->localName === 'output') {
+            $text = trim(preg_replace('/\s+/', ' ', $root->textContent) ?? $root->textContent);
+
+            return $text !== '' ? $text : 'empty text output';
+        }
+        if ($root->localName === 'warning') {
+            $message = $document->scalar('normalize-space(message)', $root);
+
+            return is_string($message) && $message !== '' ? $message : 'warning without message';
+        }
+
+        return null;
     }
 
     private function extract(Definition $definition, CollectionResult $result): DefinitionResult

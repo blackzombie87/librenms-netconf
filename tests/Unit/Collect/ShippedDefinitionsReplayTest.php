@@ -56,7 +56,8 @@ it('replays every shipped definition without errors or warnings', function () {
 
     expect($result->ok())->toBeTrue()
         ->and($result->warnings())->toBe([])
-        ->and($result->summary()['commands_ok'])->toBe(11)
+        ->and($result->summary()['commands_ok'])->toBe(23) // distinct commands across the shipped definitions
+        ->and($result->summary()['commands_skipped'])->toBe(0)
         ->and($result->summary()['commands_failed'])->toBe(0)
         ->and(count($result->sensors()))->toBeGreaterThanOrEqual(33)
         ->and(count($result->metrics()))->toBeGreaterThanOrEqual(36);
@@ -139,4 +140,44 @@ it('expands the flattened SRX cluster table per node', function () {
         ->and(sensorsOf('junos-srx-cluster', 'rg-failovers')['RG1']->value)->toBe(1.0)
         ->and(metricsOf('junos-srx-cluster', 'rg-node')['RG0/node1']->values['priority'])->toBe(1.0)
         ->and(metricsOf('junos-srx-cluster', 'rg-node')['RG0/node1']->strings['status'])->toBe('secondary');
+});
+
+it('extracts the Tier 2 system, NTP, license and LACP data', function () {
+    expect(sensorsOf('junos-ntp', 'sync')['ntp']->state?->label)->toBe('Synchronized')
+        ->and(sensorsOf('junos-ntp', 'stratum')['stratum']->value)->toBe(4.0)
+        ->and(sensorsOf('junos-ntp', 'peers-reachable')['reachable']->value)->toBe(1.0)
+        ->and(array_keys(metricsOf('junos-ntp', 'peer')))->toBe(['ntp1.example.net'])
+        ->and(metricsOf('junos-ntp', 'peer')['ntp1.example.net']->values['selected'])->toBe(1.0)
+        ->and(metricsOf('junos-ntp', 'system')['system']->values['offset_ms'])->toBe(0.325185);
+
+    expect(sensorsOf('junos-system', 'krt-queue')['total']->value)->toBe(0.0)
+        ->and(metricsOf('junos-system', 'krt'))->toHaveCount(32)
+        ->and(metricsOf('junos-system', 'uptime')['localre']->values['config_age'])->toBe(93242.0)
+        ->and(metricsOf('junos-system', 'uptime')['localre']->strings['config_user'])->toBe('netadmin')
+        ->and(metricsOf('junos-system', 'commit')['last']->values['history'])->toBe(4.0)
+        ->and(metricsOf('junos-system', 'commit')['last']->values['epoch'])->toBe(1789636652.0);
+
+    expect(sensorsOf('junos-license', 'unlicensed')['unlicensed']->value)->toBe(4.0)
+        ->and(metricsOf('junos-license', 'feature')['evpn-vxlan']->strings['validity'])->toBe('invalid');
+
+    expect(array_keys(sensorsOf('junos-lacp', 'member-state')))->toBe(['xe-0/0/1', 'xe-0/0/2'])
+        ->and(sensorsOf('junos-lacp', 'member-state')['xe-0/0/1']->descr)->toBe('LACP xe-0/0/1 in ae1')
+        ->and(sensorsOf('junos-lacp', 'members-degraded')['ae1']->value)->toBe(0.0);
+});
+
+it('extracts the synthetic LDP, RPKI and VRRP samples', function () {
+    expect(sensorsOf('junos-ldp', 'neighbors')['total']->value)->toBe(2.0)
+        ->and(sensorsOf('junos-ldp', 'sessions-down')['total']->value)->toBe(1.0)
+        ->and(sensorsOf('junos-ldp', 'session-state')['192.0.2.101']->state?->label)->toBe('Operational')
+        ->and(sensorsOf('junos-ldp', 'session-state')['192.0.2.102']->state?->generic)->toBe(2);
+
+    expect(sensorsOf('junos-rpki', 'session-state')['192.0.2.202']->state?->label)->toBe('Transition')
+        ->and(sensorsOf('junos-rpki', 'sessions-down')['total']->value)->toBe(1.0)
+        ->and(sensorsOf('junos-rpki', 'invalid-origins')['invalid']->value)->toBe(1200.0)
+        ->and(metricsOf('junos-rpki', 'session')['192.0.2.201']->types['flaps'])->toBe('COUNTER');
+
+    expect(array_keys(sensorsOf('junos-vrrp', 'state')))->toBe(['irb.100/100', 'irb.200/200', 'irb.300/300'])
+        ->and(sensorsOf('junos-vrrp', 'state')['irb.300/300']->state?->label)->toBe('Init')
+        ->and(sensorsOf('junos-vrrp', 'groups-degraded')['total']->value)->toBe(1.0)
+        ->and(metricsOf('junos-vrrp', 'group')['irb.100/100']->values['master'])->toBe(1.0);
 });

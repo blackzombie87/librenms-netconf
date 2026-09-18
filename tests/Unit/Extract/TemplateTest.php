@@ -33,3 +33,11 @@ it('stringifies numbers without trailing zeros', function () {
         ->and(Template::stringify(true))->toBe('1')
         ->and(Template::stringify(null))->toBe('');
 });
+
+it('supports fallbacks for empty placeholders', function () {
+    $doc = new XmlDocument('<r/>');
+
+    expect(Template::render('{re:system}', $doc, $doc->root(), ['re' => '']))->toBe('system')
+        ->and(Template::render('{re:system}', $doc, $doc->root(), ['re' => 're0']))->toBe('re0')
+        ->and(Template::render('{index:none}-{n:1}', $doc, $doc->root(), ['index' => '', 'n' => '']))->toBe('none-1');
+});

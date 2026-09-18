@@ -1,0 +1,44 @@
+# LDP neighbours and sessions (MPLS-LDP-STD-MIB is not polled by LibreNMS).
+name: junos-ldp
+description: LDP neighbour count and session states
+
+match:
+  os: junos
+
+commands:
+  neighbor:
+    cli: show ldp neighbor
+    optional: true          # "LDP instance is not running"
+  session:
+    cli: show ldp session
+    optional: true
+
+sensors:
+  - id: neighbors
+    class: count
+    command: neighbor
+    index: "'total'"
+    descr: LDP neighbours
+    value: count(//ldp-neighbor)
+    group: LDP
+
+  - id: sessions-down
+    class: count
+    command: session
+    index: "'total'"
+    descr: LDP sessions not operational
+    value: count(//ldp-session[ldp-session-state != 'Operational'])
+    group: LDP
+    limit: 0
+
+  - id: session-state
+    class: state
+    command: session
+    rows: //ldp-session
+    index: string(ldp-neighbor-address)
+    descr: 'LDP session {index}'
+    value: string(ldp-session-state)          # Operational | Nonexistent | Initialized | ...
+    group: LDP
+    states:
+      Operational: { value: 1, generic: 0 }
+      Down:        { match: '/.*/', value: 2, generic: 2, default: true }

@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <multi-routing-engine-results>
+    <multi-routing-engine-item>
+      <re-name>localre</re-name>
+      <system-uptime-information xmlns="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+        <current-time>
+          <date-time junos:seconds="1789729894">2026-09-18 13:11:34 CEST</date-time>
+        </current-time>
+        <time-source> NTP CLOCK </time-source>
+        <system-booted-time>
+          <date-time junos:seconds="1786824747">2026-08-15 22:12:27 CEST</date-time>
+          <time-length junos:seconds="2905147">4w5d 14:59</time-length>
+        </system-booted-time>
+        <protocols-started-time>
+          <date-time junos:seconds="1786824835">2026-08-15 22:13:55 CEST</date-time>
+          <time-length junos:seconds="2905059">4w5d 14:57</time-length>
+        </protocols-started-time>
+        <last-configured-time>
+          <date-time junos:seconds="1789636652">2026-09-17 11:17:32 CEST</date-time>
+          <time-length junos:seconds="93242">1d 01:54</time-length>
+          <user>netadmin</user>
+        </last-configured-time>
+        <uptime-information>
+          <date-time junos:seconds="1789729894">1:11PM</date-time>
+          <up-time junos:seconds="2905140">33 days, 14:59</up-time>
+          <active-user-count junos:format="0 users">0</active-user-count>
+          <load-average-1>0.19</load-average-1>
+          <load-average-5>0.19</load-average-5>
+          <load-average-15>0.18</load-average-15>
+          <user-table/>
+        </uptime-information>
+      </system-uptime-information>
+    </multi-routing-engine-item>
+  </multi-routing-engine-results>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>

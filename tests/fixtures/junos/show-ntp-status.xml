@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <ntp-status>
+    <associd>0</associd>
+    <statusinfo>0615 leap_none, sync_ntp, 1 event, clock_sync</statusinfo>
+    <version>"ntpd 4.2.8p15"</version>
+    <processor>"amd64"</processor>
+    <system>"FreeBSD"</system>
+    <leap>00</leap>
+    <stratum>4</stratum>
+    <precision>-23</precision>
+    <rootdelay>25.100</rootdelay>
+    <rootdisp>41.878</rootdisp>
+    <refid>192.0.2.9</refid>
+    <reftime>ee579993.a9609475  Fri, Sep 18 2026 13:05:55.661</reftime>
+    <clock>ee579ae2.4af93907  Fri, Sep 18 2026 13:11:30.292</clock>
+    <peer>59705</peer>
+    <tc>10</tc>
+    <mintc>3</mintc>
+    <offset>+0.325185</offset>
+    <frequency>+0.212</frequency>
+    <sys-jitter>0.000000</sys-jitter>
+    <clk-jitter>0.505</clk-jitter>
+    <clk-wander>0.066</clk-wander>
+  </ntp-status>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>

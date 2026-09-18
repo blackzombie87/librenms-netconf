@@ -1,0 +1,16 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R0/junos">
+    <!-- synthetic sample built from junos_exporter's element names (MIT), not a device capture -->
+    <rv-statistics-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <rv-statistics>
+            <rv-record-count>510000</rv-record-count>
+            <rv-replication-record-count>510000</rv-replication-record-count>
+            <rv-prefix-count>412000</rv-prefix-count>
+            <rv-origin-as-count>41000</rv-origin-as-count>
+            <rv-memory-utilization>73400320</rv-memory-utilization>
+            <rv-policy-origin-validation-results-valid>250000</rv-policy-origin-validation-results-valid>
+            <rv-policy-origin-validation-results-invalid>1200</rv-policy-origin-validation-results-invalid>
+            <rv-policy-origin-validation-results-unknown>640000</rv-policy-origin-validation-results-unknown>
+        </rv-statistics>
+    </rv-statistics-information>
+    <cli><banner></banner></cli>
+</rpc-reply>

@@ -1,0 +1,71 @@
+# RPKI validation sessions and origin-validation statistics (no MIB).
+name: junos-rpki
+description: RPKI cache sessions, flaps, prefix counts and validation results
+
+match:
+  os: junos
+
+commands:
+  session:
+    cli: show validation session
+    optional: true          # "RV instance is not running"
+  stats:
+    cli: show validation statistics
+    optional: true
+
+sensors:
+  - id: session-state
+    class: state
+    command: session
+    rows: //rv-session
+    index: string(ip-address)
+    descr: 'RPKI session {index}'
+    value: string(session-state)
+    group: RPKI
+    states:
+      Up:         { match: '/^Up/',   value: 1, generic: 0 }
+      Down:       { match: '/^Down/', value: 3, generic: 2 }
+      Transition: { match: '/.*/',    value: 2, generic: 1, default: true }
+
+  - id: sessions-down
+    class: count
+    command: session
+    index: "'total'"
+    descr: RPKI sessions not up
+    value: count(//rv-session[not(starts-with(session-state, 'Up'))])
+    group: RPKI
+    limit: 0
+
+  - id: invalid-origins
+    class: count
+    command: stats
+    index: "'invalid'"
+    descr: RPKI origin validation results invalid
+    value: number(//rv-statistics/rv-policy-origin-validation-results-invalid)
+    group: RPKI
+
+metrics:
+  - id: session
+    command: session
+    rows: //rv-session
+    index: string(ip-address)
+    descr: 'RPKI session {index}'
+    fields:
+      flaps: { xpath: number(session-flaps), type: COUNTER }
+      v4:    number(ip-prefix-count)
+      v6:    number(ip6-prefix-count)
+      state: string(session-state)
+
+  - id: statistics
+    command: stats
+    index: "'statistics'"
+    descr: RPKI statistics
+    fields:
+      records:     number(//rv-statistics/rv-record-count)
+      replication: number(//rv-statistics/rv-replication-record-count)
+      prefixes:    number(//rv-statistics/rv-prefix-count)
+      origin_as:   number(//rv-statistics/rv-origin-as-count)
+      memory:      number(//rv-statistics/rv-memory-utilization)
+      valid:       number(//rv-statistics/rv-policy-origin-validation-results-valid)
+      invalid:     number(//rv-statistics/rv-policy-origin-validation-results-invalid)
+      unknown:     number(//rv-statistics/rv-policy-origin-validation-results-unknown)

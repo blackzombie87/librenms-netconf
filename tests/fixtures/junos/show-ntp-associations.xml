@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <ntp-associations>
+    <association>
+      <remote>*ntp1.example.net</remote>
+      <refid>192.0.2.9</refid>
+      <auth>-</auth>
+      <st>3</st>
+      <association-type>u</association-type>
+      <when>335</when>
+      <poll>1024</poll>
+      <reach>377</reach>
+      <delay>3.203</delay>
+      <offset>+0.325</offset>
+      <jitter>0.332</jitter>
+      <rootdelay>21.896</rootdelay>
+      <rootdisp>21.225</rootdisp>
+    </association>
+  </ntp-associations>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>

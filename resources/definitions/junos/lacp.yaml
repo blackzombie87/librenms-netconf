@@ -1,0 +1,47 @@
+# LAG health: LACP mux state per member link (IEEE8023-LAG-MIB gives no per-member state).
+name: junos-lacp
+description: LACP member state per aggregate
+
+match:
+  os: junos
+
+commands:
+  lacp:
+    cli: show lacp interfaces
+    optional: true          # no LAGs configured
+
+sensors:
+  - id: member-state
+    class: state
+    command: lacp
+    rows: //lacp-interface-information/lag-lacp-protocol
+    index: string(name)
+    descr: 'LACP {index} in {row:../lag-lacp-header/aggregate-name}'
+    value: string(lacp-mux-state)
+    group: LACP
+    states:
+      Distributing: { match: '/^Collecting distributing/', value: 1, generic: 0 }
+      Attached:     { value: 2, generic: 1 }
+      Waiting:      { value: 3, generic: 1 }
+      Detached:     { value: 4, generic: 2 }
+      Unknown:      { match: '/.*/', value: 5, generic: 3, default: true }
+
+  - id: members-degraded
+    class: count
+    command: lacp
+    rows: //lacp-interface-information
+    index: string(lag-lacp-header/aggregate-name)
+    descr: 'LACP {index} members not distributing'
+    value: count(lag-lacp-protocol[lacp-mux-state != 'Collecting distributing'])
+    group: LACP
+    limit: 0
+
+metrics:
+  - id: aggregate
+    command: lacp
+    rows: //lacp-interface-information
+    index: string(lag-lacp-header/aggregate-name)
+    descr: 'LACP {index}'
+    fields:
+      members:      count(lag-lacp-protocol)
+      distributing: count(lag-lacp-protocol[lacp-mux-state = 'Collecting distributing'])

@@ -1,0 +1,22 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R0/junos">
+    <!-- synthetic sample built from junos_exporter's element names (MIT), not a device capture -->
+    <rv-session-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <rv-session>
+            <ip-address>192.0.2.201</ip-address>
+            <session-state>Up</session-state>
+            <session-flaps>3</session-flaps>
+            <session-uptime>2d 04:11:20</session-uptime>
+            <ip-prefix-count>412000</ip-prefix-count>
+            <ip6-prefix-count>98000</ip6-prefix-count>
+        </rv-session>
+        <rv-session>
+            <ip-address>192.0.2.202</ip-address>
+            <session-state>Connect</session-state>
+            <session-flaps>17</session-flaps>
+            <session-uptime>00:00:00</session-uptime>
+            <ip-prefix-count>0</ip-prefix-count>
+            <ip6-prefix-count>0</ip6-prefix-count>
+        </rv-session>
+    </rv-session-information>
+    <cli><banner></banner></cli>
+</rpc-reply>

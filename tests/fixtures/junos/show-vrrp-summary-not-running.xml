@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <xnm:warning xmlns="http://xml.juniper.net/xnm/1.1/xnm" xmlns:xnm="http://xml.juniper.net/xnm/1.1/xnm">
+    <message>
+            vrrp subsystem not running - not needed by configuration.
+        </message>
+    <reason>
+      <daemon>vrrp</daemon>
+      <process-not-configured/>
+    </reason>
+  </xnm:warning>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>

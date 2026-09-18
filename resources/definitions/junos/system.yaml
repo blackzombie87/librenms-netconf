@@ -1,0 +1,62 @@
+# Control-plane facts without a MIB: KRT queue depth, last commit, uptime details.
+name: junos-system
+description: KRT queue length, last configuration commit and uptime details
+
+match:
+  os: junos
+
+commands:
+  uptime:
+    cli: show system uptime
+  commit:
+    cli: show system commit
+    optional: true          # needs view-configuration; skipped silently otherwise
+  krt:
+    cli: show krt queue
+    optional: true
+
+sensors:
+  - id: krt-queue
+    class: count
+    command: krt
+    index: "'total'"
+    descr: KRT queue length
+    value: sum(//krtq-queue-length)
+    group: System
+    warn_limit: 100
+
+metrics:
+  - id: uptime
+    command: uptime
+    rows: //system-uptime-information
+    index: '{re:system}'
+    descr: 'Uptime {index}'
+    fields:
+      uptime:        number(uptime-information/up-time/@seconds)
+      config_age:    number(last-configured-time/time-length/@seconds)
+      last_config:   number(last-configured-time/date-time/@seconds)
+      config_user:   string(last-configured-time/user)
+      load1:         number(uptime-information/load-average-1)
+      load5:         number(uptime-information/load-average-5)
+      load15:        number(uptime-information/load-average-15)
+      users:         number(uptime-information/active-user-count)
+
+  - id: commit
+    command: commit
+    rows: //commit-history[sequence-number = 0]
+    index: "'last'"
+    descr: Last commit
+    fields:
+      epoch:   number(date-time/@seconds)
+      history: count(//commit-history)
+      user:    string(user)
+      client:  string(client)
+      comment: string(comment)
+
+  - id: krt
+    command: krt
+    rows: //krt-queue
+    index: string(krtq-type)
+    descr: 'KRT {index}'
+    fields:
+      length: number(krtq-queue-length)

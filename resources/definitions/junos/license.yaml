@@ -1,0 +1,33 @@
+# License usage: features in use without a valid license (Junos raises a minor alarm too).
+name: junos-license
+description: Licensed vs. used feature counts
+
+match:
+  os: junos
+
+commands:
+  usage:
+    cli: show system license usage
+    optional: true
+
+sensors:
+  - id: unlicensed
+    class: count
+    command: usage
+    index: "'unlicensed'"
+    descr: Features in use without valid license
+    value: count(//feature-summary[validity-type != 'valid' and number(used-licensed) > 0])
+    group: License
+    warn_limit: 0
+
+metrics:
+  - id: feature
+    command: usage
+    rows: //feature-summary
+    index: string(name)
+    descr: 'License {row:description}'
+    fields:
+      licensed: number(licensed)
+      used:     number(used-licensed)
+      needed:   number(needed)
+      validity: string(validity-type)

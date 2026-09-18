@@ -1,0 +1,77 @@
+# NTP synchronisation state (no MIB on Junos).
+name: junos-ntp
+description: NTP sync state, stratum, offset and per-peer reachability
+
+match:
+  os: junos
+
+commands:
+  status:
+    cli: show ntp status
+    optional: true          # "ntpd not running" when NTP is not configured
+  assoc:
+    cli: show ntp associations
+    optional: true
+
+sensors:
+  - id: sync
+    class: state
+    command: status
+    index: "'ntp'"
+    descr: NTP synchronisation
+    value: string(//ntp-status/statusinfo)
+    group: NTP
+    states:
+      Unsynchronized: { match: '/sync_unspec|sync_alarm|leap_alarm|clock_unsync/', value: 2, generic: 2 }
+      Synchronized:   { match: '/sync_ntp|clock_sync/',                            value: 1, generic: 0 }
+      Unknown:        { match: '/.*/', value: 3, generic: 3, default: true }
+
+  - id: stratum
+    class: count
+    command: status
+    index: "'stratum'"
+    descr: NTP stratum
+    value: number(//ntp-status/stratum)
+    group: NTP
+    limit: 15               # 16 = not synchronised
+
+  - id: peers-reachable
+    class: count
+    command: assoc
+    index: "'reachable'"
+    descr: NTP peers reachable
+    value: count(//association[reach != '0'])
+    group: NTP
+    limit_low: 1
+
+metrics:
+  - id: system
+    command: status
+    index: "'system'"
+    descr: NTP system
+    fields:
+      offset_ms:    string(//ntp-status/offset)     # "+0.325": XPath number() rejects a leading +, the plugin parses strings
+      rootdelay_ms: number(//ntp-status/rootdelay)
+      rootdisp_ms:  number(//ntp-status/rootdisp)
+      sys_jitter:   number(//ntp-status/sys-jitter)
+      clk_jitter:   number(//ntp-status/clk-jitter)
+      frequency:    string(//ntp-status/frequency)
+      stratum:      number(//ntp-status/stratum)
+      refid:        string(//ntp-status/refid)
+      status:       string(//ntp-status/statusinfo)
+
+  - id: peer
+    command: assoc
+    rows: //association
+    # ntpq marks the selected peer with * (candidates +, others x . - # o); strip the marker
+    index: concat(translate(substring(remote, 1, 1), '*+#-xo. ', ''), substring(remote, 2))
+    descr: 'NTP peer {index}'
+    fields:
+      stratum:   number(st)
+      delay_ms:  number(delay)
+      offset_ms: string(offset)
+      jitter_ms: number(jitter)
+      poll:      number(poll)
+      selected:  number(starts-with(remote, '*'))
+      reach:     string(reach)
+      refid:     string(refid)
