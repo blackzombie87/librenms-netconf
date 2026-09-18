@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 – 2026-09-18
+
+Fixes from the external review of 1.0.0 (`docs/REVIEW-2026-09-v1.0.0.md`).
 
 - One poller log line per run summarises the RRD layout work (files verified, data sources
   added, rrdtool failures) instead of only logging appended data sources per file.
