@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <alarm-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-alarm">
+    <alarm-summary>
+      <active-alarm-count>4</active-alarm-count>
+    </alarm-summary>
+    <alarm-detail>
+      <alarm-time junos:seconds="1789704053">
+                2026-09-18 06:00:53 CEST
+            </alarm-time>
+      <alarm-class>Minor</alarm-class>
+      <alarm-description>EVPN-VXLAN feature(262) usage requires a license</alarm-description>
+      <alarm-short-description>evpn-vxlan</alarm-short-description>
+      <alarm-type>System</alarm-type>
+    </alarm-detail>
+    <alarm-detail>
+      <alarm-time junos:seconds="1789704053">
+                2026-09-18 06:00:53 CEST
+            </alarm-time>
+      <alarm-class>Minor</alarm-class>
+      <alarm-description>ESI-LAG(252) usage requires a license</alarm-description>
+      <alarm-short-description>esi-lag</alarm-short-description>
+      <alarm-type>System</alarm-type>
+    </alarm-detail>
+    <alarm-detail>
+      <alarm-time junos:seconds="1789704053">
+                2026-09-18 06:00:53 CEST
+            </alarm-time>
+      <alarm-class>Minor</alarm-class>
+      <alarm-description>VxLAN(164) usage requires a license</alarm-description>
+      <alarm-short-description>vxlan</alarm-short-description>
+      <alarm-type>System</alarm-type>
+    </alarm-detail>
+    <alarm-detail>
+      <alarm-time junos:seconds="1789704053">
+                2026-09-18 06:00:53 CEST
+            </alarm-time>
+      <alarm-class>Minor</alarm-class>
+      <alarm-description>BGP Routing Protocol(47) usage requires a license</alarm-description>
+      <alarm-short-description>bgp</alarm-short-description>
+      <alarm-type>System</alarm-type>
+    </alarm-detail>
+  </alarm-information>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>

@@ -17,7 +17,7 @@ class NetconfRunCommand extends Command
 
     protected $signature = 'netconf:run
         {device : Hostname, IP, sysName or device_id}
-        {command* : Operational command, e.g. show version (quotes optional)}
+        {cmd* : Operational command, e.g. show version (quotes optional; "command" is reserved by artisan)}
         {--rpc : Treat the command as a raw RPC body (netconf transport only)}
         {--raw : Print the reply exactly as received}
         {--o|output= : Write the reply to this file instead of stdout}'
@@ -27,7 +27,7 @@ class NetconfRunCommand extends Command
 
     public function handle(): int
     {
-        $command = implode(' ', (array) $this->argument('command'));
+        $command = implode(' ', (array) $this->argument('cmd'));
 
         try {
             $credentials = $this->resolveCredentials();

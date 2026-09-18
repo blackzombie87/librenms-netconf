@@ -7,7 +7,9 @@ YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
 **Status: Phase 1 — connectivity and tooling.** Transports, credentials, the settings
-page and the `lnms netconf:test` / `lnms netconf:run` commands are in place. The
+page and the `lnms netconf:test` / `lnms netconf:run` commands are in place and verified
+against an EX4650 (Junos 23.4R2) over the cli transport on port 22 and the NETCONF
+subsystem on ports 830 and 22. The
 definition engine and the poller/discovery module follow in the next phases
 (see `NETCONF_PLUGIN_PLAN.md` in the development notes).
 
@@ -80,7 +82,8 @@ prefix; the settings form never shows them again.
 ## Commands
 
 ```bash
-# login + version + effective permissions of the login class
+# login, "show version" and the login class' permission list ("show cli authorization");
+# warns when "view" is missing or the account has configuration rights
 ./lnms netconf:test leaf1.example.net
 ./lnms netconf:test leaf1.example.net --transport=netconf --port=830 --capabilities
 ./lnms netconf:test 10.0.0.5 --username=librenms --ask-password   # host not yet in LibreNMS

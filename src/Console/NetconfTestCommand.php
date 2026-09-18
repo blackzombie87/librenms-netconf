@@ -111,17 +111,25 @@ class NetconfTestCommand extends Command
             return true; // informational only
         }
 
-        $text = trim((string) $reply->payload()?->textContent);
-        $this->line('<info>show cli authorization:</info>');
-        foreach (preg_split('/\R/', $text) ?: [] as $line) {
-            $line = trim($line);
-            if ($line !== '') {
-                $this->line('  ' . $line);
-            }
+        $permissions = [];
+        foreach ($reply->xpath()->query('//*[local-name()="user-permission-entry"]/*[local-name()="permission-type"]') ?: [] as $node) {
+            $permissions[] = trim($node->textContent);
         }
+        $permissions = array_values(array_unique(array_filter($permissions, fn ($p) => $p !== '' && $p !== 'none')));
+        $class = $reply->text('user-information/user-class') ?? '?';
 
-        if (! str_contains($text, 'view')) {
+        $this->table(['show cli authorization', 'Value'], $this->rows([
+            'user' => $reply->text('user-information/user') ?? '?',
+            'class' => $class,
+            'permissions' => count($permissions),
+            'list' => wordwrap(implode(', ', $permissions), 70, "\n", true),
+        ]));
+
+        if (! in_array('view', $permissions, true)) {
             $this->warn('The login class does not report the "view" permission; most show commands will be denied.');
+        }
+        if ($class === 'super-user' || in_array('all-control', $permissions, true)) {
+            $this->warn('The account has configuration rights. Use a read-only class for monitoring (see README).');
         }
 
         return true;

@@ -74,3 +74,20 @@ it('pretty prints', function () {
 
     expect($reply->pretty())->toBe("<?xml version=\"1.0\"?>\n<a>\n  <b>1</b>\n</a>\n");
 });
+
+it('looks through the multi-routing-engine wrapper when extracting text', function () {
+    $reply = new Reply('show version', fixture('junos/show-version-multi-re.xml'));
+
+    expect($reply->payload()?->localName)->toBe('multi-routing-engine-results')
+        ->and($reply->text('host-name'))->toBe('leaf1')
+        ->and($reply->text('product-model'))->toBe('ex4650-48y-8c')
+        ->and($reply->text('junos-version'))->toBe('23.4R2-S7.4')
+        ->and($reply->text('user-information/user-class'))->toBeNull();
+});
+
+it('reads nested paths with a descendant first step', function () {
+    $reply = new Reply('show virtual-chassis status', fixture('junos/show-virtual-chassis-status.xml'));
+
+    expect($reply->text('member/member-role'))->toBe('Master*')
+        ->and($reply->text('virtual-chassis-id-information/virtual-chassis-mode'))->toBe('Enabled');
+});

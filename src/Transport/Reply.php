@@ -198,14 +198,18 @@ class Reply
     }
 
     /**
+     * The first step is searched anywhere below the context (so multi-RE wrappers such as
+     * multi-routing-engine-results/multi-routing-engine-item are transparent), further steps
+     * are direct children.
+     *
      * @param  list<string>  $paths  slash separated local names, e.g. "error-info/bad-element"
      */
     private function firstText(DOMXPath $xpath, DOMElement $context, array $paths): ?string
     {
         foreach ($paths as $path) {
             $expr = '.';
-            foreach (explode('/', $path) as $step) {
-                $expr .= sprintf('/*[local-name()="%s"]', $step);
+            foreach (explode('/', $path) as $i => $step) {
+                $expr .= sprintf('%s*[local-name()="%s"]', $i === 0 ? '//' : '/', $step);
             }
             $nodes = $xpath->query($expr, $context);
             if ($nodes !== false && $nodes->length > 0) {

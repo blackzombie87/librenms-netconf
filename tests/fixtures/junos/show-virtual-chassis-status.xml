@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <virtual-chassis-information>
+    <virtual-chassis-id-information>
+      <virtual-chassis-id>0000.5e00.5301</virtual-chassis-id>
+      <virtual-chassis-mode>Enabled</virtual-chassis-mode>
+    </virtual-chassis-id-information>
+    <member-list junos:style="single-slot">
+      <member>
+        <member-status>Prsnt</member-status>
+        <member-id>0</member-id>
+        <fpc-slot>(FPC 0)</fpc-slot>
+        <member-serial-number>XX0000000001</member-serial-number>
+        <member-model>ex4650-48y-8c</member-model>
+        <member-priority>128</member-priority>
+        <member-mixed-mode>N</member-mixed-mode>
+        <member-route-mode>VC</member-route-mode>
+        <member-role>Master*</member-role>
+        <neighbor-list>
+                </neighbor-list>
+      </member>
+    </member-list>
+    <next-member-information>
+      <next-member-id>1</next-member-id>
+      <next-fpc-slot>1</next-fpc-slot>
+    </next-member-information>
+  </virtual-chassis-information>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>

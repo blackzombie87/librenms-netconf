@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <alarm-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-alarm">
+    <alarm-summary>
+      <no-active-alarms/>
+    </alarm-summary>
+  </alarm-information>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>

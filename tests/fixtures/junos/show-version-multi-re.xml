@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+  <multi-routing-engine-results>
+    <multi-routing-engine-item>
+      <re-name>localre</re-name>
+      <software-information>
+        <host-name>leaf1</host-name>
+        <product-model>ex4650-48y-8c</product-model>
+        <product-name>ex4650-48y-8c</product-name>
+        <junos-version>23.4R2-S7.4</junos-version>
+        <package-information>
+          <name>os-kernel</name>
+          <package-name>os-kernel-prd-x86-64-20250723.90ae8a5_builder_stable_12_234</package-name>
+          <comment>JUNOS OS Kernel 64-bit  [20250723.90ae8a5_builder_stable_12_234]</comment>
+        </package-information>
+        <package-information>
+          <name>os-libs</name>
+          <package-name>os-libs-12-x86-64-20250723.90ae8a5_builder_stable_12_234</package-name>
+          <comment>JUNOS OS libs [20250723.90ae8a5_builder_stable_12_234]</comment>
+        </package-information>
+        <package-information>
+          <name>os-runtime</name>
+          <package-name>os-runtime-x86-64-20250723.90ae8a5_builder_stable_12_234</package-name>
+          <comment>JUNOS OS runtime [20250723.90ae8a5_builder_stable_12_234]</comment>
+        </package-information>
+</software-information>
+    </multi-routing-engine-item>
+  </multi-routing-engine-results>
+  <cli>
+    <banner>{master:0}</banner>
+  </cli>
+</rpc-reply>
