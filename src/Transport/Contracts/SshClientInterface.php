@@ -36,5 +36,8 @@ interface SshClientInterface
 
     public function serverIdentification(): string;
 
+    /** Server host key as "type base64" once connected, '' before. */
+    public function serverHostKey(): string;
+
     public function disconnect(): void;
 }

@@ -8,19 +8,23 @@ use SafferIt\LibrenmsNetconf\Transport\Contracts\ChannelInterface;
 use SafferIt\LibrenmsNetconf\Transport\Contracts\SshClientInterface;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\AuthenticationException;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\ConnectionException;
+use SafferIt\LibrenmsNetconf\Transport\Exceptions\HostKeyException;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\TimeoutException;
 use Throwable;
 
 /**
  * SshClientInterface backed by phpseclib 3.
  *
- * Host keys are not verified (decision 2026-09-18); phpseclib accepts any server key.
+ * Host keys are verified against an OpenSSH known_hosts file when the credentials carry
+ * one (setting known_hosts); without it phpseclib accepts any server key.
  */
 class PhpseclibSshClient implements SshClientInterface
 {
     private ?SSH2 $ssh = null;
 
     private string $stderr = '';
+
+    private string $hostKey = '';
 
     private string $host = '';
 
@@ -48,8 +52,14 @@ class PhpseclibSshClient implements SshClientInterface
         try {
             $ssh = new SSH2($credentials->host, $credentials->port, $connectTimeout);
             $ssh->enableQuietMode();
+            $hostKey = $ssh->getServerPublicHostKey();   // runs the key exchange
         } catch (Throwable $e) {
             throw new ConnectionException($this->target() . ': ' . $e->getMessage(), 0, $e);
+        }
+        $this->hostKey = is_string($hostKey) ? $hostKey : '';
+
+        if ($credentials->verifiesHostKey()) {
+            $this->verifyHostKey($ssh, $credentials);
         }
 
         $failures = [];
@@ -137,6 +147,11 @@ class PhpseclibSshClient implements SshClientInterface
         return $this->ssh ? trim((string) $this->ssh->getServerIdentification()) : '';
     }
 
+    public function serverHostKey(): string
+    {
+        return $this->hostKey;
+    }
+
     public function disconnect(): void
     {
         if ($this->ssh) {
@@ -147,6 +162,44 @@ class PhpseclibSshClient implements SshClientInterface
             }
             $this->ssh = null;
         }
+    }
+
+    /**
+     * @throws HostKeyException
+     */
+    private function verifyHostKey(SSH2 $ssh, Credentials $credentials): void
+    {
+        $known = new KnownHosts((string) $credentials->knownHosts);
+        $fail = function (string $message) use ($ssh): never {
+            $ssh->disconnect();
+            throw new HostKeyException($this->target() . ': ' . $message);
+        };
+
+        if (! $known->isReadable()) {
+            $fail(sprintf('known_hosts file %s is not readable (setting known_hosts)', $known->file()));
+        }
+        if ($this->hostKey === '') {
+            $fail('server did not present a host key that phpseclib could verify');
+        }
+
+        $verdict = $known->check($credentials->host, $credentials->port, $this->hostKey);
+        $fingerprint = KnownHosts::fingerprint($this->hostKey);
+        match ($verdict) {
+            KnownHosts::OK => null,
+            KnownHosts::UNKNOWN => $fail(sprintf(
+                'host key %s is not in %s; if this is the right device add the line: %s',
+                $fingerprint,
+                $known->file(),
+                KnownHosts::line($credentials->host, $credentials->port, $this->hostKey)
+            )),
+            KnownHosts::REVOKED => $fail(sprintf('host key %s is marked @revoked in %s', $fingerprint, $known->file())),
+            default => $fail(sprintf(
+                'HOST KEY MISMATCH: %s presented %s, which differs from every key stored for it in %s (device replaced, or someone in the path)',
+                $this->target(),
+                $fingerprint,
+                $known->file()
+            )),
+        };
     }
 
     private function connection(): SSH2

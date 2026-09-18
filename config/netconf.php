@@ -15,6 +15,7 @@ return [
     'transport' => 'cli',
     'connect_timeout' => 10,
     'command_timeout' => 30,
+    'known_hosts' => '',       // OpenSSH known_hosts file; empty = server host keys are not verified
     'poll_budget' => 20,
     'definitions_dir' => '',
     'enable_by_default' => false,

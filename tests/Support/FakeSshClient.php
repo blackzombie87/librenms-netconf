@@ -68,6 +68,11 @@ class FakeSshClient implements SshClientInterface
         return 'SSH-2.0-OpenSSH_7.5 (fake)';
     }
 
+    public function serverHostKey(): string
+    {
+        return 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPn7v1Zt7nJc9m6z0m3mKk3rQ1Uu3o8dS3xTo3v3Bq2f';
+    }
+
     public function disconnect(): void
     {
         $this->disconnected = true;

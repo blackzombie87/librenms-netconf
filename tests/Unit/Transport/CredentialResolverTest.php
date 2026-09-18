@@ -77,6 +77,16 @@ it('falls back to the transport default port when none is usable', function () {
         ->and($resolver->resolve('h', ['port' => 70000])->port)->toBe(22);
 });
 
+it('passes the known_hosts file through and lets "-" disable it', function () use ($settings) {
+    $resolver = new CredentialResolver;
+
+    expect($resolver->resolve('h', $settings)->verifiesHostKey())->toBeFalse()
+        ->and($resolver->resolve('h', $settings)->describe()['known_hosts'])->toBe('not verified')
+        ->and($resolver->resolve('h', $settings + ['known_hosts' => ' /etc/ssh/known_hosts '])->knownHosts)->toBe('/etc/ssh/known_hosts')
+        ->and($resolver->resolve('h', $settings + ['known_hosts' => '/a'], [], ['known_hosts' => '/b'])->knownHosts)->toBe('/b')
+        ->and($resolver->resolve('h', $settings + ['known_hosts' => '/a'], [], ['known_hosts' => '-'])->verifiesHostKey())->toBeFalse();
+});
+
 it('rejects unknown transports', function () {
     expect(fn () => (new CredentialResolver)->resolve('h', ['transport' => 'telnet']))
         ->toThrow(InvalidArgumentException::class, "Unknown transport 'telnet'");

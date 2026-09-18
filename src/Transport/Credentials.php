@@ -31,7 +31,14 @@ final class Credentials
         public readonly array $authOrder = [self::AUTH_KEY, self::AUTH_PASSWORD],
         public readonly int $connectTimeout = 10,
         public readonly int $commandTimeout = 30,
+        public readonly ?string $knownHosts = null,
     ) {
+    }
+
+    /** Whether the server host key must match an entry in the known_hosts file. */
+    public function verifiesHostKey(): bool
+    {
+        return $this->knownHosts !== null && $this->knownHosts !== '';
     }
 
     public function hasPassword(): bool
@@ -86,6 +93,7 @@ final class Credentials
             'auth_order' => implode(',', $this->authOrder),
             'connect_timeout' => $this->connectTimeout,
             'command_timeout' => $this->commandTimeout,
+            'known_hosts' => $this->verifiesHostKey() ? (string) $this->knownHosts : 'not verified',
         ];
     }
 

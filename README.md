@@ -113,7 +113,25 @@ set system login class LIBRENMS_NETCONF allow-commands "^(show |netconf|xml-mode
 | `cli` (default) | one SSH connection, each command runs as `show … \| display xml` on its own exec channel — the approach of [junos_exporter](https://github.com/czerwonk/junos_exporter) | 22 |
 | `netconf` | NETCONF subsystem, hello/capability exchange, RFC 6242 end-of-message or chunked framing, `<command format="xml">` for CLI strings and raw `<rpc>` bodies | 830 |
 
-Both return the same XML body. Host keys are **not** verified.
+Both return the same XML body.
+
+### Host keys
+
+By default the server host key is **not** verified (any key is accepted, as phpseclib
+does). For production set *Host key check (known_hosts)* on the settings page to an
+OpenSSH `known_hosts` file readable by the poller user, for example
+`/opt/librenms/.ssh/known_hosts`. Every device must then have an entry, otherwise the
+connection is refused with the fingerprint and the line to add:
+
+```bash
+ssh-keyscan -p 22 leaf1.example.net >> /opt/librenms/.ssh/known_hosts   # compare the fingerprint on the console first
+./lnms netconf:test leaf1.example.net                                    # prints "host_key: ssh-ed25519 SHA256:… (verified against …)"
+./lnms netconf:test leaf1.example.net --known-hosts=-                    # one-off without verification
+```
+
+Hashed entries, `[host]:port` entries for non-default ports, wildcards and `@revoked`
+markers are understood; a key that differs from every stored key for the host is reported
+as a host key mismatch and the device goes into back-off like any other connection failure.
 
 ## Credentials
 

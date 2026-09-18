@@ -44,6 +44,12 @@
                 <td><code>{{ $effective['port'] }}</code></td>
             </tr>
             <tr>
+                <td><label for="known_hosts">Host key check (known_hosts)</label></td>
+                <td><input class="form-control" id="known_hosts" type="text" name="settings[known_hosts]"
+                           value="{{ $settings['known_hosts'] ?? '' }}" placeholder="/opt/librenms/.ssh/known_hosts — empty: host keys are not verified"></td>
+                <td><code>{{ $effective['known_hosts'] !== '' ? $effective['known_hosts'] : 'not verified' }}</code></td>
+            </tr>
+            <tr>
                 <td><label for="connect_timeout">Connect timeout (s)</label></td>
                 <td><input class="form-control" id="connect_timeout" type="number" min="1" name="settings[connect_timeout]"
                            value="{{ $settings['connect_timeout'] ?? '' }}" placeholder="{{ $defaults['connect_timeout'] }}"></td>
@@ -150,6 +156,8 @@
 
     <p style="margin-top: 15px;">
         Secrets are encrypted with the LibreNMS <code>APP_KEY</code> before they are stored and are
-        never shown again. Host keys are not verified.
+        never shown again. With a known_hosts file every device's host key must be listed there
+        (<code>ssh-keyscan -p &lt;port&gt; &lt;device&gt; &gt;&gt; known_hosts</code> after checking the
+        fingerprint on the console); <code>lnms netconf:test</code> prints the fingerprint.
     </p>
 </div>

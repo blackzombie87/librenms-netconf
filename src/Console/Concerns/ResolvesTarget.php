@@ -25,7 +25,8 @@ trait ResolvesTarget
         {--t|transport= : cli or netconf}
         {--auth-order= : key,password or password,key}
         {--connect-timeout= : Seconds for TCP/SSH setup}
-        {--timeout= : Seconds to wait for each command}';
+        {--timeout= : Seconds to wait for each command}
+        {--known-hosts= : Verify the host key against this OpenSSH known_hosts file ("-" disables the configured one)}';
 
     protected ?Device $device = null;
 
@@ -48,6 +49,7 @@ trait ResolvesTarget
             'auth_order' => $this->option('auth-order'),
             'connect_timeout' => $this->option('connect-timeout'),
             'command_timeout' => $this->option('timeout'),
+            'known_hosts' => $this->option('known-hosts'),
         ];
 
         if ($this->option('ask-password')) {

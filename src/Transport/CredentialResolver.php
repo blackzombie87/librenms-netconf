@@ -88,6 +88,7 @@ class CredentialResolver
             authOrder: self::parseAuthOrder($overrides['auth_order'] ?? $settings['auth_order'] ?? null),
             connectTimeout: max(1, (int) ($overrides['connect_timeout'] ?? $settings['connect_timeout'] ?? 10)),
             commandTimeout: max(1, (int) ($overrides['command_timeout'] ?? $settings['command_timeout'] ?? 30)),
+            knownHosts: self::knownHosts($overrides['known_hosts'] ?? null, $settings['known_hosts'] ?? null),
         );
     }
 
@@ -114,6 +115,20 @@ class CredentialResolver
         }
 
         return $order ?: $default;
+    }
+
+    /** known_hosts path: override wins, "-" as override disables a configured file. */
+    private static function knownHosts(mixed $override, mixed $setting): ?string
+    {
+        $value = trim((string) ($override ?? ''));
+        if ($value === '-') {
+            return null;
+        }
+        if ($value === '') {
+            $value = trim((string) ($setting ?? ''));
+        }
+
+        return $value === '' ? null : $value;
     }
 
     public static function isEncrypted(mixed $value): bool
