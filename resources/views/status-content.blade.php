@@ -92,7 +92,7 @@
 
         @if ($can_admin)
             <div class="panel panel-default">
-                <div class="panel-heading"><i class="fa fa-code fa-fw" aria-hidden="true"></i> <strong>Run a show command</strong> <small class="text-muted">— the reply as the plugin sees it, handy while writing definitions</small></div>
+                <div class="panel-heading"><i class="fa fa-code fa-fw" aria-hidden="true"></i> <strong>Run a show command</strong> <small class="text-muted">— the reply as the plugin sees it, handy while writing definitions; a single <code>show …</code> without pipes, <code>show configuration</code> excluded</small></div>
                 <div class="panel-body">
                     <form method="post" action="{{ route('netconf.run') }}" class="form-inline">
                         @csrf

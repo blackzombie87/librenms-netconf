@@ -7,6 +7,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use SafferIt\LibrenmsNetconf\Definitions\DefinitionLoader;
+use SafferIt\LibrenmsNetconf\Support\CommandGuard;
 use SafferIt\LibrenmsNetconf\Support\StatusOverview;
 use SafferIt\LibrenmsNetconf\Transport\DeviceCredentials;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\TransportException;
@@ -37,7 +38,11 @@ class StatusController extends Controller
     {
         $data = $request->validate([
             'device_id' => 'required|integer',
-            'command' => 'required|string|max:500|regex:/^show\s/i',
+            'command' => ['required', 'string', 'max:500', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (($reason = CommandGuard::reject((string) $value)) !== null) {
+                    $fail("Command $reason.");
+                }
+            }],
             'transport' => 'nullable|in:,cli,netconf',
         ]);
 

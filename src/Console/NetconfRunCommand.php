@@ -10,6 +10,10 @@ use SafferIt\LibrenmsNetconf\Transport\Reply;
 /**
  * lnms netconf:run <device> show evpn instance extensive — ad-hoc command, pretty XML.
  * Useful while writing YAML definitions.
+ *
+ * Deliberately unrestricted: whoever can run lnms on the poller can open an SSH session
+ * with the same credentials anyway. Whether anything but "show" works is up to the login
+ * class on the device (README); the web form is guarded by CommandGuard instead.
  */
 class NetconfRunCommand extends Command
 {
