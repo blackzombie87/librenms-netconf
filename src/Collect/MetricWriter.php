@@ -2,6 +2,7 @@
 
 namespace SafferIt\LibrenmsNetconf\Collect;
 
+use App\Facades\Rrd;
 use App\Models\Device;
 use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
@@ -16,8 +17,11 @@ use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
  */
 class MetricWriter
 {
-    public function __construct(private readonly Device $device)
+    private RrdLayout $layout;
+
+    public function __construct(private readonly Device $device, ?RrdLayout $layout = null)
     {
+        $this->layout = $layout ?? RrdLayout::make();
     }
 
     /**
@@ -26,43 +30,56 @@ class MetricWriter
      */
     public function write(array $rows, ?DataStorageInterface $datastore): array
     {
-        // one upsert per chunk instead of two statements per row (an EVPN leaf has hundreds)
+        // types = data source order of the RRD as last verified (null: never written by this version)
+        /** @var array<string, array<string, string>|null> $stored */
+        $stored = NetconfMetric::query()->where('device_id', $this->device->device_id)
+            ->get(['definition', 'mapping', 'metric_index', 'types'])
+            ->mapWithKeys(fn (NetconfMetric $m) => ["$m->definition/$m->mapping/$m->metric_index" => $m->types])->all();
+
         $now = now();
         $records = [];
-        foreach ($rows as $row) {
+        $orders = [];
+        foreach ($rows as $i => $row) {
+            $index = mb_substr($row->index, 0, 191);
+            $key = "$row->definition/{$row->mapping->id}/$index";
+            $order = $stored[$key] ?? null;
+            if ($datastore !== null && $row->values !== []) {
+                $file = Rrd::name($this->device->hostname, NetconfMetric::rrdName($row->definition, $row->mapping->id, $row->index));
+                $order = $orders[$i] = $this->layout->reconcile($file, $row->types, $order);
+            }
             $records[] = [
                 'device_id' => $this->device->device_id,
                 'definition' => $row->definition,
                 'mapping' => $row->mapping->id,
-                'metric_index' => mb_substr($row->index, 0, 191),
+                'metric_index' => $index,
                 'descr' => mb_substr($row->descr, 0, 255),
                 'group' => $row->mapping->group,
                 'values' => json_encode($row->values),
-                'types' => json_encode($row->types),
+                'types' => $order === null ? null : json_encode($order),
                 'labels' => json_encode($row->strings),
                 'last_seen' => $now,
             ];
         }
+        // one upsert per chunk instead of two statements per row (an EVPN leaf has hundreds)
         foreach (array_chunk($records, 200) as $chunk) {
             NetconfMetric::query()->upsert($chunk, ['device_id', 'definition', 'mapping', 'metric_index'], ['descr', 'group', 'values', 'types', 'labels', 'last_seen']);
         }
 
         $written = 0;
-        foreach ($rows as $row) {
-            if ($datastore !== null && $row->values !== []) {
-                // every RRD field of the mapping, in definition order, whether present or not:
-                // the data source set must not depend on what this reply contained
+        foreach ($rows as $i => $row) {
+            if (isset($orders[$i])) {
+                // every data source of the file, in file order, whether this reply had a value or not
                 $def = RrdDefinition::make();
-                foreach ($row->types as $field => $type) {
+                foreach ($orders[$i] as $field => $type) {
                     $def->addDataset($field, $type, $type === 'GAUGE' ? null : 0);
                 }
-                $datastore->put($this->device, 'netconf', [
+                $datastore?->put($this->device, 'netconf', [
                     'definition' => $row->definition,
                     'mapping' => $row->mapping->id,
                     'index' => $row->index,
                     'rrd_name' => NetconfMetric::rrdName($row->definition, $row->mapping->id, $row->index),
                     'rrd_def' => $def,
-                ], $row->rrdValues());
+                ], $row->rrdValues($orders[$i]));
                 $written++;
             }
 

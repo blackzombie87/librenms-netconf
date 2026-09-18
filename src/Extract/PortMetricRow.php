@@ -26,16 +26,17 @@ final class PortMetricRow
     }
 
     /**
-     * Values for the RRD update: every data source of the mapping in definition order,
-     * `U` (unknown) where this row has no value, so the update never drifts from the
-     * data sources the file was created with.
+     * Values for the RRD update: one entry per data source in $order (default: the mapping's
+     * fields in definition order), `U` (unknown) where this row has no value, so the update
+     * never drifts from the data sources of the file.
      *
+     * @param  array<string, string>|null  $order  data sources of the file (name => type)
      * @return array<string, float|string>
      */
-    public function rrdValues(): array
+    public function rrdValues(?array $order = null): array
     {
         $out = [];
-        foreach ($this->types as $field => $type) {
+        foreach ($order ?? $this->types as $field => $type) {
             $out[$field] = $this->values[$field] ?? 'U';
         }
 

@@ -11,8 +11,15 @@ custom metrics through YAML definitions. See `README.md` for what is shipped.
 - RRD data source drift: metric and port RRDs are now created from every numeric field
   of the mapping in YAML order and updated with `U` for missing values. Before, the data
   source set depended on the first reply, and later polls with more fields failed with
-  "found extra data on update argument" (seen on the NTP mappings). Label fields carry
-  `type: string` and never become data sources.
+  "found extra data on update argument" (seen on the NTP mappings and 24 of 30 port
+  files, whose FEC counters exist on some ports only), or, with the same count in a
+  different order, wrote values into the wrong data source without any error. Label
+  fields carry `type: string` and never become data sources.
+- Existing RRDs heal themselves: the data source order of every file is verified once
+  (`rrdtool info`), missing fields are appended with `rrdtool tune DS:…` (history kept)
+  and the verified order is stored on the row, so later polls cost nothing extra. A
+  changed YAML field set is handled the same way; a file that cannot be tuned is
+  written with the data sources it has and a warning names the fields not recorded.
 - Devices that matched no definition at discovery were never re-matched while polling.
 - Definitions were cached for the process lifetime; edits are now picked up.
 - The web "run a show command" form accepted `;`, pipes, multi-line input and
@@ -32,11 +39,11 @@ custom metrics through YAML definitions. See `README.md` for what is shipped.
 
 ### Upgrade notes
 
-- Run `lnms migrate` (new `netconf_metrics.types` column).
-- Delete `rrd/<host>/netconf-junos-ntp-*.rrd` (and any other `netconf-*.rrd` created
-  before this change whose mapping gained numeric fields); they are recreated with the
-  full data source set on the next poll. `rrdtool info <file> | grep '^ds\['` lists the
-  current data sources.
+- Run `lnms migrate` (new `netconf_metrics.types` column; stored data source orders are
+  reset so every file is verified once on the next poll).
+- The first poll after the upgrade runs `rrdtool info` per metric/port RRD and appends
+  missing data sources (`rrdtool tune`, needs rrdtool 1.5 or newer, works through
+  rrdcached). Nothing has to be deleted; the log lists the files that gained data sources.
 
 ### Known gaps
 

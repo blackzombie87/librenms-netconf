@@ -308,8 +308,9 @@ Notes:
 - The RRD of a metric or port row has one data source per GAUGE/COUNTER/DERIVE field of
   the mapping, in YAML order, created on the first write; values missing in a reply are
   written as unknown. Mark text fields `type: string` so they do not become empty data
-  sources. If a definition later gains or reorders numeric fields, delete the RRD to
-  recreate it (`rrdtool info` shows the current data sources).
+  sources. When a definition gains numeric fields the plugin appends the data sources to
+  the existing files (`rrdtool tune`, once) and keeps writing in the file's order, so the
+  history stays and no value lands in the wrong data source.
 - The core `sensors` poller lists netconf sensors as "Checking (netconf) …" and skips
   them; their `sensor_oid` is sysUpTime so that check stays cheap.
 

@@ -158,7 +158,9 @@ it('keeps the RRD data source set stable whatever a row contains', function () {
         ->and($row->strings['reach'])->toBe('377')
         ->and(array_keys($row->types))->toBe(['offset_ms', 'missing', 'text', 'flaps'])
         ->and($row->types['flaps'])->toBe('COUNTER')
-        ->and($row->rrdValues())->toBe(['offset_ms' => 0.325185, 'missing' => 'U', 'text' => 'U', 'flaps' => 'U']);
+        ->and($row->rrdValues())->toBe(['offset_ms' => 0.325185, 'missing' => 'U', 'text' => 'U', 'flaps' => 'U'])
+        // file order wins over YAML order, extra data sources of the file receive U
+        ->and($row->rrdValues(['flaps' => 'COUNTER', 'legacy' => 'GAUGE', 'offset_ms' => 'GAUGE']))->toBe(['flaps' => 'U', 'legacy' => 'U', 'offset_ms' => 0.325185]);
 
     // port rows: same contract
     $pdef = defWith(['ports' => [[

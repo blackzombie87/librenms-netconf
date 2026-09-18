@@ -2,6 +2,7 @@
 
 namespace SafferIt\LibrenmsNetconf\Collect;
 
+use App\Facades\Rrd;
 use App\Models\Device;
 use App\Models\Port;
 use Illuminate\Support\Facades\Log;
@@ -23,8 +24,11 @@ class PortMetricWriter
     /** @var array<string, list<int>> "definition/mapping" => port ids written by write() */
     private array $written = [];
 
-    public function __construct(private readonly Device $device)
+    private RrdLayout $layout;
+
+    public function __construct(private readonly Device $device, ?RrdLayout $layout = null)
     {
+        $this->layout = $layout ?? RrdLayout::make();
     }
 
     /**
@@ -37,6 +41,12 @@ class PortMetricWriter
         $unmatched = [];
         $now = now();
 
+        // types = data source order of the RRD as last verified (null: never written by this version)
+        /** @var array<string, array<string, string>|null> $stored */
+        $stored = NetconfPortMetric::query()->where('device_id', $this->device->device_id)
+            ->get(['port_id', 'definition', 'mapping', 'types'])
+            ->mapWithKeys(fn (NetconfPortMetric $m) => ["$m->port_id/$m->definition/$m->mapping" => $m->types])->all();
+
         // resolve ports first, then one upsert per chunk instead of two statements per row
         $resolved = [];
         $records = [];
@@ -48,14 +58,20 @@ class PortMetricWriter
             }
             $matched++;
             $this->written[$row->definition . '/' . $row->mapping->id][] = $portId;
-            $resolved[] = [$row, $portId];
+
+            $order = $stored["$portId/$row->definition/{$row->mapping->id}"] ?? null;
+            if ($datastore !== null && $row->values !== []) {
+                $file = Rrd::name($this->device->hostname, NetconfPortMetric::rrdName($portId, $row->definition, $row->mapping->id));
+                $order = $this->layout->reconcile($file, $row->types, $order);
+                $resolved[] = [$row, $portId, $order];
+            }
             $records[] = [
                 'port_id' => $portId,
                 'definition' => $row->definition,
                 'mapping' => $row->mapping->id,
                 'device_id' => $this->device->device_id,
                 'values' => json_encode($row->values),
-                'types' => json_encode($row->types),
+                'types' => $order === null ? null : json_encode($order),
                 'last_seen' => $now,
             ];
         }
@@ -63,12 +79,11 @@ class PortMetricWriter
             NetconfPortMetric::query()->upsert($chunk, ['port_id', 'definition', 'mapping'], ['device_id', 'values', 'types', 'last_seen']);
         }
 
-        foreach ($resolved as [$row, $portId]) {
-            if ($datastore !== null && $row->values !== []) {
-                // every RRD field of the mapping, in definition order, whether present or not:
-                // the data source set must not depend on what this reply contained
+        foreach ($resolved as [$row, $portId, $order]) {
+            if ($datastore !== null) {
+                // every data source of the file, in file order, whether this reply had a value or not
                 $def = RrdDefinition::make();
-                foreach ($row->types as $field => $type) {
+                foreach ($order as $field => $type) {
                     $def->addDataset($field, $type, $type === 'GAUGE' ? null : 0);
                 }
                 $datastore->put($this->device, 'netconf-port', [
@@ -77,7 +92,7 @@ class PortMetricWriter
                     'port_id' => $portId,
                     'rrd_name' => NetconfPortMetric::rrdName($portId, $row->definition, $row->mapping->id),
                     'rrd_def' => $def,
-                ], $row->rrdValues());
+                ], $row->rrdValues($order));
             }
 
             Log::debug(sprintf('  port %s=%s (port_id %d) %s', $row->matchField, $row->matchValue, $portId, json_encode($row->values)));
