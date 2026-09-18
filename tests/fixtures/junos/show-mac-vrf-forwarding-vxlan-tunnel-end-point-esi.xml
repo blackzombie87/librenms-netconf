@@ -1,0 +1,67 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S3.9/junos">
+    <vxlan-esi-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+        <esi-format junos:style="esi-entry">
+            <esi-value>00:11:22:33:44:55:00:00:02:00</esi-value>
+            <routing-instance-name>default-switch</routing-instance-name>
+            <vxlan-load-balancing-next-hop>1947</vxlan-load-balancing-next-hop>
+            <indirect-next-hop>524317</indirect-next-hop>
+            <esi-interface>esi.1947</esi-interface>
+            <local-interface>ae2.0,</local-interface>
+            <num-remote-vteps>1</num-remote-vteps>
+            <esi-aliasing-enabled>Aliasing</esi-aliasing-enabled>
+            <esi-remote-vtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+                <esi-remote-vtep-entry>
+                    <remote-vtep-address>192.0.2.12</remote-vtep-address>
+                    <remote-vtep-interface>vtep-7.32771</remote-vtep-interface>
+                    <vxlan-encapsulation-next-hop>1719</vxlan-encapsulation-next-hop>
+                    <mask-id>0</mask-id>
+                    <flags>18</flags>
+                    <remote-vtep-mac-count>81</remote-vtep-mac-count>
+                </esi-remote-vtep-entry>
+            </esi-remote-vtep-information>
+        </esi-format>
+        <esi-format junos:style="esi-entry">
+            <esi-value>00:11:22:33:44:55:00:00:05:00</esi-value>
+            <routing-instance-name>default-switch</routing-instance-name>
+            <vxlan-load-balancing-next-hop>0</vxlan-load-balancing-next-hop>
+            <indirect-next-hop>0</indirect-next-hop>
+            <esi-interface></esi-interface>
+            <local-interface>ae5.0,</local-interface>
+            <num-remote-vteps>0</num-remote-vteps>
+            <esi-aliasing-enabled>Aliasing</esi-aliasing-enabled>
+            <esi-remote-vtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+            </esi-remote-vtep-information>
+        </esi-format>
+        <esi-format junos:style="esi-entry">
+            <esi-value>00:11:22:33:44:66:00:00:01:00</esi-value>
+            <routing-instance-name>default-switch</routing-instance-name>
+            <vxlan-load-balancing-next-hop>1771</vxlan-load-balancing-next-hop>
+            <indirect-next-hop>524330</indirect-next-hop>
+            <esi-interface>esi.1771</esi-interface>
+            <local-interface></local-interface>
+            <num-remote-vteps>2</num-remote-vteps>
+            <esi-aliasing-enabled>Aliasing</esi-aliasing-enabled>
+            <esi-remote-vtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+                <esi-remote-vtep-entry>
+                    <remote-vtep-address>192.0.2.62</remote-vtep-address>
+                    <remote-vtep-interface>vtep-7.32774</remote-vtep-interface>
+                    <vxlan-encapsulation-next-hop>1812</vxlan-encapsulation-next-hop>
+                    <mask-id>1</mask-id>
+                    <flags>18</flags>
+                    <remote-vtep-mac-count>41</remote-vtep-mac-count>
+                </esi-remote-vtep-entry>
+                <esi-remote-vtep-entry>
+                    <remote-vtep-address>192.0.2.61</remote-vtep-address>
+                    <remote-vtep-interface>vtep-7.32775</remote-vtep-interface>
+                    <vxlan-encapsulation-next-hop>1925</vxlan-encapsulation-next-hop>
+                    <mask-id>0</mask-id>
+                    <flags>18</flags>
+                    <remote-vtep-mac-count>40</remote-vtep-mac-count>
+                </esi-remote-vtep-entry>
+            </esi-remote-vtep-information>
+        </esi-format>
+    </vxlan-esi-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

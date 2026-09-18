@@ -1,0 +1,72 @@
+{
+    "name": "saffer-it/librenms-netconf",
+    "description": "LibreNMS plugin that collects values over SSH/NETCONF (Junos '| display xml') and maps them onto sensors, port metrics and custom metrics via YAML definitions",
+    "type": "package",
+    "license": "MIT",
+    "keywords": [
+        "librenms",
+        "plugin",
+        "netconf",
+        "junos",
+        "evpn"
+    ],
+    "authors": [
+        {
+            "name": "Christian Saffer"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "SafferIt\\LibrenmsNetconf\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SafferIt\\LibrenmsNetconf\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "ext-dom": "*",
+        "ext-libxml": "*",
+        "ext-openssl": "*",
+        "librenms/plugin-interfaces": "^1.0",
+        "phpseclib/phpseclib": "^3.0",
+        "symfony/yaml": "^6.4 || ^7.0"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "laravel/framework": "^11.0 || ^12.0",
+        "pestphp/pest": "^3.8",
+        "phpstan/phpstan": "^2.1"
+    },
+    "suggest": {
+        "illuminate/support": "provided by LibreNMS, needed for the service provider, hooks and console commands"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "SafferIt\\LibrenmsNetconf\\NetconfPluginProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "style": "vendor/bin/php-cs-fixer check --diff",
+        "style:fix": "vendor/bin/php-cs-fixer fix",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "check": [
+            "@style",
+            "@analyse",
+            "@test"
+        ]
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

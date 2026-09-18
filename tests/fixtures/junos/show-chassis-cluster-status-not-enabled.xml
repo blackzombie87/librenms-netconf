@@ -1,0 +1,10 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S3.9/junos">
+    <xnm:error xmlns="http://xml.juniper.net/xnm/1.1/xnm" xmlns:xnm="http://xml.juniper.net/xnm/1.1/xnm">
+        <parse/>
+        <source-daemon>jsrpd</source-daemon>
+        <message>error: Chassis cluster is not enabled</message>
+    </xnm:error>
+    <cli>
+        <banner></banner>
+    </cli>
+</rpc-reply>

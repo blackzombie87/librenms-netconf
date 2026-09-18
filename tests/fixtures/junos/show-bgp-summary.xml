@@ -1,0 +1,110 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S3.9/junos">
+    <bgp-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <bgp-thread-mode>BGP I/O</bgp-thread-mode>
+        <thread-state></thread-state>
+        <default-ebgp-advertise-mode>accept</default-ebgp-advertise-mode>
+        <default-ebgp-receive-mode>accept</default-ebgp-receive-mode>
+        <group-count>1</group-count>
+        <peer-count>3</peer-count>
+        <down-peer-count>0</down-peer-count>
+        <bgp-rib junos:style="brief">
+            <name>bgp.evpn.0</name>
+            <total-prefix-count>10133</total-prefix-count>
+            <received-prefix-count>10133</received-prefix-count>
+            <accepted-prefix-count>10133</accepted-prefix-count>
+            <active-prefix-count>10133</active-prefix-count>
+            <suppressed-prefix-count>0</suppressed-prefix-count>
+            <history-prefix-count>0</history-prefix-count>
+            <damped-prefix-count>0</damped-prefix-count>
+            <total-external-prefix-count>0</total-external-prefix-count>
+            <active-external-prefix-count>0</active-external-prefix-count>
+            <accepted-external-prefix-count>0</accepted-external-prefix-count>
+            <suppressed-external-prefix-count>0</suppressed-external-prefix-count>
+            <total-internal-prefix-count>10133</total-internal-prefix-count>
+            <active-internal-prefix-count>10133</active-internal-prefix-count>
+            <accepted-internal-prefix-count>10133</accepted-internal-prefix-count>
+            <suppressed-internal-prefix-count>0</suppressed-internal-prefix-count>
+            <pending-prefix-count>0</pending-prefix-count>
+            <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+            <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+        </bgp-rib>
+        <bgp-peer junos:style="terse" heading="Peer                     AS      InPkt     OutPkt    OutQ   Flaps Last Up/Dwn State|#Active/Received/Accepted/Damped...">
+            <peer-address>192.0.2.12</peer-address>
+            <peer-as>65000</peer-as>
+            <input-messages>88112122</input-messages>
+            <output-messages>87042097</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>1</flap-count>
+            <elapsed-time junos:seconds="52656869">87w0d 10:54:29</elapsed-time>
+            <description>SPINE-B</description>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>bgp.evpn.0</name>
+                <active-prefix-count>1447</active-prefix-count>
+                <received-prefix-count>1447</received-prefix-count>
+                <accepted-prefix-count>1447</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>__default_evpn__.evpn.0</name>
+                <active-prefix-count>7</active-prefix-count>
+                <received-prefix-count>7</received-prefix-count>
+                <accepted-prefix-count>7</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>default-switch.evpn.0</name>
+                <active-prefix-count>1440</active-prefix-count>
+                <received-prefix-count>1440</received-prefix-count>
+                <accepted-prefix-count>1440</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+        <bgp-peer junos:style="terse">
+            <peer-address>192.0.2.51</peer-address>
+            <peer-as>65000</peer-as>
+            <input-messages>2116535</input-messages>
+            <output-messages>14950221</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>43</flap-count>
+            <elapsed-time junos:seconds="9403803">15w3d 20:10:03</elapsed-time>
+            <description>REMOTE-SITE-A</description>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>bgp.evpn.0</name>
+                <active-prefix-count>498</active-prefix-count>
+                <received-prefix-count>498</received-prefix-count>
+                <accepted-prefix-count>498</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>default-switch.evpn.0</name>
+                <active-prefix-count>498</active-prefix-count>
+                <received-prefix-count>498</received-prefix-count>
+                <accepted-prefix-count>498</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+        <bgp-peer junos:style="terse">
+            <peer-address>198.51.100.252</peer-address>
+            <peer-as>65000</peer-as>
+            <input-messages>1296365</input-messages>
+            <output-messages>69547479</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>0</flap-count>
+            <elapsed-time junos:seconds="37669612">62w1d 23:46:52</elapsed-time>
+            <description>BORDER-ROUTER-A</description>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>bgp.evpn.0</name>
+                <active-prefix-count>167</active-prefix-count>
+                <received-prefix-count>167</received-prefix-count>
+                <accepted-prefix-count>167</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+    </bgp-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>
