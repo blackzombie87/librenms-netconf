@@ -36,9 +36,15 @@ class Reply
      */
     public static function fromCliOutput(string $command, string $output, float $duration = 0.0): self
     {
-        $start = strpos($output, '<');
-        $end = strrpos($output, '>');
+        // Junos answers syntax errors and denied commands in plain text, e.g.
+        // "error: syntax error, expecting <command>: nonsense" or "error: permission denied"
+        if (! str_starts_with(ltrim($output), '<')
+            && preg_match_all('/^\s*(?:error|syntax error|permission denied)[^\n]*/mi', $output, $errors) > 0) {
+            throw new RpcErrorException($command, array_map('trim', $errors[0]));
+        }
 
+        $start = preg_match('/<(\?xml|[A-Za-z_])/', $output, $m, PREG_OFFSET_CAPTURE) ? $m[0][1] : false;
+        $end = strrpos($output, '>');
         if ($start === false || $end === false || $end < $start) {
             throw new ProtocolException(sprintf(
                 '%s: device did not return XML (%d bytes: %s)',

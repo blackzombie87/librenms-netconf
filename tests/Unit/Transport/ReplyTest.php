@@ -59,7 +59,7 @@ it('strips non-xml noise from cli exec output', function () {
 });
 
 it('fails clearly when the device returned no xml at all', function () {
-    expect(fn () => Reply::fromCliOutput('show version', "error: permission denied\n"))
+    expect(fn () => Reply::fromCliOutput('show version', "{master:0}\n"))
         ->toThrow(ProtocolException::class, 'did not return XML');
 });
 
@@ -90,4 +90,18 @@ it('reads nested paths with a descendant first step', function () {
 
     expect($reply->text('member/member-role'))->toBe('Master*')
         ->and($reply->text('virtual-chassis-id-information/virtual-chassis-mode'))->toBe('Enabled');
+});
+
+it('turns plain-text cli errors into rpc errors', function () {
+    expect(fn () => Reply::fromCliOutput('show nonsense', "\nerror: syntax error, expecting <command>: nonsense\n"))
+        ->toThrow(RpcErrorException::class, 'show nonsense: error: syntax error, expecting <command>: nonsense');
+
+    expect(fn () => Reply::fromCliOutput('show system alarms', "error: permission denied\n"))
+        ->toThrow(RpcErrorException::class, 'permission denied');
+});
+
+it('still accepts warnings printed before the xml', function () {
+    $reply = Reply::fromCliOutput('show version', "warning: license expired\n<rpc-reply><software-information><host-name>a</host-name></software-information></rpc-reply>");
+
+    expect($reply->text('host-name'))->toBe('a');
 });
