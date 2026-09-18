@@ -6,7 +6,7 @@ use App\Models\Device;
 use Illuminate\Console\Command;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Console\Concerns\ResolvesTarget;
-use SafferIt\LibrenmsNetconf\Support\SettingsSecrets;
+use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
 
 /**
@@ -61,66 +61,47 @@ class NetconfDeviceCommand extends Command
 
     private function applyChanges(Device $device): bool
     {
-        $changed = false;
-        $set = function (string $suffix, ?string $value, bool $secret = false) use ($device, &$changed): void {
-            if ($value === null || $value === '') {
-                return;
-            }
-            $device->setAttrib(CredentialResolver::ATTRIB_PREFIX . $suffix, $secret ? SettingsSecrets::seal($value) : $value);
-            $changed = true;
-        };
-
-        if ($this->option('enable')) {
-            $device->setAttrib(NetconfService::ATTRIB_ENABLED, '1');
-            $changed = true;
-        } elseif ($this->option('disable')) {
-            $device->setAttrib(NetconfService::ATTRIB_ENABLED, '0');
-            $changed = true;
-        }
-
-        $set('username', $this->option('set-username'));
-        $set('password', $this->option('set-password'), true);
+        $input = [
+            'enabled' => $this->option('enable') ? '1' : ($this->option('disable') ? '0' : null),
+            'username' => $this->option('set-username'),
+            'password' => $this->option('set-password'),
+            'keyfile' => $this->option('set-key'),
+            'key_passphrase' => $this->option('set-passphrase'),
+            'port' => $this->option('set-port'),
+            'transport' => $this->option('set-transport'),
+            'clear' => (array) $this->option('clear'),
+        ];
         if ($this->option('set-ask-password')) {
-            $set('password', (string) $this->secret('Password for this device'), true);
+            $input['password'] = (string) $this->secret('Password for this device');
         }
-        $set('keyfile', $this->option('set-key'));
-        $set('passphrase', $this->option('set-passphrase'), true);
-        $set('port', $this->option('set-port'));
-        $transport = $this->option('set-transport');
-        if ($transport !== null && $transport !== '') {
-            if (! in_array($transport, ['cli', 'netconf'], true)) {
-                $this->error('transport must be cli or netconf');
-            } else {
-                $set('transport', $transport);
+        foreach ($input['clear'] as $suffix) {
+            if ($suffix !== 'all' && ! in_array($suffix, DeviceSettings::FIELDS, true)) {
+                $this->error("unknown override \"$suffix\" (known: " . implode(', ', DeviceSettings::FIELDS) . ')');
+
+                return false;
             }
         }
 
-        $clear = (array) $this->option('clear');
-        if (in_array('all', $clear, true)) {
-            $clear = array_values(CredentialResolver::KEYS);
+        try {
+            $changes = DeviceSettings::apply($device, $input);
+        } catch (\InvalidArgumentException $e) {
+            $this->error($e->getMessage());
+
+            return false;
         }
-        foreach ($clear as $suffix) {
-            if (! in_array($suffix, CredentialResolver::KEYS, true)) {
-                $this->error("unknown override \"$suffix\" (known: " . implode(', ', CredentialResolver::KEYS) . ')');
-                continue;
-            }
-            if ($device->forgetAttrib(CredentialResolver::ATTRIB_PREFIX . $suffix)) {
-                $changed = true;
-            }
+        foreach ($changes as $change) {
+            $this->line('  ' . $change);
         }
 
-        return $changed;
+        return $changes !== [];
     }
 
     private function show(Device $device, NetconfService $service): void
     {
         $attribs = $device->getAttribs();
         $rows = [['netconf_enabled', $attribs[NetconfService::ATTRIB_ENABLED] ?? '(unset, global default ' . ($service->isEnabled($device) ? 'on' : 'off') . ')']];
-        foreach (CredentialResolver::KEYS as $suffix) {
-            $key = CredentialResolver::ATTRIB_PREFIX . $suffix;
-            if (isset($attribs[$key])) {
-                $rows[] = [$key, in_array($suffix, ['password', 'key_passphrase'], true) ? 'set (encrypted)' : $attribs[$key]];
-            }
+        foreach (DeviceSettings::current($device) as $suffix => $value) {
+            $rows[] = [CredentialResolver::ATTRIB_PREFIX . $suffix, $value];
         }
         $this->table(['Device attribute', 'Value'], $rows);
 

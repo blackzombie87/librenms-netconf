@@ -1,0 +1,129 @@
+<div class="row">
+    <div class="col-md-12">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <i class="fa fa-terminal fa-fw" aria-hidden="true"></i> <strong>NETCONF devices</strong>
+                <span class="pull-right">
+                    <a href="{{ route('netconf.definitions') }}">definitions</a>
+                    @if ($can_admin)
+                        &middot; <a href="{{ url('plugin/settings/netconf') }}">settings</a>
+                    @endif
+                </span>
+            </div>
+            <div class="panel-body">
+                @if (! $module_ready)
+                    <div class="alert alert-warning">The poller module class is not loadable. Run <code>composer dump-autoload</code> / re-install the plugin.</div>
+                @endif
+                <p class="text-muted">
+                    Polling is {{ $default_on ? 'enabled for all devices by default' : 'opt-in per device' }}
+                    (transport <code>{{ $settings['transport'] }}</code>, port <code>{{ $settings['port'] }}</code>, user <code>{{ $settings['username'] !== '' ? $settings['username'] : '(none)' }}</code>).
+                    Devices that are neither enabled nor have been polled are not listed.
+                </p>
+                @if ($rows === [])
+                    <p>No devices enabled yet. Use <code>lnms netconf:device &lt;device&gt; --enable</code> or the NETCONF page of a device.</p>
+                @else
+                    <table class="table table-condensed table-hover">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Enabled</th>
+                                <th>Transport</th>
+                                <th>Definitions</th>
+                                <th>Last OK</th>
+                                <th>Polls</th>
+                                <th>Failures</th>
+                                <th>Duration</th>
+                                <th>Last result</th>
+                                <th>Overrides</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($rows as $row)
+                                @php($st = $row['status'])
+                                <tr class="{{ $st && $st->consecutive_failures > 0 ? 'danger' : ($row['enabled'] ? '' : 'text-muted') }}">
+                                    <td>
+                                        <a href="{{ route('netconf.device', $row['device']->device_id) }}">{{ $row['device']->displayName() }}</a>
+                                        <small><a href="{{ \LibreNMS\Util\Url::deviceUrl($row['device']) }}" title="device page"><i class="fa fa-external-link" aria-hidden="true"></i></a></small>
+                                    </td>
+                                    <td>
+                                        @if ($row['enabled'])
+                                            <span class="label label-success">yes</span>
+                                        @else
+                                            <span class="label label-default">no</span>
+                                        @endif
+                                        @if ($row['inherited'])<small class="text-muted">(default)</small>@endif
+                                    </td>
+                                    <td>{{ $st?->transport }}</td>
+                                    <td>
+                                        @foreach ($st?->definitions ?? [] as $name)
+                                            <span class="label label-info">{{ $name }}</span>
+                                        @endforeach
+                                    </td>
+                                    <td>{{ $st?->last_ok?->diffForHumans() }}</td>
+                                    <td>{{ $st?->poll_count }}</td>
+                                    <td>
+                                        @if ($st && $st->consecutive_failures > 0)
+                                            <span class="label label-danger">{{ $st->consecutive_failures }}</span>
+                                            @if ($st->inBackoff())<small>back-off until {{ $st->next_attempt->format('H:i:s') }}</small>@endif
+                                        @elseif ($st)
+                                            0
+                                        @endif
+                                    </td>
+                                    <td>{{ $st && $st->last_duration !== null ? sprintf('%.1fs', $st->last_duration) : '' }}</td>
+                                    <td>
+                                        @if ($st?->last_error)
+                                            <span class="text-danger" title="{{ $st->last_error }}">{{ \Illuminate\Support\Str::limit($st->last_error, 60) }}</span>
+                                        @elseif ($st?->last_summary)
+                                            <small>{{ $st->last_summary['sensors'] ?? 0 }} sensors, {{ $st->last_summary['metric_rows'] ?? 0 }} metric rows, {{ $st->last_summary['port_rows'] ?? 0 }} port rows</small>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @foreach ($row['overrides'] as $k => $v)
+                                            <small><code>{{ $k }}</code>=<span>{{ $v }}</span></small>
+                                        @endforeach
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endif
+            </div>
+        </div>
+
+        @if ($can_admin)
+            <div class="panel panel-default">
+                <div class="panel-heading"><i class="fa fa-code fa-fw" aria-hidden="true"></i> <strong>Run a show command</strong> <small class="text-muted">— the reply as the plugin sees it, handy while writing definitions</small></div>
+                <div class="panel-body">
+                    <form method="post" action="{{ route('netconf.run') }}" class="form-inline">
+                        @csrf
+                        <select name="device_id" class="form-control" required>
+                            @foreach ($run_devices as $device)
+                                <option value="{{ $device->device_id }}" {{ (int) old('device_id', $run['device_id'] ?? 0) === $device->device_id ? 'selected' : '' }}>{{ $device->displayName() }}</option>
+                            @endforeach
+                        </select>
+                        <input type="text" name="command" class="form-control" style="width: 40%;" placeholder="show evpn instance extensive" value="{{ old('command', $run['command'] ?? '') }}" required>
+                        <select name="transport" class="form-control">
+                            <option value="">device transport</option>
+                            <option value="cli">cli</option>
+                            <option value="netconf">netconf</option>
+                        </select>
+                        <button type="submit" class="btn btn-primary">Run</button>
+                    </form>
+                    @if ($errors->any())
+                        <div class="alert alert-danger" style="margin-top: 10px;">{{ implode(' ', $errors->all()) }}</div>
+                    @endif
+                    @if ($run)
+                        <div style="margin-top: 15px;">
+                            @if ($run['ok'])
+                                <p><strong>{{ $run['device'] }}</strong>: <code>{{ $run['command'] }}</code> — {{ $run['bytes'] }} bytes in {{ sprintf('%.2f', $run['duration']) }}s</p>
+                                <pre style="max-height: 600px; overflow: auto;">{{ $run['xml'] }}</pre>
+                            @else
+                                <div class="alert alert-danger"><strong>{{ $run['device'] }}</strong>: <code>{{ $run['command'] }}</code><br>{{ $run['message'] }}</div>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+            </div>
+        @endif
+    </div>
+</div>

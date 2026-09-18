@@ -4,7 +4,10 @@ namespace SafferIt\LibrenmsNetconf;
 
 use App\Facades\LibrenmsConfig;
 use Illuminate\Support\ServiceProvider;
+use LibreNMS\Interfaces\Plugins\Hooks\DeviceOverviewHook;
+use LibreNMS\Interfaces\Plugins\Hooks\MenuEntryHook;
 use LibreNMS\Interfaces\Plugins\Hooks\SettingsHook;
+use LibreNMS\Interfaces\Plugins\Hooks\SinglePageHook;
 use LibreNMS\Interfaces\Plugins\PluginManagerInterface;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Console\NetconfDeviceCommand;
@@ -13,6 +16,9 @@ use SafferIt\LibrenmsNetconf\Console\NetconfRunCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfTestCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfValidateCommand;
 use SafferIt\LibrenmsNetconf\Definitions\DefinitionLoader;
+use SafferIt\LibrenmsNetconf\Hooks\DeviceOverview;
+use SafferIt\LibrenmsNetconf\Hooks\Menu;
+use SafferIt\LibrenmsNetconf\Hooks\Page;
 use SafferIt\LibrenmsNetconf\Hooks\Settings;
 use SafferIt\LibrenmsNetconf\Support\SettingsSecrets;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
@@ -41,6 +47,9 @@ class NetconfPluginProvider extends ServiceProvider
         $name = NetconfSettings::PLUGIN_NAME;
 
         $pluginManager->publishHook($name, SettingsHook::class, Settings::class);
+        $pluginManager->publishHook($name, MenuEntryHook::class, Menu::class);
+        $pluginManager->publishHook($name, SinglePageHook::class, Page::class);
+        $pluginManager->publishHook($name, DeviceOverviewHook::class, DeviceOverview::class);
         $this->loadViewsFrom(__DIR__ . '/../resources/views', $name);
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         SettingsSecrets::register();
@@ -48,6 +57,8 @@ class NetconfPluginProvider extends ServiceProvider
         if (! $pluginManager->pluginEnabled($name)) {
             return;
         }
+
+        $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
 
         if ($this->app->runningInConsole()) {
             $this->commands([

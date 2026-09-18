@@ -22,6 +22,7 @@ namespace App\Models {
      *
      * @method static Device|null find(int $id)
      * @method static \Illuminate\Database\Eloquent\Builder<Device> where(string $column, mixed $value)
+     * @method static \Illuminate\Database\Eloquent\Builder<Device> hasAccess(User $user)
      */
     class Device extends \Illuminate\Database\Eloquent\Model
     {
@@ -154,6 +155,27 @@ namespace App\Models {
      */
     class Sensor extends \Illuminate\Database\Eloquent\Model
     {
+        public function currentTranslation(): ?StateTranslation
+        {
+            return null;
+        }
+
+        public function formatValue(string $field = 'sensor_current'): string
+        {
+            return '';
+        }
+    }
+
+    /**
+     * @property int $user_id
+     * @property string $username
+     */
+    class User extends \Illuminate\Database\Eloquent\Model
+    {
+        public function can(string $ability, mixed $arguments = []): bool
+        {
+            return false;
+        }
     }
 
     /**

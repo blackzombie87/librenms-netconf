@@ -6,12 +6,14 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: Phase 3 — polling into LibreNMS works.** Transports, credentials and the
-settings page (Phase 1) and the YAML definition engine (Phase 2) are verified against an
-EX4650 (Junos 23.4R2). The `netconf` poller/discovery module stores the extracted values
-as native LibreNMS sensors (health tab, graphs, alert rules), as per-port metrics and as
-custom metrics with their own RRDs. Still to come: the device credentials page and
-overview panel (Phase 4) and graphs/UI for port and custom metrics (Phase 5). The
+**Status: Phase 4 — usable from the web UI.** Transports, credentials and the settings
+page (Phase 1), the YAML definition engine (Phase 2) and the `netconf` poller/discovery
+module (Phase 3) are verified against an EX4650 (Junos 23.4R2). Extracted values are
+stored as native LibreNMS sensors (health tab, graphs, alert rules), per-port metrics and
+custom metrics with their own RRDs. The web UI has a NETCONF status page, a per-device
+page (credentials, test connection, discover/poll now), a device overview panel and a
+"run a show command" form. Still to come: graphs for port and custom metrics and the port
+tab (Phase 5). The
 definition engine and the poller/discovery module follow in the next phases
 (see `NETCONF_PLUGIN_PLAN.md` in the development notes).
 
@@ -43,6 +45,23 @@ Then run the migrations and enable devices:
 
 Instead of enabling devices one by one, set *Enable for all devices* on the settings page;
 `--disable` then opts a device out. The module also appears in the device's *Modules* tab.
+
+## Web UI
+
+- **NETCONF** in the Plugins menu (`/plugin/netconf/status`): every enabled or previously
+  polled device with transport, matched definitions, last success, poll count, failures and
+  back-off; admins get a *Run a show command* form that prints the XML reply as the plugin
+  sees it. `/plugin/netconf/definitions` lists the loaded definitions and any YAML errors.
+- **Device page** (`/plugin/netconf/device/<id>`, linked from the overview panel): status,
+  effective credentials, per-device overrides (polling on/off, transport, port, user,
+  password, key file, passphrase), *Test connection*, *Discover now* and *Poll now*.
+  Secrets are encrypted before they are stored and never displayed.
+- **Device overview panel**: polling state, matched definitions, sensor summary with the
+  critical ones linked, and the first rows of every custom metric mapping; the full tables
+  are at `/plugin/netconf/device/<id>/metrics`.
+
+Viewing needs access to the device (global-read for the status page); changing anything or
+talking to a device needs the admin role.
 
 ## Device login class (Junos)
 
