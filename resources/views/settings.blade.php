@@ -8,12 +8,6 @@
         <code>lnms netconf:run &lt;device&gt; show version</code>.
     </p>
 
-    @if (! $module_ready)
-        <div class="alert alert-info">
-            Poller/discovery module not shipped in this version yet: connectivity tooling only.
-        </div>
-    @endif
-
     <form method="post">
         @csrf
         <table class="table table-condensed" style="max-width: 900px;">

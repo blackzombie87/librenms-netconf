@@ -6,16 +6,15 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: Phase 5 — feature complete for v1.0.** Transports, credentials and the settings
-page, the YAML definition engine and the `netconf` poller/discovery module are verified
-against an EX4650 (Junos 23.4R2). Extracted values are stored as native LibreNMS sensors
-(health tab, graphs, alert rules), per-port metrics and custom metrics with their own RRDs
-and graphs. The web UI has a NETCONF status page, a per-device page (credentials, test
-connection, discover/poll now), a device overview panel, metric tables with graphs, a port
-tab with the per-port counters and a "run a show command" form. Remaining before a release:
-packaging on Packagist. The
-definition engine and the poller/discovery module follow in the next phases
-(see `NETCONF_PLUGIN_PLAN.md` in the development notes).
+**Status: release candidate for 1.0.0, not yet on Packagist.** Transports, credentials and
+the settings page, the YAML definition engine and the `netconf` poller/discovery module are
+verified against an EX4650 (Junos 23.4R2). Extracted values are stored as native LibreNMS
+sensors (health tab, graphs, alert rules), per-port metrics and custom metrics with their
+own RRDs and graphs. The web UI has a NETCONF status page, a per-device page (credentials,
+test connection, discover/poll now), a device overview panel, metric tables with graphs, a
+port tab with the per-port counters and a "run a show command" form. Not in this version:
+EVPN multihoming peers as LibreNMS neighbours, license expiry, and the LDP/RPKI/VRRP
+definitions are unverified on real devices (see `CHANGELOG.md`).
 
 ## Requirements
 
@@ -135,11 +134,15 @@ as a host key mismatch and the device goes into back-off like any other connecti
 
 ## Credentials
 
-Global defaults live on the plugin settings page. Per device they can be overridden with
+Global defaults live on the plugin settings page. Per device they can be overridden on the
+device page (`/plugin/netconf/device/<id>`) or with `lnms netconf:device`; the overrides are
 device attributes (`netconf_username`, `netconf_password`, `netconf_keyfile`,
-`netconf_key_passphrase`, `netconf_port`, `netconf_transport`); a UI for that follows in
-Phase 4. Secrets are encrypted with the LibreNMS `APP_KEY` and stored with a `crypt:`
-prefix; the settings form never shows them again.
+`netconf_key_passphrase`, `netconf_port`, `netconf_transport`). Secrets are encrypted with
+the LibreNMS `APP_KEY` and stored with a `crypt:` prefix; neither form shows them again.
+
+The plugin only needs `show` commands. Run the monitoring account in the read-only login
+class above rather than `super-user`: `lnms netconf:test` warns when the account has
+configuration rights.
 
 ## Commands
 

@@ -38,7 +38,6 @@ class Settings implements SettingsHook
             'effective' => $effective,
             'defaults' => NetconfSettings::defaults(),
             'secret_state' => $secretState,
-            'module_ready' => class_exists(\LibreNMS\Modules\Netconf::class),
         ];
     }
 }
