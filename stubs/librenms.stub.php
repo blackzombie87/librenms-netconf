@@ -124,6 +124,11 @@ namespace App\Facades {
             return false;
         }
 
+        public static function erase(string $key): bool
+        {
+            return true;
+        }
+
         public static function getOsSetting(?string $os, string $key, mixed $default = null): mixed
         {
             return null;
@@ -370,6 +375,20 @@ namespace App\Facades {
         public static function checkRrdExists(string $filename): bool
         {
             return false;
+        }
+
+        /**
+         * @param  string|array<int, string|int>  $prefix
+         * @return list<string>
+         */
+        public static function getRrdFiles(string $hostname, string|array $prefix = ''): array
+        {
+            return [];
+        }
+
+        public static function dirFromHost(string $host): string
+        {
+            return '';
         }
     }
 }

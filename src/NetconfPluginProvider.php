@@ -15,6 +15,7 @@ use SafferIt\LibrenmsNetconf\Console\NetconfDeviceCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfPreviewCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfRunCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfTestCommand;
+use SafferIt\LibrenmsNetconf\Console\NetconfUninstallCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfValidateCommand;
 use SafferIt\LibrenmsNetconf\Definitions\DefinitionLoader;
 use SafferIt\LibrenmsNetconf\Hooks\DeviceOverview;
@@ -56,6 +57,11 @@ class NetconfPluginProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__ . '/../resources/views', $name);
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         SettingsSecrets::register();
+
+        if ($this->app->runningInConsole()) {
+            // available while the plugin is disabled: it is the step before plugin:remove
+            $this->commands([NetconfUninstallCommand::class]);
+        }
 
         if (! $pluginManager->pluginEnabled($name)) {
             return;

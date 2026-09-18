@@ -314,6 +314,54 @@ Notes:
 - The core `sensors` poller lists netconf sensors as "Checking (netconf) …" and skips
   them; their `sensor_oid` is sysUpTime so that check stays cheap.
 
+## Upgrade and uninstall
+
+**Upgrade.** `daily.sh` re-installs every plugin listed in `composer.plugins.json` at the
+version constraint `plugin:add` recorded (`^1.0` for a 1.x install), so patch and minor
+releases arrive with the regular LibreNMS update. To move on purpose, or to a specific
+version, run `plugin:add` again, then the migrations:
+
+```bash
+./lnms plugin:add saffer-it/librenms-netconf            # newest release within the constraint
+./lnms plugin:add saffer-it/librenms-netconf 1.1.0      # a specific version
+./lnms migrate
+```
+
+Read the *Upgrade notes* of the release in `CHANGELOG.md` first; nothing has to be
+deleted for an upgrade, the RRDs heal themselves (see *What lands where*).
+
+**Disable.** `./lnms plugin:disable netconf` stops polling and discovery, hides the pages
+and the commands and keeps all data; `plugin:enable netconf` resumes.
+
+**Uninstall.** `./lnms plugin:remove saffer-it/librenms-netconf` only removes the package.
+Everything the plugin stored stays behind:
+
+| What | Where |
+|---|---|
+| sensors with `poller_type = netconf` (values, state translations) | `sensors` table, `rrd/<host>/sensor-<class>-netconf-*.rrd` |
+| custom and per-port metrics | tables `netconf_metrics`, `netconf_port_metrics`, files `rrd/<host>/netconf-*.rrd` |
+| per-device status and back-off | table `netconf_device_status` |
+| per-device switches and credential overrides | `devices_attribs` rows `netconf_enabled`, `netconf_queues`, `netconf_username`, … |
+| module scheduling | config keys `poller_modules.netconf`, `discovery_modules.netconf` |
+| the plugin's migrations | rows in the `migrations` table |
+| global settings including the encrypted password | row `netconf` in the `plugins` table (LibreNMS deletes it itself once the package is gone) |
+
+`netconf:uninstall` removes all of that in an order a concurrently running poller cannot
+undo (plugin disabled and module keys erased first, rows and files next, tables and
+migration rows last). It stays available while the plugin is disabled:
+
+```bash
+./lnms netconf:uninstall                  # lists what would be deleted, changes nothing
+./lnms netconf:uninstall --purge          # asks once, then deletes; --keep-rrd keeps the files, --force skips the question
+./lnms plugin:remove saffer-it/librenms-netconf
+```
+
+Alert rules that reference the plugin's sensors or tables are listed by the command and
+left for you to delete (rules on `netconf_metrics` fail once the table is gone). Also
+untouched: the SSH key and `known_hosts` files and the user definitions directory. To
+start over rather than uninstall, run `--purge`, then `plugin:enable netconf`, `migrate`
+and enable the devices again.
+
 ## Development
 
 ```bash

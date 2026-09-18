@@ -8,6 +8,7 @@ use App\Models\Sensor;
 use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
 use LibreNMS\Interfaces\Module;
+use LibreNMS\Interfaces\Plugins\PluginManagerInterface;
 use LibreNMS\OS;
 use LibreNMS\Polling\ConnectivityHelper;
 use LibreNMS\Polling\ModuleStatus;
@@ -18,6 +19,7 @@ use SafferIt\LibrenmsNetconf\Collect\SensorWriter;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
+use SafferIt\LibrenmsNetconf\NetconfSettings;
 
 /**
  * LibreNMS poller/discovery module shipped by the saffer-it/librenms-netconf plugin.
@@ -99,6 +101,13 @@ class Netconf implements Module
     private function should(OS $os, ModuleStatus $status, ConnectivityHelper $connectivity, bool $poll): bool
     {
         if (! $status->isEnabled() || ! $connectivity->isAvailable()) {
+            return false;
+        }
+
+        // the module keys stay in the config table while the plugin is disabled (lnms plugin:disable)
+        if (! app(PluginManagerInterface::class)->pluginEnabled(NetconfSettings::PLUGIN_NAME)) {
+            Log::debug('netconf skipped: plugin disabled');
+
             return false;
         }
 

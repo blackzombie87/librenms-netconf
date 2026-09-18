@@ -54,6 +54,12 @@ custom metrics through YAML definitions. See `README.md` for what is shipped.
 - Parser hints (bare-word `index:` expressions) are shown by `netconf:validate` and the
   definitions page; the unused sensor `entity:` key was removed.
 - `netconf_metrics.types` stores the RRD data source types per row (migration).
+- `lnms netconf:uninstall [--purge] [--keep-rrd] [--force]` lists and removes everything the
+  plugin stores in LibreNMS (sensors and their RRDs, the three tables and their RRDs, device
+  attributes, module config keys, migration rows); it stays available while the plugin is
+  disabled so it can run right before `plugin:remove`. README section *Upgrade and uninstall*.
+- `lnms plugin:disable netconf` now stops the poller/discovery module; before, the persisted
+  module keys kept it running with the plugin disabled.
 - `composer.lock` is committed and resolved for PHP 8.2 (`config.platform`), so CI
   installs the same dependency set on every PHP version; LibreNMS resolves the plugin
   against its own lock, so installations are unaffected.
