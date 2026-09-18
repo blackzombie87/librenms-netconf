@@ -31,11 +31,12 @@ class GraphController extends Controller
     {
         $device = $this->device($metric->device_id);
         $file = Rrd::name($device->hostname, NetconfMetric::rrdName($metric->definition, $metric->mapping, $metric->metric_index));
-        $fields = $this->fields($request, array_keys($metric->values ?? []));
+        $sources = $metric->dataSources();
+        $fields = $this->fields($request, array_keys($sources));
 
         $builder = new GraphBuilder($this->palette());
         foreach ($fields as $field) {
-            $builder->add($file, $field, $field, $this->metricType($metric, $field));
+            $builder->add($file, $field, $field, $sources[$field]);
         }
 
         return $this->render($request, $builder, sprintf('%s - %s', $device->displayName(), $metric->descr ?: $metric->metric_index), [$file]);
@@ -54,11 +55,12 @@ class GraphController extends Controller
         $builder = new GraphBuilder($this->palette());
         $files = [];
         foreach ($rows as $row) {
-            if (! array_key_exists($data['field'], $row->values ?? [])) {
+            $sources = $row->dataSources();
+            if (! array_key_exists($data['field'], $sources)) {
                 continue;
             }
             $files[] = $file = Rrd::name($device->hostname, NetconfMetric::rrdName($row->definition, $row->mapping, $row->metric_index));
-            $builder->add($file, $data['field'], $row->metric_index, $this->metricType($row, $data['field']));
+            $builder->add($file, $data['field'], $row->metric_index, $sources[$data['field']]);
         }
 
         return $this->render($request, $builder, sprintf('%s - %s/%s %s', $device->displayName(), $data['definition'], $data['mapping'], $data['field']), $files);
@@ -128,26 +130,6 @@ class GraphController extends Controller
         }
 
         return array_values(array_intersect(explode(',', $wanted), $available));
-    }
-
-    private function metricType(NetconfMetric $metric, string $field): string
-    {
-        // types are not stored per metric row; derive from the shipped/user definition when loaded
-        $loader = app(\SafferIt\LibrenmsNetconf\Definitions\DefinitionLoader::class);
-        $definition = $loader->get($metric->definition);
-        if ($definition) {
-            foreach ($definition->metrics as $mapping) {
-                if ($mapping->id === $metric->mapping) {
-                    foreach ($mapping->fields as $f) {
-                        if ($f->name === $field) {
-                            return $f->type;
-                        }
-                    }
-                }
-            }
-        }
-
-        return 'GAUGE';
     }
 
     /**

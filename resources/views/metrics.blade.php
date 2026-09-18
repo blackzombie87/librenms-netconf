@@ -18,7 +18,7 @@
         <div class="panel-body">
             @forelse ($metrics as $group => $rows)
                 @php([$definition, $mapping] = explode(' / ', $group, 2))
-                @php($numeric = collect($rows)->flatMap(fn ($r) => array_keys($r->values ?? []))->unique()->values())
+                @php($numeric = collect($rows)->flatMap(fn ($r) => array_keys($r->dataSources()))->unique()->values())
                 <h4><code>{{ $group }}</code> <small>{{ $rows->count() }} rows, updated {{ $rows->first()->last_seen?->diffForHumans() }}</small></h4>
                 @php($fields = collect($rows)->flatMap(fn ($r) => array_keys(($r->values ?? []) + ($r->labels ?? [])))->unique()->values())
                 <div style="overflow-x: auto;">

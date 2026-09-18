@@ -37,6 +37,7 @@ class MetricWriter
                 'descr' => mb_substr($row->descr, 0, 255),
                 'group' => $row->mapping->group,
                 'values' => $row->values,
+                'types' => $row->types,
                 'labels' => $row->strings,
                 'last_seen' => now(),
             ]);
