@@ -6,15 +6,16 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: release candidate for 1.0.0, not yet on Packagist.** Transports, credentials and
-the settings page, the YAML definition engine and the `netconf` poller/discovery module are
-verified against an EX4650 (Junos 23.4R2). Extracted values are stored as native LibreNMS
+**Status: 1.0.0, not yet on Packagist** (install from a Git checkout or a path repository
+until then, see *Development*). Transports, credentials and the settings page, the YAML
+definition engine and the `netconf` poller/discovery module are verified against an EX4650
+(Junos 23.4R2); the LDP, RPKI and VRRP definitions against recorded replies of a Junos 22.2
+MPLS router. Extracted values are stored as native LibreNMS
 sensors (health tab, graphs, alert rules), per-port metrics and custom metrics with their
 own RRDs and graphs. The web UI has a NETCONF status page, a per-device page (credentials,
 test connection, discover/poll now), a device overview panel, metric tables with graphs, a
 port tab with the per-port counters and a "run a show command" form. Not in this version:
-EVPN multihoming peers as LibreNMS neighbours, license expiry, and the LDP/RPKI/VRRP
-definitions are unverified on real devices (see `CHANGELOG.md`).
+EVPN multihoming peers as LibreNMS neighbours and license expiry (see `CHANGELOG.md`).
 
 ## Requirements
 
@@ -190,9 +191,9 @@ Shipped (Junos):
 
 Commands whose subsystem is not running ("LDP instance is not running", "vrrp subsystem
 not running") are recognised and skipped without creating sensors, so every definition can
-be shipped enabled. The LDP, RPKI and VRRP element paths come from junos_exporter's
-collectors and were not yet verified on a device running those protocols; the other
-definitions are verified on an EX4650.
+be shipped enabled. The LDP, RPKI and VRRP definitions were verified against recorded
+replies of a Junos 22.2 MPLS router (anonymised copies in `tests/fixtures/junos/`); the
+other definitions live on an EX4650.
 
 Alert rules for the sensors and for the JSON columns of `netconf_metrics` are in
 *Alerting* below.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (1.0.0 candidate)
+## 1.0.0 – 2026-09-18
 
 First release. LibreNMS plugin that runs `show … | display xml` (SSH exec) or NETCONF
 RPCs on Junos devices and maps the replies onto native sensors, per-port metrics and
