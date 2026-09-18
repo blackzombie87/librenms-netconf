@@ -48,11 +48,13 @@ class GraphController extends Controller
         $data = $request->validate(['device' => 'required|integer', 'definition' => 'required|string', 'mapping' => 'required|string', 'field' => 'required|string']);
         $device = $this->device((int) $data['device']);
 
-        $rows = NetconfMetric::query()->where('device_id', $device->device_id)
+        $all = NetconfMetric::query()->where('device_id', $device->device_id)
             ->where('definition', $data['definition'])->where('mapping', $data['mapping'])->get()
-            ->sortBy('metric_index')->take(self::MAX_SERIES);
+            ->sortBy('metric_index');
+        $rows = $all->take(self::MAX_SERIES);
 
         $builder = new GraphBuilder($this->palette());
+        $this->capNote($builder, $all->count(), 'rows');
         $files = [];
         foreach ($rows as $row) {
             $sources = $row->dataSources();
@@ -88,13 +90,15 @@ class GraphController extends Controller
         $data = $request->validate(['device' => 'required|integer', 'definition' => 'required|string', 'mapping' => 'required|string', 'field' => 'required|string']);
         $device = $this->device((int) $data['device']);
 
-        $rows = NetconfPortMetric::query()->where('netconf_port_metrics.device_id', $device->device_id)
-            ->where('definition', $data['definition'])->where('mapping', $data['mapping'])
-            ->join('ports', 'ports.port_id', '=', 'netconf_port_metrics.port_id')
+        $query = NetconfPortMetric::query()->where('netconf_port_metrics.device_id', $device->device_id)
+            ->where('definition', $data['definition'])->where('mapping', $data['mapping']);
+        $total = $query->count();
+        $rows = $query->join('ports', 'ports.port_id', '=', 'netconf_port_metrics.port_id')
             ->orderBy('ports.ifIndex')->limit(self::MAX_SERIES)
             ->get(['netconf_port_metrics.*', 'ports.ifName']);
 
         $builder = new GraphBuilder($this->palette());
+        $this->capNote($builder, $total, 'ports');
         $files = [];
         foreach ($rows as $row) {
             $values = is_array($row->values) ? $row->values : (array) json_decode((string) $row->values, true);
@@ -107,6 +111,14 @@ class GraphController extends Controller
         }
 
         return $this->render($request, $builder, sprintf('%s - %s/%s %s', $device->displayName(), $data['definition'], $data['mapping'], $data['field']), $files);
+    }
+
+    /** Make the MAX_SERIES cut visible in the image instead of silently dropping series. */
+    private function capNote(GraphBuilder $builder, int $total, string $what): void
+    {
+        if ($total > self::MAX_SERIES) {
+            $builder->comment(sprintf('showing the first %d of %d %s', self::MAX_SERIES, $total, $what));
+        }
     }
 
     private function device(int $deviceId): Device

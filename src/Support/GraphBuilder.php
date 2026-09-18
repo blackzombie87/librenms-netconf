@@ -18,6 +18,9 @@ class GraphBuilder
     /** @var list<string> */
     private array $colours;
 
+    /** @var list<string> */
+    private array $comments = [];
+
     /**
      * @param  list<string>|null  $colours  hex colours without '#'
      */
@@ -29,6 +32,14 @@ class GraphBuilder
     public function add(string $file, string $ds, string $label, string $type = 'GAUGE'): self
     {
         $this->series[] = ['file' => $file, 'ds' => $ds, 'label' => $label, 'type' => $type];
+
+        return $this;
+    }
+
+    /** Free text printed below the legend, e.g. "showing 25 of 61 rows". */
+    public function comment(string $text): self
+    {
+        $this->comments[] = $text;
 
         return $this;
     }
@@ -72,6 +83,10 @@ class GraphBuilder
             $options[] = "GPRINT:{$id}min:MIN:%6.2lf%s";
             $options[] = "GPRINT:{$id}max:MAX:%6.2lf%s";
             $options[] = "GPRINT:$id:AVERAGE:%6.2lf%s\\l";
+        }
+
+        foreach ($this->comments as $comment) {
+            $options[] = 'COMMENT:' . str_replace(':', '\\:', preg_replace('/[^\x20-\x7E]/u', '?', $comment) ?? $comment) . '\\l';
         }
 
         return $options;

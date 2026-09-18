@@ -21,6 +21,12 @@ it('builds DEF, LINE and GPRINT options per series with rotating colours', funct
         ->and($b->count())->toBe(3);
 });
 
+it('appends comments after the series with colons escaped', function () {
+    $options = (new GraphBuilder)->add('/rrd/h/a.rrd', 'total', 'x')->comment('showing 25 of 61 rows: capped')->options('t');
+
+    expect(end($options))->toBe('COMMENT:showing 25 of 61 rows\\: capped\\l');
+});
+
 it('escapes colons in RRD paths', function () {
     $options = (new GraphBuilder)->add('/rrd/2001:db8::1/netconf-a-b-c.rrd', 'total', 'x')->options('t');
 

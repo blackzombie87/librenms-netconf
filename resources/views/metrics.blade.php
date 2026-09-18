@@ -44,7 +44,7 @@
                 </div>
                 @if ($numeric->isNotEmpty())
                     <details style="margin-bottom: 20px;">
-                        <summary>Graphs per field ({{ $numeric->count() }}), one line per row{{ $rows->count() > 25 ? ', first 25 rows' : '' }}</summary>
+                        <summary>Graphs per field ({{ $numeric->count() }}), one line per row{{ $rows->count() > $max_series ? sprintf(', first %d of %d rows', $max_series, $rows->count()) : '' }}</summary>
                         <div class="row">
                             @foreach ($numeric as $field)
                                 <div class="col-md-6">
@@ -81,7 +81,7 @@
                 </table>
                 </div>
                 <details style="margin-bottom: 20px;">
-                    <summary>Graphs per counter, one line per port (first 25 ports)</summary>
+                    <summary>Graphs per counter, one line per port{{ $ports->count() > $max_series ? sprintf(' (first %d of %d ports per mapping)', $max_series, $ports->count()) : '' }}</summary>
                     @foreach ($pgroups as $pg)
                         @php([$pdef, $pmap] = explode('/', $pg, 2))
                         <div class="row">

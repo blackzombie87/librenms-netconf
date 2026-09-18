@@ -53,6 +53,7 @@ class DeviceController extends Controller
             'metrics' => $metrics,
             'ports' => $ports,
             'period' => $period,
+            'max_series' => GraphController::MAX_SERIES,
         ]);
     }
 
