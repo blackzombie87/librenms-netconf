@@ -25,6 +25,9 @@ class DefinitionLoader
     /** @var list<string> */
     private array $errors = [];
 
+    /** @var list<string> */
+    private array $hints = [];
+
     /**
      * @param  list<string>  $directories  lowest priority first
      */
@@ -62,9 +65,10 @@ class DefinitionLoader
         if ($this->cache === null || $signature !== $this->signature) {
             $this->cache = [];
             $this->errors = [];
+            $this->hints = [];
             foreach ($files as $file) {
                 try {
-                    $definition = $this->load($file);
+                    $definition = $this->load($file, $this->hints);
                     $this->cache[$definition->name] = $definition;
                 } catch (DefinitionException $e) {
                     $this->errors[] = $e->getMessage();
@@ -95,9 +99,24 @@ class DefinitionLoader
     }
 
     /**
+     * Non-fatal remarks the parser made about the loaded files (likely mistakes that are
+     * still valid YAML), for netconf:validate and the definitions page.
+     *
+     * @return list<string>
+     */
+    public function hints(): array
+    {
+        $this->all();
+
+        return $this->hints;
+    }
+
+    /**
+     * @param  list<string>  $hints  parser hints are appended here
+     *
      * @throws DefinitionException
      */
-    public function load(string $file): Definition
+    public function load(string $file, array &$hints = []): Definition
     {
         if (! is_readable($file)) {
             throw new DefinitionException("$file: not readable");
@@ -113,7 +132,11 @@ class DefinitionLoader
             throw new DefinitionException("$file: top level must be a mapping");
         }
 
-        return (new DefinitionParser)->parse($data, $file);
+        $parser = new DefinitionParser;
+        $definition = $parser->parse($data, $file);
+        array_push($hints, ...$parser->hints());
+
+        return $definition;
     }
 
     /**

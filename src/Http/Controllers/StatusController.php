@@ -30,6 +30,7 @@ class StatusController extends Controller
         return view('netconf::definitions', [
             'definitions' => $loader->all(),
             'errors' => $loader->errors(),
+            'hints' => $loader->hints(),
             'directories' => $loader->directories(),
         ]);
     }

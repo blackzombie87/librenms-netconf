@@ -152,7 +152,7 @@ class DefinitionParser
             $path = "sensors[$i]";
             $this->knownKeys($item, [
                 'id', 'class', 'command', 'rows', 'when', 'repeat', 'index', 'descr', 'value', 'value_any', 'group',
-                'limit', 'limit_low', 'warn_limit', 'warn_limit_low', 'divisor', 'multiplier', 'states', 'entity',
+                'limit', 'limit_low', 'warn_limit', 'warn_limit_low', 'divisor', 'multiplier', 'states',
             ], $path);
 
             $class = $this->string($item, 'class', $path, true);
@@ -200,7 +200,6 @@ class DefinitionParser
                 divisor: $this->float($item, 'divisor', $path) ?? 1,
                 multiplier: $this->float($item, 'multiplier', $path) ?? 1,
                 states: $states,
-                entity: $this->string($item, 'entity', $path),
             );
         }
 

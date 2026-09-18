@@ -13,6 +13,9 @@
             @foreach ($errors as $error)
                 <div class="alert alert-danger">{{ $error }}</div>
             @endforeach
+            @foreach ($hints as $hint)
+                <div class="alert alert-info">{{ $hint }}</div>
+            @endforeach
             <table class="table table-condensed table-hover">
                 <thead><tr><th>Name</th><th>Description</th><th>Match</th><th>Commands</th><th>Sensors</th><th>Ports</th><th>Metrics</th><th>Source</th></tr></thead>
                 <tbody>

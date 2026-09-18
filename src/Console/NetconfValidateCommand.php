@@ -48,9 +48,10 @@ class NetconfValidateCommand extends Command
         $loader = new DefinitionLoader($dirs);
         $definitions = $loader->all();
         $errors = $loader->errors();
+        $hints = $loader->hints();
         foreach ($files as $file) {
             try {
-                $definition = $loader->load($file);
+                $definition = $loader->load($file, $hints);
                 $definitions[$definition->name] = $definition;
             } catch (\Throwable $e) {
                 $errors[] = $e->getMessage();
@@ -77,6 +78,9 @@ class NetconfValidateCommand extends Command
 
         foreach ($errors as $error) {
             $this->error($error);
+        }
+        foreach ($hints as $hint) {
+            $this->comment('hint: ' . $hint);
         }
 
         $replay = $this->option('replay');

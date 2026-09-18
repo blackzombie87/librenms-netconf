@@ -30,7 +30,6 @@ final class SensorMapping
         public readonly float $divisor = 1,
         public readonly float $multiplier = 1,
         public readonly array $states = [],
-        public readonly ?string $entity = null,
     ) {
     }
 

@@ -55,6 +55,21 @@ it('reloads when a definition file is added, changed or removed', function () {
     rmdir($dir);
 });
 
+it('collects parser hints per loaded file', function () {
+    $dir = sys_get_temp_dir() . '/netconf-defs-' . uniqid();
+    mkdir($dir);
+    // index "total" is a bare word: evaluated as an XPath element, most likely meant as a literal
+    file_put_contents("$dir/h.yaml", "name: hinted\nmatch: {os: junos}\ncommands: {a: show a}\nsensors:\n  - {class: count, command: a, index: total, descr: X, value: count(//x)}\n");
+    $loader = new DefinitionLoader([$dir]);
+
+    expect($loader->hints())->toHaveCount(1)
+        ->and($loader->hints()[0])->toContain('h.yaml')->toContain('literal')
+        ->and($loader->errors())->toBe([]);
+
+    unlink("$dir/h.yaml");
+    rmdir($dir);
+});
+
 it('matches shipped definitions to device facts', function () {
     $loader = new DefinitionLoader([DefinitionLoader::shippedDirectory()]);
     $matcher = new DefinitionMatcher;
