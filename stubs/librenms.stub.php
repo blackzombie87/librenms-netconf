@@ -186,6 +186,7 @@ namespace App\Models {
      * @property string|null $ifDescr
      * @property string|null $ifAlias
      * @property int $deleted
+     * @property Device $device
      *
      * @method static \Illuminate\Database\Eloquent\Builder<Port> where(string $column, mixed $operator = null, mixed $value = null)
      */
@@ -347,6 +348,71 @@ namespace LibreNMS\RRD {
         public function addDataset(string $name, string $type, int|float|null $min = null, int|float|null $max = null, ?int $heartbeat = null): self
         {
             return $this;
+        }
+    }
+}
+
+namespace App\Facades {
+    class Rrd
+    {
+        /** @param  string|array<int, string|int>  $extra */
+        public static function name(string $host, string|array $extra): string
+        {
+            return '';
+        }
+
+        /** @param  list<string|int|float>  $options */
+        public static function graph(array $options): string
+        {
+            return '';
+        }
+
+        public static function checkRrdExists(string $filename): bool
+        {
+            return false;
+        }
+    }
+}
+
+namespace LibreNMS\Enum {
+    enum ImageFormat: string
+    {
+        case Png = 'png';
+        case Svg = 'svg';
+
+        public function contentType(): string
+        {
+            return '';
+        }
+    }
+}
+
+namespace LibreNMS\Data\Graphing {
+    class GraphParameters
+    {
+        public readonly \LibreNMS\Enum\ImageFormat $imageFormat;
+
+        public readonly int $width;
+
+        public readonly int $height;
+
+        /** @param  array<string, mixed>  $vars */
+        public function __construct(array $vars)
+        {
+            $this->imageFormat = \LibreNMS\Enum\ImageFormat::Svg;
+            $this->width = 0;
+            $this->height = 0;
+        }
+
+        public function visible(string $element): bool
+        {
+            return true;
+        }
+
+        /** @return list<string|int|float> */
+        public function toRrdOptions(): array
+        {
+            return [];
         }
     }
 }

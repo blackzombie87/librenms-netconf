@@ -43,10 +43,16 @@ class DeviceController extends Controller
             ->orderBy('ports.ifIndex')
             ->get(['netconf_port_metrics.*', 'ports.ifName', 'ports.ifIndex', 'ports.ifAlias']);
 
+        $period = (string) request()->query('period', '-1d');
+        if (! preg_match('/^-\d+[hdwmy]{1,2}$/', $period)) {
+            $period = '-1d';
+        }
+
         return view('netconf::metrics', [
             'device' => $device,
             'metrics' => $metrics,
             'ports' => $ports,
+            'period' => $period,
         ]);
     }
 

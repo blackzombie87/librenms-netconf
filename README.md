@@ -6,14 +6,14 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: Phase 4 — usable from the web UI.** Transports, credentials and the settings
-page (Phase 1), the YAML definition engine (Phase 2) and the `netconf` poller/discovery
-module (Phase 3) are verified against an EX4650 (Junos 23.4R2). Extracted values are
-stored as native LibreNMS sensors (health tab, graphs, alert rules), per-port metrics and
-custom metrics with their own RRDs. The web UI has a NETCONF status page, a per-device
-page (credentials, test connection, discover/poll now), a device overview panel and a
-"run a show command" form. Still to come: graphs for port and custom metrics and the port
-tab (Phase 5). The
+**Status: Phase 5 — feature complete for v1.0.** Transports, credentials and the settings
+page, the YAML definition engine and the `netconf` poller/discovery module are verified
+against an EX4650 (Junos 23.4R2). Extracted values are stored as native LibreNMS sensors
+(health tab, graphs, alert rules), per-port metrics and custom metrics with their own RRDs
+and graphs. The web UI has a NETCONF status page, a per-device page (credentials, test
+connection, discover/poll now), a device overview panel, metric tables with graphs, a port
+tab with the per-port counters and a "run a show command" form. Remaining before a release:
+packaging on Packagist and the Tier 2 definitions. The
 definition engine and the poller/discovery module follow in the next phases
 (see `NETCONF_PLUGIN_PLAN.md` in the development notes).
 
@@ -59,6 +59,16 @@ Instead of enabling devices one by one, set *Enable for all devices* on the sett
 - **Device overview panel**: polling state, matched definitions, sensor summary with the
   critical ones linked, and the first rows of every custom metric mapping; the full tables
   are at `/plugin/netconf/device/<id>/metrics`.
+- **Metric tables** (`/plugin/netconf/device/<id>/metrics`): every custom metric row with
+  its values and labels, a graph per row, and per mapping a fold-out with one graph per
+  field (one line per row); the same for port metrics. Period selector 6h/day/week/month/
+  year.
+- **Port tab** (*Plugins* tab of a port): the per-port counters with a combined rate graph
+  of all counters, gauges individually, and a fold-out with one graph per counter.
+
+Graphs are rendered from the plugin's RRDs by `/plugin/netconf/graph/...` using the same
+size, font and colour parameters as core graphs (SVG or PNG per the *webui.graph_type*
+setting); counters are shown as rates per second.
 
 Viewing needs access to the device (global-read for the status page); changing anything or
 talking to a device needs the admin role.

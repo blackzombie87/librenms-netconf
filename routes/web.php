@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use SafferIt\LibrenmsNetconf\Http\Controllers\DeviceController;
+use SafferIt\LibrenmsNetconf\Http\Controllers\GraphController;
 use SafferIt\LibrenmsNetconf\Http\Controllers\StatusController;
 
 /*
@@ -20,6 +21,12 @@ Route::middleware(['web', 'auth'])
 
         Route::get('device/{device}', [DeviceController::class, 'show'])->name('device');
         Route::get('device/{device}/metrics', [DeviceController::class, 'metrics'])->name('device.metrics');
+
+        // graphs from the plugin's own RRDs (authorised per device inside the controller)
+        Route::get('graph/metric/{metric}', [GraphController::class, 'metric'])->name('graph.metric');
+        Route::get('graph/metrics', [GraphController::class, 'metrics'])->name('graph.metrics');
+        Route::get('graph/port/{portMetric}', [GraphController::class, 'port'])->name('graph.port');
+        Route::get('graph/ports', [GraphController::class, 'ports'])->name('graph.ports');
 
         Route::middleware('can:admin')->group(function (): void {
             Route::post('device/{device}', [DeviceController::class, 'update'])->name('device.update');
