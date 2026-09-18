@@ -32,7 +32,7 @@ sensors:
     command: summary
     index: "'total'"
     descr: VRRP groups neither master nor backup
-    value: count(//vrrp-interface[not(contains('master backup', translate(vrrp-state, 'MASTERBACKUP', 'masterbackup')))])
+    value: count(//vrrp-interface[translate(vrrp-state, 'MASTERBACKUP', 'masterbackup') != 'master' and translate(vrrp-state, 'MASTERBACKUP', 'masterbackup') != 'backup'])
     group: VRRP
     limit: 0
 
