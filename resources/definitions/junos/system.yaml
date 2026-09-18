@@ -35,7 +35,9 @@ metrics:
       uptime:        number(uptime-information/up-time/@seconds)
       config_age:    number(last-configured-time/time-length/@seconds)
       last_config:   number(last-configured-time/date-time/@seconds)
-      config_user:   string(last-configured-time/user)
+      config_user:
+        xpath: string(last-configured-time/user)
+        type: string
       load1:         number(uptime-information/load-average-1)
       load5:         number(uptime-information/load-average-5)
       load15:        number(uptime-information/load-average-15)
@@ -49,9 +51,15 @@ metrics:
     fields:
       epoch:   number(date-time/@seconds)
       history: count(//commit-history)
-      user:    string(user)
-      client:  string(client)
-      comment: string(comment)
+      user:
+        xpath: string(user)
+        type: string
+      client:
+        xpath: string(client)
+        type: string
+      comment:
+        xpath: string(comment)
+        type: string
 
   - id: krt
     command: krt

@@ -57,8 +57,12 @@ metrics:
       clk_jitter:   number(//ntp-status/clk-jitter)
       frequency:    string(//ntp-status/frequency)
       stratum:      number(//ntp-status/stratum)
-      refid:        string(//ntp-status/refid)
-      status:       string(//ntp-status/statusinfo)
+      refid:
+        xpath: string(//ntp-status/refid)
+        type: string
+      status:
+        xpath: string(//ntp-status/statusinfo)
+        type: string
 
   - id: peer
     command: assoc
@@ -73,5 +77,9 @@ metrics:
       jitter_ms: number(jitter)
       poll:      number(poll)
       selected:  number(starts-with(remote, '*'))
-      reach:     string(reach)
-      refid:     string(refid)
+      reach:
+        xpath: string(reach)
+        type: string
+      refid:
+        xpath: string(refid)
+        type: string

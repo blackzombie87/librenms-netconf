@@ -254,6 +254,11 @@ class Extractor
     }
 
     /**
+     * Values of one row. $types lists every RRD field of the mapping in YAML order (present
+     * or not) so the writers create a stable data source set; `type: string` fields go to
+     * $strings, numeric fields whose text is not a number are kept as strings for display
+     * (custom metrics) or reported (ports).
+     *
      * @param  list<MetricField>  $fields
      * @return array{array<string, float>, array<string, string>, array<string, string>}
      */
@@ -263,14 +268,20 @@ class Extractor
         $strings = [];
         $types = [];
         foreach ($fields as $field) {
+            if (! $field->isText()) {
+                $types[$field->name] = $field->type;
+            }
             $raw = $doc->scalar(Template::substituteN($field->xpath, $n), $row);
             if ($raw === null || $raw === '') {
+                continue;
+            }
+            if ($field->isText()) {
+                $strings[$field->name] = Template::stringify($raw);
                 continue;
             }
             $number = $this->number($raw, $field->transform);
             if ($number !== null) {
                 $values[$field->name] = $number;
-                $types[$field->name] = $field->type;
             } elseif ($keepStrings) {
                 $strings[$field->name] = Template::stringify($raw);
             } else {

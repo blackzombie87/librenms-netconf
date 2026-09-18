@@ -133,7 +133,9 @@ metrics:
       local_ifs_up:   number(local-interfaces-up)
       irb_ifs:        number(irb-interfaces)
       irb_ifs_up:     number(irb-interfaces-up)
-      encap:          string(evpn-encap-type)
+      encap:
+        xpath: string(evpn-encap-type)
+        type: string
 
   - id: neighbor
     command: evpn_inst
@@ -155,7 +157,15 @@ metrics:
     fields:
       remote_pes: count(evpn-esi-remote-pe-information/evpn-esi-remote-pe)
       is_df:      number(evpn-esi-df-information/esi-designated-forwarder = ../evpn-router-id)
-      esi:        string(evpn-esi-value)
-      df:         string(evpn-esi-df-information/esi-designated-forwarder)
-      bdf:        string(evpn-esi-df-information/esi-backup-forwarder)
-      status:     string(evpn-esi-local-intf-information/evpn-esi-local-intf-status)
+      esi:
+        xpath: string(evpn-esi-value)
+        type: string
+      df:
+        xpath: string(evpn-esi-df-information/esi-designated-forwarder)
+        type: string
+      bdf:
+        xpath: string(evpn-esi-df-information/esi-backup-forwarder)
+        type: string
+      status:
+        xpath: string(evpn-esi-local-intf-information/evpn-esi-local-intf-status)
+        type: string

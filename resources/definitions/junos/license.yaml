@@ -30,4 +30,6 @@ metrics:
       licensed: number(licensed)
       used:     number(used-licensed)
       needed:   number(needed)
-      validity: string(validity-type)
+      validity:
+        xpath: string(validity-type)
+        type: string

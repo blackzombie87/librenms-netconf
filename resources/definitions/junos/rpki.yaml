@@ -54,7 +54,9 @@ metrics:
       flaps: { xpath: number(session-flaps), type: COUNTER }
       v4:    number(ip-prefix-count)
       v6:    number(ip6-prefix-count)
-      state: string(session-state)
+      state:
+        xpath: string(session-state)
+        type: string
 
   - id: statistics
     command: stats

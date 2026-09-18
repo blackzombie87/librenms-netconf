@@ -42,7 +42,15 @@ metrics:
     descr: 'VRRP {row:interface} group {row:group}'
     fields:
       master:   number(translate(vrrp-state, 'MASTER', 'master') = 'master')
-      state:    string(vrrp-state)
-      mode:     string(vrrp-mode)
-      vip:      string(virtual-ip-address)
-      if_state: string(interface-state)
+      state:
+        xpath: string(vrrp-state)
+        type: string
+      mode:
+        xpath: string(vrrp-mode)
+        type: string
+      vip:
+        xpath: string(virtual-ip-address)
+        type: string
+      if_state:
+        xpath: string(interface-state)
+        type: string

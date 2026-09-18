@@ -112,6 +112,20 @@ it('parses ports and metrics with field shorthand and types', function () {
         ->and(fn () => parseDef(minimal(['metrics' => [['command' => 'ver', 'index' => "'i'", 'fields' => ['this_name_is_far_too_long' => 'x']]]])))
         ->toThrow(DefinitionException::class, '1-19 characters')
         ->and(fn () => parseDef(minimal(['metrics' => [['command' => 'ver', 'index' => "'i'", 'fields' => ['a' => ['xpath' => 'x', 'type' => 'ABSOLUTE']]]]])))
+        ->toThrow(DefinitionException::class, 'GAUGE, COUNTER, DERIVE or string');
+});
+
+it('accepts label-only string fields in metrics but not in ports', function () {
+    $d = parseDef(minimal(['metrics' => [[
+        'command' => 'ver', 'index' => "'i'",
+        'fields' => ['total' => 'number(t)', 'state' => ['xpath' => 'string(s)', 'type' => 'string']],
+    ]]]));
+
+    expect($d->metrics[0]->fields[1]->type)->toBe('STRING')
+        ->and($d->metrics[0]->fields[1]->isText())->toBeTrue()
+        ->and($d->metrics[0]->fields[0]->isText())->toBeFalse();
+
+    expect(fn () => parseDef(minimal(['ports' => [['command' => 'ver', 'rows' => '//a', 'match' => ['port_field' => 'ifIndex', 'xpath' => 'x'], 'metrics' => ['a' => ['xpath' => 'x', 'type' => 'string']]]]])))
         ->toThrow(DefinitionException::class, 'GAUGE, COUNTER or DERIVE');
 });
 

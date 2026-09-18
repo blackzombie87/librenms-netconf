@@ -315,9 +315,10 @@ class DefinitionParser
     /**
      * Accepts `{name: xpath}` maps, `{name: {xpath, type}}` maps and `[{name, xpath, type}]` lists.
      *
+     * @param  bool  $rrdOnly  ports: every field is an RRD data source, `type: string` is not allowed
      * @return list<MetricField>
      */
-    private function fields(mixed $data, string $path, bool $list): array
+    private function fields(mixed $data, string $path, bool $rrdOnly): array
     {
         if (! is_array($data) || $data === []) {
             throw $this->error($path, 'at least one field is required');
@@ -346,8 +347,11 @@ class DefinitionParser
             $names[$name] = true;
 
             $type = strtoupper((string) ($spec['type'] ?? 'GAUGE'));
-            if (! in_array($type, MetricField::TYPES, true)) {
+            if ($rrdOnly && ! in_array($type, MetricField::RRD_TYPES, true)) {
                 throw $this->error("$path.$key.type", 'must be GAUGE, COUNTER or DERIVE');
+            }
+            if (! in_array($type, MetricField::TYPES, true)) {
+                throw $this->error("$path.$key.type", 'must be GAUGE, COUNTER, DERIVE or string');
             }
 
             $fields[] = new MetricField($name, $this->xpath((string) $spec['xpath'], "$path.$key.xpath") ?? '', $type, isset($spec['transform']) ? (string) $spec['transform'] : null);

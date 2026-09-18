@@ -247,10 +247,10 @@ metrics:
     rows: //route-table
     index: string(table-name)
     descr: 'Route table {index}'
-    fields:                      # numeric -> RRD (name max 19 chars), text -> label
+    fields:                      # GAUGE/COUNTER/DERIVE -> RRD data source (name max 19 chars)
       total:  number(total-route-count)
       flaps:  { xpath: number(flap-count), type: COUNTER }
-      state:  string(peer-state)
+      state:  { xpath: string(peer-state), type: string }   # label only, never an RRD data source
 ```
 
 Namespaces are stripped before evaluation, so paths never need prefixes; attributes keep
@@ -284,8 +284,11 @@ Notes:
 - Sensors whose command failed or was skipped in a run are kept, not deleted; sensors
   disappear only when their command succeeded and the row is gone.
 - User-customised limits (sensor "custom" flag in the UI) survive rediscovery.
-- The RRD data sources of a metric or port row are fixed when the file is created. If a
-  definition later gains a numeric field, delete the RRD to recreate it.
+- The RRD of a metric or port row has one data source per GAUGE/COUNTER/DERIVE field of
+  the mapping, in YAML order, created on the first write; values missing in a reply are
+  written as unknown. Mark text fields `type: string` so they do not become empty data
+  sources. If a definition later gains or reorders numeric fields, delete the RRD to
+  recreate it (`rrdtool info` shows the current data sources).
 - The core `sensors` poller lists netconf sensors as "Checking (netconf) …" and skips
   them; their `sensor_oid` is sysUpTime so that check stays cheap.
 

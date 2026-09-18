@@ -94,8 +94,12 @@ metrics:
       out_msgs:    { xpath: number(output-messages), type: COUNTER }
       route_queue: number(route-queue-count)
       uptime:      number(elapsed-time/@seconds)
-      state:       string(peer-state)
-      description: string(description)
+      state:
+        xpath: string(peer-state)
+        type: string
+      description:
+        xpath: string(description)
+        type: string
 
   - id: bgp-peer-rib
     command: bgp_sum

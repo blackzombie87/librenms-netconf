@@ -12,7 +12,7 @@ final class MetricRow
     /**
      * @param  array<string, float>  $values  numeric fields
      * @param  array<string, string>  $strings  fields whose value is not numeric (kept for display/labels)
-     * @param  array<string, string>  $types  field name => GAUGE|COUNTER|DERIVE
+     * @param  array<string, string>  $types  every RRD field of the mapping in YAML order => GAUGE|COUNTER|DERIVE
      */
     public function __construct(
         public readonly string $definition,
@@ -24,5 +24,22 @@ final class MetricRow
         public readonly array $types,
         public readonly ?string $re = null,
     ) {
+    }
+
+    /**
+     * Values for the RRD update: every data source of the mapping in definition order,
+     * `U` (unknown) where this row has no value, so the update never drifts from the
+     * data sources the file was created with.
+     *
+     * @return array<string, float|string>
+     */
+    public function rrdValues(): array
+    {
+        $out = [];
+        foreach ($this->types as $field => $type) {
+            $out[$field] = $this->values[$field] ?? 'U';
+        }
+
+        return $out;
     }
 }

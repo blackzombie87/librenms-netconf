@@ -148,7 +148,10 @@ it('extracts the Tier 2 system, NTP, license and LACP data', function () {
         ->and(sensorsOf('junos-ntp', 'peers-reachable')['reachable']->value)->toBe(1.0)
         ->and(array_keys(metricsOf('junos-ntp', 'peer')))->toBe(['ntp1.example.net'])
         ->and(metricsOf('junos-ntp', 'peer')['ntp1.example.net']->values['selected'])->toBe(1.0)
-        ->and(metricsOf('junos-ntp', 'system')['system']->values['offset_ms'])->toBe(0.325185);
+        ->and(metricsOf('junos-ntp', 'system')['system']->values['offset_ms'])->toBe(0.325185)
+        ->and(metricsOf('junos-ntp', 'peer')['ntp1.example.net']->strings['reach'])->toBe('377')
+        ->and(array_keys(metricsOf('junos-ntp', 'peer')['ntp1.example.net']->rrdValues()))->toBe(['stratum', 'delay_ms', 'offset_ms', 'jitter_ms', 'poll', 'selected'])
+        ->and(array_keys(metricsOf('junos-ntp', 'system')['system']->types))->toBe(['offset_ms', 'rootdelay_ms', 'rootdisp_ms', 'sys_jitter', 'clk_jitter', 'frequency', 'stratum']);
 
     expect(sensorsOf('junos-system', 'krt-queue')['total']->value)->toBe(0.0)
         ->and(metricsOf('junos-system', 'krt'))->toHaveCount(32)

@@ -53,9 +53,10 @@ class PortMetricWriter
             ]);
 
             if ($datastore !== null && $row->values !== []) {
+                // every RRD field of the mapping, in definition order, whether present or not:
+                // the data source set must not depend on what this reply contained
                 $def = RrdDefinition::make();
-                foreach ($row->values as $field => $value) {
-                    $type = $row->types[$field] ?? 'GAUGE';
+                foreach ($row->types as $field => $type) {
                     $def->addDataset($field, $type, $type === 'GAUGE' ? null : 0);
                 }
                 $datastore->put($this->device, 'netconf-port', [
@@ -64,7 +65,7 @@ class PortMetricWriter
                     'port_id' => $portId,
                     'rrd_name' => NetconfPortMetric::rrdName($portId, $row->definition, $row->mapping->id),
                     'rrd_def' => $def,
-                ], $row->values);
+                ], $row->rrdValues());
             }
 
             Log::debug(sprintf('  port %s=%s (port_id %d) %s', $row->matchField, $row->matchValue, $portId, json_encode($row->values)));

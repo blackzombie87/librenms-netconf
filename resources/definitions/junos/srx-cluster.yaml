@@ -63,6 +63,12 @@ metrics:
     descr: 'Cluster {index}'
     fields:
       priority:      number(device-stats/device-priority[{n}])
-      status:        string(device-stats/redundancy-group-status[{n}])
-      preempt:       string(device-stats/preempt[{n}])
-      failover_mode: string(device-stats/failover-mode[{n}])
+      status:
+        xpath: string(device-stats/redundancy-group-status[{n}])
+        type: string
+      preempt:
+        xpath: string(device-stats/preempt[{n}])
+        type: string
+      failover_mode:
+        xpath: string(device-stats/failover-mode[{n}])
+        type: string

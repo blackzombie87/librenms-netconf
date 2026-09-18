@@ -19,9 +19,15 @@ metrics:
     fields:
       remote_vteps: number(num-remote-vteps)
       remote_macs:  sum(esi-remote-vtep-information/esi-remote-vtep-entry/remote-vtep-mac-count)
-      esi:          string(esi-value)
-      instance:     string(routing-instance-name)
-      aliasing:     string(esi-aliasing-enabled)
+      esi:
+        xpath: string(esi-value)
+        type: string
+      instance:
+        xpath: string(routing-instance-name)
+        type: string
+      aliasing:
+        xpath: string(esi-aliasing-enabled)
+        type: string
 
   - id: remote-vtep
     command: vtep_esi
@@ -30,5 +36,9 @@ metrics:
     descr: 'ESI-LAG {row:translate(normalize-space(../../local-interface), ",", "")} peer {row:remote-vtep-address}'
     fields:
       macs: number(remote-vtep-mac-count)
-      vtep: string(remote-vtep-address)
-      esi:  string(../../esi-value)
+      vtep:
+        xpath: string(remote-vtep-address)
+        type: string
+      esi:
+        xpath: string(../../esi-value)
+        type: string

@@ -11,7 +11,8 @@ use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 
 /**
  * Custom metrics: one netconf_metrics row per index (last values + labels, for the UI and
- * Advanced-SQL alert rules) and one RRD per row with a data source per numeric field.
+ * Advanced-SQL alert rules) and one RRD per row with a data source per numeric field of
+ * the mapping (missing values are written as unknown).
  */
 class MetricWriter
 {
@@ -41,9 +42,10 @@ class MetricWriter
             ]);
 
             if ($datastore !== null && $row->values !== []) {
+                // every RRD field of the mapping, in definition order, whether present or not:
+                // the data source set must not depend on what this reply contained
                 $def = RrdDefinition::make();
-                foreach ($row->values as $field => $value) {
-                    $type = $row->types[$field] ?? 'GAUGE';
+                foreach ($row->types as $field => $type) {
                     $def->addDataset($field, $type, $type === 'GAUGE' ? null : 0);
                 }
                 $datastore->put($this->device, 'netconf', [
@@ -52,7 +54,7 @@ class MetricWriter
                     'index' => $row->index,
                     'rrd_name' => NetconfMetric::rrdName($row->definition, $row->mapping->id, $row->index),
                     'rrd_def' => $def,
-                ], $row->values);
+                ], $row->rrdValues());
                 $written++;
             }
 

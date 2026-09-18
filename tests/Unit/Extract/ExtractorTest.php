@@ -137,6 +137,40 @@ it('extracts metric rows with numeric and string fields', function () {
         ->and($rows[0]->types['flaps'])->toBe('COUNTER');
 });
 
+it('keeps the RRD data source set stable whatever a row contains', function () {
+    $def = defWith(['metrics' => [[
+        'command' => 'c', 'index' => "'system'",
+        'fields' => [
+            'offset_ms' => 'string(//ntp-status/offset)',       // "+0.325185": numeric although string()
+            'missing' => 'number(//ntp-status/no-such-node)',   // absent in this reply
+            'text' => 'string(//ntp-status/statusinfo)',        // GAUGE typed but not a number
+            'flaps' => ['xpath' => 'number(//nope)', 'type' => 'COUNTER'],
+            'refid' => ['xpath' => 'string(//ntp-status/refid)', 'type' => 'string'],
+            'reach' => ['xpath' => "string('377')", 'type' => 'string'],   // numeric-looking label stays a label
+        ],
+    ]]]);
+    $doc = new XmlDocument(fixture('junos/show-ntp-status.xml'));
+
+    $row = (new Extractor)->metrics($def, $def->metrics[0], $doc)[0];
+
+    expect($row->values)->toBe(['offset_ms' => 0.325185])
+        ->and($row->strings)->toHaveKeys(['text', 'refid', 'reach'])
+        ->and($row->strings['reach'])->toBe('377')
+        ->and(array_keys($row->types))->toBe(['offset_ms', 'missing', 'text', 'flaps'])
+        ->and($row->types['flaps'])->toBe('COUNTER')
+        ->and($row->rrdValues())->toBe(['offset_ms' => 0.325185, 'missing' => 'U', 'text' => 'U', 'flaps' => 'U']);
+
+    // port rows: same contract
+    $pdef = defWith(['ports' => [[
+        'command' => 'c', 'rows' => '//physical-interface[snmp-index]', 'match' => ['port_field' => 'ifIndex', 'xpath' => 'string(snmp-index)'],
+        'metrics' => ['missing' => 'number(no-such-element)', 'crc_in' => ['xpath' => 'number(ethernet-mac-statistics/input-crc-errors)', 'type' => 'COUNTER']],
+    ]]]);
+    $prow = (new Extractor)->ports($pdef, $pdef->ports[0], new XmlDocument(fixture('junos/show-interfaces-extensive.xml')))[0];
+
+    expect(array_keys($prow->rrdValues()))->toBe(['missing', 'crc_in'])
+        ->and($prow->rrdValues()['missing'])->toBe('U');
+});
+
 it('parses numbers with units and durations', function () {
     expect(Extractor::duration('75w0d 12:49'))->toBe(75 * 604800 + 12 * 3600 + 49 * 60.0)
         ->and(Extractor::duration('1d 02:03:04'))->toBe(86400 + 2 * 3600 + 3 * 60 + 4.0)
