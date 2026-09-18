@@ -3,7 +3,7 @@
 namespace SafferIt\LibrenmsNetconf\Transport;
 
 use SafferIt\LibrenmsNetconf\Transport\Contracts\TransportInterface;
-use SafferIt\LibrenmsNetconf\Transport\Exceptions\TransportException;
+use SafferIt\LibrenmsNetconf\Transport\Exceptions\RpcErrorException;
 
 /**
  * In-memory transport for tests and the "--fixture" mode of netconf:run.
@@ -53,7 +53,8 @@ class FakeTransport implements TransportInterface
         $this->executed[] = $key;
 
         if (! array_key_exists($key, $this->replies)) {
-            throw new TransportException("FakeTransport: no reply registered for '$key'");
+            // behave like a device that does not know the command: only this command fails
+            throw new RpcErrorException($key, ['no reply registered in FakeTransport']);
         }
 
         return (new Reply($key, $this->replies[$key]))->assertOk();

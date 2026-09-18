@@ -1,0 +1,25 @@
+# Per-port, per-queue drop counters. Opt-in per device (attribute netconf_queues=1):
+# 8 queues x 3 counters per port is a lot of RRDs.
+name: junos-interface-queues
+description: Per-queue queued / transmitted / dropped packets per port (opt-in via device attribute netconf_queues)
+
+match:
+  os: junos
+  attrib: netconf_queues
+
+commands:
+  if_ext:
+    cli: show interfaces extensive
+
+metrics:
+  - id: queue
+    command: if_ext
+    rows: //physical-interface[snmp-index]/queue-counters/queue
+    index: concat(../../name, '/', queue-number)
+    descr: '{row:../../name} queue {row:queue-number} ({row:forwarding-class-name})'
+    group: Queues
+    fields:
+      queued:      { xpath: number(queue-counters-queued-packets),     type: COUNTER }
+      transmitted: { xpath: number(queue-counters-trans-packets),      type: COUNTER }
+      dropped:     { xpath: number(queue-counters-total-drop-packets), type: COUNTER }
+      ifindex:     number(../../snmp-index)

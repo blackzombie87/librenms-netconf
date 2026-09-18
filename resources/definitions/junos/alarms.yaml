@@ -1,0 +1,48 @@
+name: junos-alarms
+description: Active system and chassis alarm counts by severity
+
+match:
+  os: junos
+
+commands:
+  sys_alarms:
+    cli: show system alarms
+  chassis_alarms:
+    cli: show chassis alarms
+
+sensors:
+  - id: system-major
+    class: count
+    command: sys_alarms
+    index: "'system-major'"
+    descr: Major system alarms
+    value: count(//alarm-detail[alarm-class = 'Major'])
+    group: Alarms
+    limit: 0
+
+  - id: system-minor
+    class: count
+    command: sys_alarms
+    index: "'system-minor'"
+    descr: Minor system alarms
+    value: count(//alarm-detail[alarm-class = 'Minor'])
+    group: Alarms
+    warn_limit: 0
+
+  - id: chassis-major
+    class: count
+    command: chassis_alarms
+    index: "'chassis-major'"
+    descr: Major chassis alarms
+    value: count(//alarm-detail[alarm-class = 'Major'])
+    group: Alarms
+    limit: 0
+
+  - id: chassis-minor
+    class: count
+    command: chassis_alarms
+    index: "'chassis-minor'"
+    descr: Minor chassis alarms
+    value: count(//alarm-detail[alarm-class = 'Minor'])
+    group: Alarms
+    warn_limit: 0

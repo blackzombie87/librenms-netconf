@@ -6,8 +6,11 @@ use App\Facades\LibrenmsConfig;
 use Illuminate\Support\ServiceProvider;
 use LibreNMS\Interfaces\Plugins\Hooks\SettingsHook;
 use LibreNMS\Interfaces\Plugins\PluginManagerInterface;
+use SafferIt\LibrenmsNetconf\Console\NetconfPreviewCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfRunCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfTestCommand;
+use SafferIt\LibrenmsNetconf\Console\NetconfValidateCommand;
+use SafferIt\LibrenmsNetconf\Definitions\DefinitionLoader;
 use SafferIt\LibrenmsNetconf\Hooks\Settings;
 use SafferIt\LibrenmsNetconf\Support\SettingsSecrets;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
@@ -23,6 +26,7 @@ class NetconfPluginProvider extends ServiceProvider
         $this->app->singleton(CredentialResolver::class, fn () => new CredentialResolver(SettingsSecrets::decrypt(...)));
         $this->app->singleton(DeviceCredentials::class, fn ($app) => new DeviceCredentials($app->make(CredentialResolver::class)));
         $this->app->singleton(TransportFactory::class);
+        $this->app->singleton(DefinitionLoader::class, fn () => new DefinitionLoader(self::definitionDirectories()));
     }
 
     public function boot(PluginManagerInterface $pluginManager): void
@@ -41,10 +45,32 @@ class NetconfPluginProvider extends ServiceProvider
             $this->commands([
                 NetconfTestCommand::class,
                 NetconfRunCommand::class,
+                NetconfValidateCommand::class,
+                NetconfPreviewCommand::class,
             ]);
         }
 
         $this->registerModule();
+    }
+
+    /**
+     * Shipped definitions first, the user directory (setting definitions_dir, default
+     * storage/app/netconf-definitions) last so it can override by name.
+     *
+     * @return list<string>
+     */
+    public static function definitionDirectories(): array
+    {
+        $dirs = [DefinitionLoader::shippedDirectory()];
+        $user = (string) (NetconfSettings::effective()['definitions_dir'] ?? '');
+        if ($user === '' && function_exists('storage_path')) {
+            $user = storage_path('app/netconf-definitions');
+        }
+        if ($user !== '') {
+            $dirs[] = $user;
+        }
+
+        return $dirs;
     }
 
     /**

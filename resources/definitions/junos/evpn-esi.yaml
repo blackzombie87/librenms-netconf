@@ -1,0 +1,34 @@
+# EVPN multihoming: which local ESI-LAG is shared with which remote VTEP (plan §3.8).
+name: junos-evpn-esi
+description: EVPN ESI-LAG to remote VTEP mapping and remote MAC counts
+
+match:
+  os: junos
+
+commands:
+  vtep_esi:
+    cli: show mac-vrf forwarding vxlan-tunnel-end-point esi
+    optional: true
+
+metrics:
+  - id: esi
+    command: vtep_esi
+    rows: //esi-format[normalize-space(local-interface) != '']
+    index: translate(normalize-space(local-interface), ',', '')
+    descr: 'ESI-LAG {index} ({row:esi-value})'
+    fields:
+      remote_vteps: number(num-remote-vteps)
+      remote_macs:  sum(esi-remote-vtep-information/esi-remote-vtep-entry/remote-vtep-mac-count)
+      esi:          string(esi-value)
+      instance:     string(routing-instance-name)
+      aliasing:     string(esi-aliasing-enabled)
+
+  - id: remote-vtep
+    command: vtep_esi
+    rows: //esi-format[normalize-space(local-interface) != '']/esi-remote-vtep-information/esi-remote-vtep-entry
+    index: concat(translate(normalize-space(../../local-interface), ',', ''), '/', remote-vtep-address)
+    descr: 'ESI-LAG {row:translate(normalize-space(../../local-interface), ",", "")} peer {row:remote-vtep-address}'
+    fields:
+      macs: number(remote-vtep-mac-count)
+      vtep: string(remote-vtep-address)
+      esi:  string(../../esi-value)

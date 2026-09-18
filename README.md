@@ -6,10 +6,12 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: Phase 1 — connectivity and tooling.** Transports, credentials, the settings
-page and the `lnms netconf:test` / `lnms netconf:run` commands are in place and verified
-against an EX4650 (Junos 23.4R2) over the cli transport on port 22 and the NETCONF
-subsystem on ports 830 and 22. The
+**Status: Phase 2 — definition engine.** Transports, credentials and the settings page
+(Phase 1) are verified against an EX4650 (Junos 23.4R2) over the cli transport on port 22
+and the NETCONF subsystem on ports 830 and 22. The YAML definition loader, matcher and
+extractor are in place with the Tier 1 definitions below; `lnms netconf:validate --replay`
+and `lnms netconf:preview` show exactly what a poll would store. Writing sensors and
+metrics into LibreNMS (the poller module) is Phase 3. The
 definition engine and the poller/discovery module follow in the next phases
 (see `NETCONF_PLUGIN_PLAN.md` in the development notes).
 
@@ -96,6 +98,105 @@ prefix; the settings form never shows them again.
 
 `device` accepts a hostname, IP, sysName or `device_id`; unknown hosts are tried with the
 global settings.
+
+## Definitions
+
+Definitions are YAML files in `resources/definitions/<vendor>/`. A user directory
+(setting *User definitions directory*, default `storage/app/netconf-definitions/`) is
+loaded afterwards and overrides shipped files with the same `name`.
+
+Shipped (Junos):
+
+| Definition | Commands | Produces |
+|---|---|---|
+| `junos-evpn` | `show evpn instance extensive`, `show evpn database state duplicate`, `show evpn l3-context` | count sensors for duplicate MACs (per instance + total, `limit: 0`), local ESIs without remote PE, degraded bridge domains, L3 contexts; state sensors for ESI resolution, ESI-LAG status, EVPN interface and IRB status; metrics per instance (local/remote MACs, neighbours, ESIs), per neighbour (route counts by type) and per ESI-LAG (DF, remote PEs) |
+| `junos-evpn-esi` | `show mac-vrf forwarding vxlan-tunnel-end-point esi` | metrics per ESI-LAG (remote VTEPs, remote MACs) and per ESI-LAG/remote VTEP pair |
+| `junos-routing` | `show route summary`, `show bgp summary` | count sensors for active and hidden routes per table, BGP peers configured/down (`limit: 0`); metrics per table, per table/protocol, per BGP RIB, per peer (flaps, messages, uptime, state) and per peer/RIB |
+| `junos-l2` | `show ethernet-switching table summary` | MAC table size and static entries (L2NG and pre-ELS shapes) |
+| `junos-interfaces` | `show interfaces extensive` | per-port counters matched by `snmp-index` = ifIndex: CRC in/out, oversized, jabber, fragments, code violations, pause frames, framing errors, runts, MTU errors, carrier transitions, FEC corrected/uncorrected words and rates, PCS errored seconds, BPDU-block state |
+| `junos-interface-queues` | `show interfaces extensive` | per port/queue queued, transmitted and dropped packets; opt-in per device via attribute `netconf_queues=1` |
+| `junos-srx-cluster` | `show chassis cluster status` | state sensors per redundancy group and node (primary/secondary/…), monitor failures, failover counters; only on hardware matching `/srx/i` |
+| `junos-alarms` | `show system alarms`, `show chassis alarms` | major/minor alarm counts (`limit: 0` for major) |
+
+### Schema
+
+```yaml
+name: junos-example              # lowercase, used in sensor_type / RRD names
+description: What it collects
+enabled: true                    # optional
+match:                           # all rules must match; literal, "/regex/" or a list
+  os: junos
+  hardware: '/^(EX46|QFX5)/'
+  version: '/^2[3-9]\./'
+  hostname: '/leaf/'
+  attrib: netconf_example        # device attribute must be truthy (opt-in)
+
+commands:                        # each runs once per poll, shared by all mappings
+  key:
+    cli: show something          # only "show ..." is allowed
+    optional: true               # device error -> mappings skipped silently
+    every: 3                     # only every 3rd poll
+  other: show something else     # shorthand
+  raw: { rpc: '<get-something/>' }   # netconf transport only
+
+sensors:
+  - id: my-count                 # optional, default sensorN; part of sensor_type
+    class: count                 # any LibreNMS sensor class (count, state, percent, …)
+    command: key
+    rows: //table-row            # one sensor per node; omit for a single sensor
+    when: not(skip)              # XPath boolean filter per row (optional)
+    repeat: count(node/name)     # flattened tables: run the row N times with {n} = 1..N
+    index: string(name)          # XPath (relative to the row) or template; must be unique
+    descr: 'Thing {index} ({row:type})'   # template: {index} {re} {n} {row:<xpath>} {device:hostname}
+    value: number(active)        # XPath; NaN/empty -> row skipped
+    value_any: [number(new-shape), number(old-shape)]   # first non-empty wins
+    group: Routing
+    limit: 0                     # limit, limit_low, warn_limit, warn_limit_low
+    divisor: 1
+    multiplier: 1
+  - id: my-state
+    class: state
+    command: key
+    rows: //item
+    index: string(name)
+    descr: 'Item {index}'
+    value: string(status)
+    states:                      # label -> value/generic (0 ok, 1 warn, 2 crit, 3 unknown)
+      Up:      { value: 1, generic: 0 }              # exact match on the label
+      Down:    { match: '/^Down/', value: 2, generic: 2 }
+      Unknown: { match: '/.*/', value: 3, generic: 3, default: true }
+
+ports:
+  - id: ethernet
+    command: key
+    rows: //physical-interface[snmp-index]
+    match: { port_field: ifIndex, xpath: string(snmp-index) }   # or ifName / ifDescr / ifAlias
+    metrics:
+      crc_in: { xpath: number(ethernet-mac-statistics/input-crc-errors), type: COUNTER }
+      bpdu:   "number(bpdu-error != 'none')"        # GAUGE by default
+
+metrics:
+  - id: table
+    command: key
+    rows: //route-table
+    index: string(table-name)
+    descr: 'Route table {index}'
+    fields:                      # numeric -> RRD (name max 19 chars), text -> label
+      total:  number(total-route-count)
+      flaps:  { xpath: number(flap-count), type: COUNTER }
+      state:  string(peer-state)
+```
+
+Namespaces are stripped before evaluation, so paths never need prefixes; attributes keep
+their local name (`elapsed-time/@seconds`). Rows inside `multi-routing-engine-results`
+(Virtual Chassis) are matched by `//` expressions like any other and expose `{re}`.
+
+```bash
+./lnms netconf:validate                                  # lint shipped + user definitions
+./lnms netconf:validate my.yaml --replay=tests/fixtures/junos   # extract from recorded replies
+./lnms netconf:preview leaf1                             # live dry run, nothing is stored
+./lnms netconf:preview leaf1 --only=junos-evpn --save=/tmp/leaf1   # and record fixtures
+```
 
 ## Development
 

@@ -34,7 +34,7 @@ it('passes a successful reply through assertOk', function () {
 });
 
 it('skips the cli banner when locating the payload', function () {
-    $reply = new Reply('show evpn database state duplicate', fixture('junos/show-evpn-database-state-duplicate-empty.xml'));
+    $reply = new Reply('show evpn database state duplicate', fixture('junos/show-evpn-database-state-duplicate.xml'));
 
     expect($reply->payload()?->localName)->toBe('evpn-database-information');
 });

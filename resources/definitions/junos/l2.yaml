@@ -1,0 +1,32 @@
+name: junos-l2
+description: MAC table size (cheaper than walking the Q-BRIDGE FDB)
+
+match:
+  os: junos
+
+commands:
+  mac_summary:
+    cli: show ethernet-switching table summary
+    optional: true          # routers without switching answer with an error
+
+sensors:
+  - id: mac-total
+    class: count
+    command: mac_summary
+    index: "'total'"
+    descr: MAC table entries
+    # L2NG (ELS) shape first, pre-ELS shape as fallback
+    value_any:
+      - number(//l2ng-l2-total-mac-count)
+      - number(//mac-table-total-count)
+    group: Switching
+
+  - id: mac-static
+    class: count
+    command: mac_summary
+    index: "'static'"
+    descr: Static MAC entries
+    value_any:
+      - number(//l2ng-l2-total-smac-count)
+      - number(//mac-table-static-count)
+    group: Switching

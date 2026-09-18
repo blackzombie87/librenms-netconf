@@ -1,0 +1,161 @@
+# EVPN-VXLAN state on Junos. There is no EVPN MIB, so all of this is NETCONF/CLI only.
+# Paths confirmed on EX4650 23.4R2 (plan §3.1/§3.7).
+name: junos-evpn
+description: EVPN-VXLAN duplicate MACs, ESI / interface states and MAC / route counts
+
+match:
+  os: junos
+
+commands:
+  evpn_inst:
+    cli: show evpn instance extensive
+  dup_mac:
+    cli: show evpn database state duplicate
+    optional: true            # older releases do not know the command
+    description: MACs currently suppressed by duplicate-MAC detection
+  l3ctx:
+    cli: show evpn l3-context
+    optional: true
+
+sensors:
+  - id: dup-mac-instance
+    class: count
+    command: dup_mac
+    rows: //evpn-database-instance
+    index: string(instance-name)
+    descr: 'EVPN duplicate MACs {index}'
+    value: count(mac-entry)
+    group: EVPN
+    limit: 0
+
+  - id: dup-mac-total
+    class: count
+    command: dup_mac
+    index: "'total'"
+    descr: EVPN duplicate MACs (total)
+    value: count(//mac-entry)
+    group: EVPN
+    limit: 0
+
+  - id: esi-resolution
+    class: state
+    command: evpn_inst
+    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information]
+    index: string(evpn-esi-local-intf-information/evpn-esi-local-intf-name)
+    descr: 'ESI {index} resolution ({row:evpn-esi-value})'
+    value: string(evpn-esi-status)
+    group: EVPN
+    states:
+      Resolved:   { match: '/^Resolved/',   value: 1, generic: 0 }
+      Unresolved: { match: '/^Unresolved/', value: 2, generic: 2 }
+      Unknown:    { match: '/.*/',          value: 3, generic: 3, default: true }
+
+  - id: esi-lag-status
+    class: state
+    command: evpn_inst
+    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information]
+    index: string(evpn-esi-local-intf-information/evpn-esi-local-intf-name)
+    descr: 'ESI-LAG {index}'
+    value: string(evpn-esi-local-intf-information/evpn-esi-local-intf-status)
+    group: EVPN
+    states:
+      Up:      { match: '/^Up/',   value: 1, generic: 0 }
+      Down:    { match: '/^Down/', value: 2, generic: 2 }
+      Unknown: { match: '/.*/',    value: 3, generic: 3, default: true }
+
+  - id: interface-status
+    class: state
+    command: evpn_inst
+    rows: //evpn-interface-status-table/evpn-interface[not(starts-with(evpn-interface-name, '.local.'))]
+    index: string(evpn-interface-name)
+    descr: 'EVPN interface {index} ({row:evpn-interface-mode})'
+    value: string(evpn-interface-status)
+    group: EVPN
+    states:
+      Up:      { value: 1, generic: 0 }
+      Down:    { value: 2, generic: 2 }
+      Unknown: { match: '/.*/', value: 3, generic: 3, default: true }
+
+  - id: irb-status
+    class: state
+    command: evpn_inst
+    rows: //irb-interface-status-table/irb-interface
+    index: string(irb-interface-name)
+    descr: 'EVPN IRB {index} (VNI {row:irb-interface-vni-id})'
+    value: string(irb-interface-status)
+    group: EVPN
+    states:
+      Up:      { value: 1, generic: 0 }
+      Down:    { value: 2, generic: 2 }
+      Unknown: { match: '/.*/', value: 3, generic: 3, default: true }
+
+  - id: esi-without-remote-pe
+    class: count
+    command: evpn_inst
+    index: "'total'"
+    descr: Local ESIs without remote PE
+    value: count(//evpn-esi[evpn-esi-local-intf-information and not(evpn-esi-remote-pe-information/evpn-esi-remote-pe)])
+    group: EVPN
+    limit: 0
+
+  - id: bridge-domains-degraded
+    class: count
+    command: evpn_inst
+    index: "'total'"
+    descr: Bridge domains with down members
+    value: count(//bridge-domain[number(interfaces-up) < number(interfaces)])
+    group: EVPN
+    limit: 0
+
+  - id: l3-contexts
+    class: count
+    command: l3ctx
+    index: "'total'"
+    descr: EVPN L3 contexts
+    value: count(//evpn-l3-context)
+    group: EVPN
+
+metrics:
+  - id: instance
+    command: evpn_inst
+    rows: //evpn-instance[mac-database-status-table]
+    index: string(evpn-instance-name)
+    descr: 'EVPN instance {index}'
+    fields:
+      local_macs:     number(mac-database-status-table/local-macs)
+      remote_macs:    number(mac-database-status-table/remote-macs)
+      local_mac_ips:  number(mac-database-status-table/local-mac-ips)
+      remote_mac_ips: number(mac-database-status-table/remote-mac-ips)
+      neighbors:      number(evpn-num-neighbors)
+      esis:           number(evpn-num-esi)
+      bridge_domains: number(num-bridge-domains)
+      local_ifs:      number(local-interfaces)
+      local_ifs_up:   number(local-interfaces-up)
+      irb_ifs:        number(irb-interfaces)
+      irb_ifs_up:     number(irb-interfaces-up)
+      encap:          string(evpn-encap-type)
+
+  - id: neighbor
+    command: evpn_inst
+    rows: //evpn-instance/evpn-neighbor
+    index: concat(../evpn-instance-name, '/', .//evpn-neighbor-address)
+    descr: 'EVPN neighbor {row:.//evpn-neighbor-address} ({row:../evpn-instance-name})'
+    fields:
+      mac_routes:    number(.//evpn-num-mac-routes)
+      mac_ip_routes: number(.//evpn-num-mac-ip-routes)
+      ead_routes:    number(.//evpn-num-ethernet-autodiscovery-routes)
+      imet_routes:   number(.//evpn-num-inclusive-multicast-routes)
+      es_routes:     number(.//evpn-num-ethernet-segment-routes)
+
+  - id: esi
+    command: evpn_inst
+    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information]
+    index: string(evpn-esi-local-intf-information/evpn-esi-local-intf-name)
+    descr: 'ESI-LAG {index}'
+    fields:
+      remote_pes: count(evpn-esi-remote-pe-information/evpn-esi-remote-pe)
+      is_df:      number(evpn-esi-df-information/esi-designated-forwarder = ../evpn-router-id)
+      esi:        string(evpn-esi-value)
+      df:         string(evpn-esi-df-information/esi-designated-forwarder)
+      bdf:        string(evpn-esi-df-information/esi-backup-forwarder)
+      status:     string(evpn-esi-local-intf-information/evpn-esi-local-intf-status)

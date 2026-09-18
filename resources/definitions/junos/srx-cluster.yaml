@@ -1,0 +1,68 @@
+# SRX chassis cluster: redundancy group state per node, failover counter, monitor failures.
+# device-stats is a flattened table (node0 and node1 values in sequence) -> repeat/{n}.
+name: junos-srx-cluster
+description: SRX chassis cluster redundancy-group states, failover counts and monitor failures
+
+match:
+  os: junos
+  hardware: '/srx/i'
+
+commands:
+  cluster:
+    cli: show chassis cluster status
+    optional: true          # standalone SRX: "Chassis cluster is not enabled"
+
+sensors:
+  - id: rg-status
+    class: state
+    command: cluster
+    rows: //redundancy-group
+    repeat: count(device-stats/device-name)
+    index: concat('RG', redundancy-group-id, '/', device-stats/device-name[{n}])
+    descr: 'Cluster {index}'
+    value: string(device-stats/redundancy-group-status[{n}])
+    group: Cluster
+    states:
+      primary:        { value: 1, generic: 0 }
+      secondary:      { value: 2, generic: 0 }
+      secondary-hold: { value: 3, generic: 1 }
+      disabled:       { value: 4, generic: 2 }
+      lost:           { value: 5, generic: 2 }
+      not-configured: { value: 6, generic: 3 }
+      ineligible:     { value: 7, generic: 2 }
+      unknown:        { match: '/.*/', value: 8, generic: 3, default: true }
+
+  - id: rg-monitor
+    class: state
+    command: cluster
+    rows: //redundancy-group
+    repeat: count(device-stats/device-name)
+    index: concat('RG', redundancy-group-id, '/', device-stats/device-name[{n}])
+    descr: 'Cluster {index} monitoring'
+    value: string(device-stats/monitor-failures[{n}])
+    group: Cluster
+    states:
+      None:    { value: 1, generic: 0 }
+      Failure: { match: '/.+/', value: 2, generic: 2, default: true }
+
+  - id: rg-failovers
+    class: count
+    command: cluster
+    rows: //redundancy-group
+    index: concat('RG', redundancy-group-id)
+    descr: 'Cluster {index} failovers'
+    value: number(redundancy-group-failover-count)
+    group: Cluster
+
+metrics:
+  - id: rg-node
+    command: cluster
+    rows: //redundancy-group
+    repeat: count(device-stats/device-name)
+    index: concat('RG', redundancy-group-id, '/', device-stats/device-name[{n}])
+    descr: 'Cluster {index}'
+    fields:
+      priority:      number(device-stats/device-priority[{n}])
+      status:        string(device-stats/redundancy-group-status[{n}])
+      preempt:       string(device-stats/preempt[{n}])
+      failover_mode: string(device-stats/failover-mode[{n}])

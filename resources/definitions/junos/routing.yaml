@@ -1,0 +1,109 @@
+name: junos-routing
+description: Route table sizes incl. hidden routes, BGP peer summary and per-peer prefix counts
+
+match:
+  os: junos
+
+commands:
+  route_sum:
+    cli: show route summary
+  bgp_sum:
+    cli: show bgp summary
+    optional: true          # devices without BGP answer "BGP is not running"
+
+sensors:
+  - id: active-routes
+    class: count
+    command: route_sum
+    rows: //route-table
+    index: string(table-name)
+    descr: 'Active routes {index}'
+    value: number(active-route-count)
+    group: Routing
+
+  - id: hidden-routes
+    class: count
+    command: route_sum
+    rows: //route-table
+    index: string(table-name)
+    descr: 'Hidden routes {index}'
+    value: number(hidden-route-count)
+    group: Routing
+
+  - id: bgp-peers
+    class: count
+    command: bgp_sum
+    index: "'total'"
+    descr: BGP peers configured
+    value: number(//bgp-information/peer-count)
+    group: BGP
+
+  - id: bgp-peers-down
+    class: count
+    command: bgp_sum
+    index: "'total'"
+    descr: BGP peers down
+    value: number(//bgp-information/down-peer-count)
+    group: BGP
+    limit: 0
+
+metrics:
+  - id: table
+    command: route_sum
+    rows: //route-table
+    index: string(table-name)
+    descr: 'Route table {index}'
+    fields:
+      destinations: number(destination-count)
+      total:        number(total-route-count)
+      active:       number(active-route-count)
+      holddown:     number(holddown-route-count)
+      hidden:       number(hidden-route-count)
+
+  - id: protocol
+    command: route_sum
+    rows: //route-table/protocols
+    index: concat(../table-name, '/', protocol-name)
+    descr: '{row:protocol-name} routes in {row:../table-name}'
+    fields:
+      routes: number(protocol-route-count)
+      active: number(active-route-count)
+
+  - id: bgp-rib
+    command: bgp_sum
+    rows: //bgp-information/bgp-rib
+    index: string(name)
+    descr: 'BGP RIB {index}'
+    fields:
+      total:      number(total-prefix-count)
+      received:   number(received-prefix-count)
+      accepted:   number(accepted-prefix-count)
+      active:     number(active-prefix-count)
+      suppressed: number(suppressed-prefix-count)
+      damped:     number(damped-prefix-count)
+      pending:    number(pending-prefix-count)
+
+  - id: bgp-peer
+    command: bgp_sum
+    rows: //bgp-peer
+    index: string(peer-address)
+    descr: 'BGP peer {index} AS{row:peer-as}'
+    fields:
+      flaps:       { xpath: number(flap-count), type: COUNTER }
+      in_msgs:     { xpath: number(input-messages), type: COUNTER }
+      out_msgs:    { xpath: number(output-messages), type: COUNTER }
+      route_queue: number(route-queue-count)
+      uptime:      number(elapsed-time/@seconds)
+      state:       string(peer-state)
+      description: string(description)
+
+  - id: bgp-peer-rib
+    command: bgp_sum
+    rows: //bgp-peer/bgp-rib
+    index: concat(../peer-address, '/', name)
+    descr: 'BGP peer {row:../peer-address} {row:name}'
+    fields:
+      active:     number(active-prefix-count)
+      received:   number(received-prefix-count)
+      accepted:   number(accepted-prefix-count)
+      suppressed: number(suppressed-prefix-count)

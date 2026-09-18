@@ -1,0 +1,38 @@
+# Per-port error and FEC counters that IF-MIB/EtherLike-MIB do not expose on Junos
+# (plan §3.3). Rows are matched to LibreNMS ports by snmp-index = ifIndex.
+name: junos-interfaces
+description: Per-port CRC / FEC / PCS / pause / BPDU-block counters from show interfaces extensive
+
+match:
+  os: junos
+
+commands:
+  if_ext:
+    cli: show interfaces extensive
+    description: about 1 MB of XML on a 48-port switch, 3 s
+
+ports:
+  - id: ethernet
+    command: if_ext
+    rows: //physical-interface[snmp-index and ethernet-mac-statistics]
+    match: { port_field: ifIndex, xpath: string(snmp-index) }
+    metrics:
+      crc_in:          { xpath: number(ethernet-mac-statistics/input-crc-errors),       type: COUNTER }
+      crc_out:         { xpath: number(ethernet-mac-statistics/output-crc-errors),      type: COUNTER }
+      oversized:       { xpath: number(ethernet-mac-statistics/input-oversized-frames), type: COUNTER }
+      jabber:          { xpath: number(ethernet-mac-statistics/input-jabber-frames),    type: COUNTER }
+      fragments:       { xpath: number(ethernet-mac-statistics/input-fragment-frames),  type: COUNTER }
+      code_violations: { xpath: number(ethernet-mac-statistics/input-code-violations),  type: COUNTER }
+      pause_in:        { xpath: number(ethernet-mac-statistics/input-mac-pause-frames), type: COUNTER }
+      pause_out:       { xpath: number(ethernet-mac-statistics/output-mac-pause-frames), type: COUNTER }
+      framing_errors:  { xpath: number(input-error-list/framing-errors),                type: COUNTER }
+      runts:           { xpath: number(input-error-list/input-runts),                   type: COUNTER }
+      mtu_errors:      { xpath: number(output-error-list/mtu-errors),                   type: COUNTER }
+      carrier_trans:   { xpath: number(output-error-list/carrier-transitions),          type: COUNTER }
+      fec_ccw:         { xpath: number(ethernet-fec-statistics/fec_ccw_count),          type: COUNTER }
+      fec_nccw:        { xpath: number(ethernet-fec-statistics/fec_nccw_count),         type: COUNTER }
+      fec_ccw_rate:    { xpath: number(ethernet-fec-statistics/fec_ccw_error_rate),     type: GAUGE }
+      fec_nccw_rate:   { xpath: number(ethernet-fec-statistics/fec_nccw_error_rate),    type: GAUGE }
+      pcs_err_seconds: { xpath: number(ethernet-pcs-statistics/errored-blocks-seconds), type: COUNTER }
+      pcs_bit_err_sec: { xpath: number(ethernet-pcs-statistics/bit-error-seconds),      type: COUNTER }
+      bpdu_error:      { xpath: "number(bpdu-error != 'none')",                         type: GAUGE }

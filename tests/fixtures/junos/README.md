@@ -5,6 +5,11 @@ saffer-it/librenms-netconf (see ../../NETCONF_PLUGIN_PLAN.md). EVPN commands add
 
 2026-09-18, Phase 1 live test on the same EX4650 (now 23.4R2-S7.4, single-member Virtual Chassis):
 `show-version-multi-re.xml` (multi-routing-engine-results wrapper, package list shortened),
-`show-system-alarms.xml` (four license alarms), `show-chassis-alarms-none.xml` (`no-active-alarms`),
+`show-system-alarms.xml` (four license alarms), `show-chassis-alarms.xml` (`no-active-alarms`),
 `show-virtual-chassis-status.xml`. Payload size reference: `show interfaces extensive` on this
 74-physical-interface switch returned 982 kB in 3.2 s over the cli transport.
+
+File names follow `FixtureReplay::slug(command)` (`show route summary` → `show-route-summary.xml`) so the
+directory can be replayed with `lnms netconf:validate --replay=tests/fixtures/junos`; variants carry a
+suffix (`show-chassis-cluster-status-not-enabled.xml`). The duplicate-MAC, L3-context and chassis-alarm
+samples are the empty/none cases.
