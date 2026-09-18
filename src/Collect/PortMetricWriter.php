@@ -20,6 +20,9 @@ class PortMetricWriter
     /** @var array<string, int|null> */
     private array $portCache = [];
 
+    /** @var array<string, list<int>> "definition/mapping" => port ids written by write() */
+    private array $written = [];
+
     public function __construct(private readonly Device $device)
     {
     }
@@ -40,6 +43,7 @@ class PortMetricWriter
                 continue;
             }
             $matched++;
+            $this->written[$row->definition . '/' . $row->mapping->id][] = $portId;
 
             NetconfPortMetric::query()->updateOrCreate([
                 'port_id' => $portId,
@@ -72,6 +76,31 @@ class PortMetricWriter
         }
 
         return ['rows' => count($rows), 'matched' => $matched, 'unmatched' => $unmatched];
+    }
+
+    /**
+     * Remove rows of mappings that produced data this run but no longer contain the port,
+     * and rows of ports that were deleted in LibreNMS. Call after write().
+     *
+     * @param  list<string>  $mappingsWithData  "definition/mapping" pairs whose command ran
+     */
+    public function prune(array $mappingsWithData): int
+    {
+        $deleted = 0;
+        foreach ($mappingsWithData as $pair) {
+            [$definition, $mapping] = explode('/', $pair, 2);
+            $deleted += NetconfPortMetric::query()->where('device_id', $this->device->device_id)
+                ->where('definition', $definition)
+                ->where('mapping', $mapping)
+                ->whereNotIn('port_id', $this->written[$pair] ?? [])
+                ->delete();
+        }
+
+        $deleted += NetconfPortMetric::query()->where('device_id', $this->device->device_id)
+            ->whereNotIn('port_id', Port::query()->where('device_id', $this->device->device_id)->where('deleted', 0)->select('port_id'))
+            ->delete();
+
+        return $deleted;
     }
 
     public function count(): int

@@ -174,6 +174,7 @@ class NetconfService
         $skipped = [];
         $classes = [];
         $mappingsWithData = [];
+        $portMappingsWithData = [];
         foreach ($definitions as $definition) {
             $def = $result->definitions[$definition->name] ?? null;
             foreach ($definition->sensors as $mapping) {
@@ -187,6 +188,11 @@ class NetconfService
             foreach ($definition->metrics as $mapping) {
                 if ($def !== null && ! in_array($mapping->id, $def->skippedMappings, true)) {
                     $mappingsWithData[] = $definition->name . '/' . $mapping->id;
+                }
+            }
+            foreach ($definition->ports as $mapping) {
+                if ($def !== null && ! in_array($mapping->id, $def->skippedMappings, true)) {
+                    $portMappingsWithData[] = $definition->name . '/' . $mapping->id;
                 }
             }
         }
@@ -216,6 +222,7 @@ class NetconfService
         $p = $ports->write($result->ports(), $discovery ? null : ($datastore ?? app('Datastore')));
         $counts['ports_matched'] = $p['matched'];
         $counts['ports_unmatched'] = count($p['unmatched']);
+        $counts['ports_pruned'] = $ports->prune($portMappingsWithData);
         if ($p['unmatched'] !== []) {
             Log::debug('netconf: unmatched ports: ' . implode(', ', array_slice($p['unmatched'], 0, 20)));
         }

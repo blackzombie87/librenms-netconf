@@ -3,6 +3,7 @@
 namespace LibreNMS\Modules;
 
 use App\Models\Device;
+use App\Models\Port;
 use App\Models\Sensor;
 use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
@@ -81,9 +82,17 @@ class Netconf implements Module
             ->sortBy(fn (NetconfMetric $metric) => $metric->definition . '|' . $metric->mapping . '|' . $metric->metric_index)->values()
             ->map(fn (NetconfMetric $metric) => $metric->makeHidden(['id', 'device_id', 'last_seen', 'created_at', 'updated_at']));
 
+        // port rows keyed by ifIndex instead of port_id so the dump is stable across installs
+        $ifIndex = Port::query()->where('device_id', $device->device_id)->pluck('ifIndex', 'port_id');
+        $ports = NetconfPortMetric::query()->where('device_id', $device->device_id)->get()
+            ->each(fn (NetconfPortMetric $port) => $port->setAttribute('ifIndex', $ifIndex->get($port->port_id)))
+            ->sortBy(fn (NetconfPortMetric $port) => sprintf('%010d|%s|%s', (int) $port->getAttribute('ifIndex'), $port->definition, $port->mapping))->values()
+            ->map(fn (NetconfPortMetric $port) => $port->makeHidden(['id', 'device_id', 'port_id', 'last_seen', 'created_at', 'updated_at']));
+
         return [
             'sensors' => $sensors,
             'netconf_metrics' => $metrics,
+            'netconf_port_metrics' => $ports,
         ];
     }
 
