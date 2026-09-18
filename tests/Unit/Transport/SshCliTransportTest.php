@@ -3,6 +3,7 @@
 use SafferIt\LibrenmsNetconf\Tests\Support\FakeSshClient;
 use SafferIt\LibrenmsNetconf\Transport\Credentials;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\AuthenticationException;
+use SafferIt\LibrenmsNetconf\Transport\Exceptions\ProtocolException;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\RpcErrorException;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\TimeoutException;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\TransportException;
@@ -47,6 +48,16 @@ it('raises rpc errors from the device', function () {
 
     expect(fn () => $transport->run('show chassis cluster status'))
         ->toThrow(RpcErrorException::class, 'Chassis cluster is not enabled');
+});
+
+it('adds stderr to the error when the device did not answer with XML', function () {
+    $client = new FakeSshClient;
+    $client->execReplies['show version | display xml'] = '';
+    $client->stderr = "unknown command: show\n";
+    $transport = new SshCliTransport(cliCredentials(), $client);
+
+    expect(fn () => $transport->run('show version'))
+        ->toThrow(ProtocolException::class, 'stderr: unknown command: show');
 });
 
 it('propagates authentication failures', function () {

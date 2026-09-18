@@ -137,11 +137,6 @@ class PhpseclibSshClient implements SshClientInterface
         return $this->ssh ? trim((string) $this->ssh->getServerIdentification()) : '';
     }
 
-    public function isConnected(): bool
-    {
-        return $this->ssh !== null && $this->ssh->isConnected();
-    }
-
     public function disconnect(): void
     {
         if ($this->ssh) {

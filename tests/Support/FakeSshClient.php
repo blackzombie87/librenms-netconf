@@ -68,11 +68,6 @@ class FakeSshClient implements SshClientInterface
         return 'SSH-2.0-OpenSSH_7.5 (fake)';
     }
 
-    public function isConnected(): bool
-    {
-        return $this->connected && ! $this->disconnected;
-    }
-
     public function disconnect(): void
     {
         $this->disconnected = true;

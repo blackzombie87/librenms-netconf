@@ -42,14 +42,6 @@ final class Pattern
         return false;
     }
 
-    /**
-     * @return list<string>
-     */
-    public function alternatives(): array
-    {
-        return $this->alternatives;
-    }
-
     public function __toString(): string
     {
         return implode('|', $this->alternatives);

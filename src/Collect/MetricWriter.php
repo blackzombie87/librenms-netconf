@@ -97,11 +97,6 @@ class MetricWriter
         return $deleted;
     }
 
-    public function count(): int
-    {
-        return NetconfMetric::query()->where('device_id', $this->device->device_id)->count();
-    }
-
     public function deleteAll(): int
     {
         return NetconfMetric::query()->where('device_id', $this->device->device_id)->delete();

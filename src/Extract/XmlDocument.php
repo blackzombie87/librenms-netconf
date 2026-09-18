@@ -54,11 +54,6 @@ class XmlDocument
         return $this->root;
     }
 
-    public function dom(): DOMDocument
-    {
-        return $this->dom;
-    }
-
     /**
      * Evaluate a row expression: returns element nodes. Relative expressions are evaluated
      * from the payload root, "//" expressions anywhere in the document.

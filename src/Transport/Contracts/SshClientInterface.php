@@ -26,7 +26,7 @@ interface SshClientInterface
      */
     public function exec(string $command, int $timeout): string;
 
-    /** Last stderr output of exec(), for diagnostics. */
+    /** Stderr of the last exec(); the cli transport adds it to "did not return XML" errors. */
     public function lastStdError(): string;
 
     /**
@@ -35,8 +35,6 @@ interface SshClientInterface
     public function startSubsystem(string $name, int $timeout): ChannelInterface;
 
     public function serverIdentification(): string;
-
-    public function isConnected(): bool;
 
     public function disconnect(): void;
 }

@@ -4,6 +4,7 @@ namespace SafferIt\LibrenmsNetconf\Transport;
 
 use SafferIt\LibrenmsNetconf\Transport\Contracts\SshClientInterface;
 use SafferIt\LibrenmsNetconf\Transport\Contracts\TransportInterface;
+use SafferIt\LibrenmsNetconf\Transport\Exceptions\ProtocolException;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\TransportException;
 
 /**
@@ -47,7 +48,16 @@ class SshCliTransport implements TransportInterface
         $output = $this->client->exec($wire, $this->credentials->commandTimeout);
         $this->commandCount++;
 
-        $reply = Reply::fromCliOutput(self::normalize($command), $output, microtime(true) - $start);
+        try {
+            $reply = Reply::fromCliOutput(self::normalize($command), $output, microtime(true) - $start);
+        } catch (ProtocolException $e) {
+            // a login class that denies the command, or a shell that swallowed it, talks on stderr
+            $stderr = trim($this->client->lastStdError());
+            if ($stderr !== '') {
+                throw new ProtocolException($e->getMessage() . '; stderr: ' . mb_strimwidth($stderr, 0, 200, '…'), 0, $e);
+            }
+            throw $e;
+        }
 
         return $reply->assertOk();
     }

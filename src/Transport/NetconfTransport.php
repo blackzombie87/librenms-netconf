@@ -133,14 +133,6 @@ class NetconfTransport implements TransportInterface
         $this->client->disconnect();
     }
 
-    /**
-     * @return list<string>
-     */
-    public function serverCapabilities(): array
-    {
-        return $this->serverCapabilities;
-    }
-
     private function request(string $body, string $label): Reply
     {
         $this->connect();
