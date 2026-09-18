@@ -79,9 +79,8 @@ class NetconfService
             if ($status->inBackoff()) {
                 return sprintf('in back-off after %d failures until %s', $status->consecutive_failures, $status->next_attempt?->toDateTimeString());
             }
-            if ($status->exists && $status->definitions === []) {
-                return 'no definitions matched at discovery';
-            }
+            // definitions are matched again on every run (cheap, no SSH): a device that matched
+            // nothing at discovery picks up new YAML or a changed os/hardware without a rediscover
         }
 
         return null;
@@ -103,7 +102,8 @@ class NetconfService
 
         Log::info(sprintf('netconf: %d matching definition(s): %s', count($definitions), implode(', ', $names) ?: '-'));
         if ($definitions === []) {
-            $this->saveStatus($status, $status->transport ?? '', $names, null, 'no definitions match this device', microtime(true) - $start, $discovery);
+            // not a failure: nothing to connect for, so no back-off and no eventlog entry
+            $this->saveStatus($status, $status->transport ?? '', $names, null, 'no definitions match this device', microtime(true) - $start, $discovery, failure: false);
 
             return new RunReport($discovery, $status->transport ?? '', [], [], [], [], microtime(true) - $start);
         }
@@ -225,8 +225,9 @@ class NetconfService
 
     /**
      * @param  list<string>  $definitions
+     * @param  bool  $failure  whether a non-null $error counts towards the back-off
      */
-    private function saveStatus(NetconfDeviceStatus $status, string $transport, array $definitions, ?CollectionResult $result, ?string $error, float $duration, bool $discovery): void
+    private function saveStatus(NetconfDeviceStatus $status, string $transport, array $definitions, ?CollectionResult $result, ?string $error, float $duration, bool $discovery, bool $failure = true): void
     {
         $settings = NetconfSettings::effective();
         $status->transport = $transport;
@@ -238,10 +239,10 @@ class NetconfService
             $status->poll_count = $status->poll_count + 1;
         }
 
-        if ($error === null) {
+        if ($error === null || ! $failure) {
             $status->consecutive_failures = 0;
             $status->next_attempt = null;
-            $status->last_error = null;
+            $status->last_error = $error === null ? null : mb_substr($error, 0, 2000);
             $status->last_ok = now();
         } else {
             $status->consecutive_failures = $status->consecutive_failures + 1;
