@@ -8,7 +8,8 @@ use Symfony\Component\Yaml\Yaml;
 /**
  * Loads YAML definitions from one or more directories (recursively). Later directories
  * override earlier ones by definition `name`, so a user directory can replace shipped
- * files. Results are cached per process.
+ * files. Results are cached per process and reloaded when a file is added, removed or
+ * modified, so long-lived processes (artisan serve, dispatcher workers) pick up edits.
  */
 class DefinitionLoader
 {
@@ -17,6 +18,9 @@ class DefinitionLoader
 
     /** @var array<string, Definition>|null */
     private ?array $cache = null;
+
+    /** Files and modification times the cache was built from. */
+    private string $signature = '';
 
     /** @var list<string> */
     private array $errors = [];
@@ -49,20 +53,25 @@ class DefinitionLoader
      */
     public function all(): array
     {
-        if ($this->cache === null) {
+        $files = [];
+        foreach ($this->directories as $dir) {
+            $files = [...$files, ...$this->files($dir)];
+        }
+        $signature = implode("\n", array_map(fn ($f) => $f . '@' . (@filemtime($f) ?: 0) . '/' . (@filesize($f) ?: 0), $files));
+
+        if ($this->cache === null || $signature !== $this->signature) {
             $this->cache = [];
             $this->errors = [];
-            foreach ($this->directories as $dir) {
-                foreach ($this->files($dir) as $file) {
-                    try {
-                        $definition = $this->load($file);
-                        $this->cache[$definition->name] = $definition;
-                    } catch (DefinitionException $e) {
-                        $this->errors[] = $e->getMessage();
-                    }
+            foreach ($files as $file) {
+                try {
+                    $definition = $this->load($file);
+                    $this->cache[$definition->name] = $definition;
+                } catch (DefinitionException $e) {
+                    $this->errors[] = $e->getMessage();
                 }
             }
             ksort($this->cache);
+            $this->signature = $signature;
         }
 
         return $this->cache;
@@ -83,11 +92,6 @@ class DefinitionLoader
         $this->all();
 
         return $this->errors;
-    }
-
-    public function forget(): void
-    {
-        $this->cache = null;
     }
 
     /**

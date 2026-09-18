@@ -34,6 +34,27 @@ it('lets a later directory override by name and reports broken files', function 
     rmdir($dir);
 });
 
+it('reloads when a definition file is added, changed or removed', function () {
+    $dir = sys_get_temp_dir() . '/netconf-defs-' . uniqid();
+    mkdir($dir);
+    $yaml = "name: reload-me\ndescription: %s\nmatch: {os: junos}\ncommands: {a: show a}\nsensors:\n  - {class: count, command: a, index: \"'x'\", descr: X, value: count(//x)}\n";
+    $loader = new DefinitionLoader([$dir]);
+
+    expect($loader->all())->toBe([]);
+
+    file_put_contents("$dir/r.yaml", sprintf($yaml, 'first'));
+    expect($loader->get('reload-me')?->description)->toBe('first');
+
+    file_put_contents("$dir/r.yaml", sprintf($yaml, 'second'));
+    touch("$dir/r.yaml", time() + 2);   // same second as the first write on fast machines
+    expect($loader->get('reload-me')?->description)->toBe('second');
+
+    unlink("$dir/r.yaml");
+    expect($loader->get('reload-me'))->toBeNull();
+
+    rmdir($dir);
+});
+
 it('matches shipped definitions to device facts', function () {
     $loader = new DefinitionLoader([DefinitionLoader::shippedDirectory()]);
     $matcher = new DefinitionMatcher;
