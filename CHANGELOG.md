@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- One poller log line per run summarises the RRD layout work (files verified, data sources
+  added, rrdtool failures) instead of only logging appended data sources per file.
+- `netconf:uninstall --purge` resolves rrdcached listings (`/<host>/<file>` or bare names)
+  against the device's RRD directory before reporting a file as not local.
+- `junos-vrrp`: the degraded-group count compares the state for equality with master/backup
+  instead of a substring test.
+
 ## 1.0.0 – 2026-09-18
 
 First release. LibreNMS plugin that runs `show … | display xml` (SSH exec) or NETCONF

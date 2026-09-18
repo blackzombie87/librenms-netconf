@@ -103,9 +103,12 @@ class NetconfPluginProvider extends ServiceProvider
     }
 
     /**
-     * Schedule the poller/discovery module once it ships (Phase 3). LibreNMS runs a module
-     * when the config key exists; the class is resolved via class_exists(), so registering
-     * the key without the class would make every poll log a missing module.
+     * Schedule the poller/discovery module. LibreNMS runs a module when its
+     * poller_modules/discovery_modules key exists and resolves the class via class_exists(),
+     * so the key is only set when the class is loadable. The keys are persisted (not just
+     * set in memory) because commands that reload the config would otherwise lose them.
+     * plugin:disable does not erase them; Modules\Netconf::should() checks the plugin state
+     * instead, and netconf:uninstall --purge removes them.
      */
     private function registerModule(): void
     {
