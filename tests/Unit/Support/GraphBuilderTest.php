@@ -21,6 +21,13 @@ it('builds DEF, LINE and GPRINT options per series with rotating colours', funct
         ->and($b->count())->toBe(3);
 });
 
+it('escapes colons in RRD paths', function () {
+    $options = (new GraphBuilder)->add('/rrd/2001:db8::1/netconf-a-b-c.rrd', 'total', 'x')->options('t');
+
+    expect($options)->toContain('DEF:ds0=/rrd/2001\\:db8\\:\\:1/netconf-a-b-c.rrd:total:AVERAGE')
+        ->and(GraphBuilder::safePath('/plain/path.rrd'))->toBe('/plain/path.rrd');
+});
+
 it('escapes colons and pads labels', function () {
     expect(GraphBuilder::safeLabel('ae2.0/192.0.2.12', 10))->toBe('ae2.0/192~')
         ->and(GraphBuilder::safeLabel('a:b', 6))->toBe('a\\:b   ')

@@ -62,10 +62,11 @@ class GraphBuilder
             $id = 'ds' . $i;
             $colour = $this->colours[$i % count($this->colours)];
             $label = self::safeLabel($s['label'], $this->labelWidth);
+            $file = self::safePath($s['file']);
 
-            $options[] = "DEF:$id={$s['file']}:{$s['ds']}:AVERAGE";
-            $options[] = "DEF:{$id}min={$s['file']}:{$s['ds']}:MIN";
-            $options[] = "DEF:{$id}max={$s['file']}:{$s['ds']}:MAX";
+            $options[] = "DEF:$id=$file:{$s['ds']}:AVERAGE";
+            $options[] = "DEF:{$id}min=$file:{$s['ds']}:MIN";
+            $options[] = "DEF:{$id}max=$file:{$s['ds']}:MAX";
             $options[] = "LINE1.25:$id#$colour:$label";
             $options[] = "GPRINT:$id:LAST:%6.2lf%s";
             $options[] = "GPRINT:{$id}min:MIN:%6.2lf%s";
@@ -74,6 +75,15 @@ class GraphBuilder
         }
 
         return $options;
+    }
+
+    /**
+     * rrdtool DEF file name: colons separate the DEF fields, so a path containing one (an
+     * IPv6 literal as hostname) must escape them.
+     */
+    public static function safePath(string $file): string
+    {
+        return str_replace(':', '\\:', $file);
     }
 
     /**
