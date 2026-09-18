@@ -17,7 +17,8 @@
     ],
     "autoload": {
         "psr-4": {
-            "SafferIt\\LibrenmsNetconf\\": "src/"
+            "SafferIt\\LibrenmsNetconf\\": "src/",
+            "LibreNMS\\Modules\\": "src/Modules/"
         }
     },
     "autoload-dev": {

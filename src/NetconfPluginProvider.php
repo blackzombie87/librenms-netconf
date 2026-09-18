@@ -6,6 +6,8 @@ use App\Facades\LibrenmsConfig;
 use Illuminate\Support\ServiceProvider;
 use LibreNMS\Interfaces\Plugins\Hooks\SettingsHook;
 use LibreNMS\Interfaces\Plugins\PluginManagerInterface;
+use SafferIt\LibrenmsNetconf\Collect\NetconfService;
+use SafferIt\LibrenmsNetconf\Console\NetconfDeviceCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfPreviewCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfRunCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfTestCommand;
@@ -27,6 +29,11 @@ class NetconfPluginProvider extends ServiceProvider
         $this->app->singleton(DeviceCredentials::class, fn ($app) => new DeviceCredentials($app->make(CredentialResolver::class)));
         $this->app->singleton(TransportFactory::class);
         $this->app->singleton(DefinitionLoader::class, fn () => new DefinitionLoader(self::definitionDirectories()));
+        $this->app->singleton(NetconfService::class, fn ($app) => new NetconfService(
+            $app->make(DefinitionLoader::class),
+            $app->make(DeviceCredentials::class),
+            $app->make(TransportFactory::class),
+        ));
     }
 
     public function boot(PluginManagerInterface $pluginManager): void
@@ -35,6 +42,7 @@ class NetconfPluginProvider extends ServiceProvider
 
         $pluginManager->publishHook($name, SettingsHook::class, Settings::class);
         $this->loadViewsFrom(__DIR__ . '/../resources/views', $name);
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         SettingsSecrets::register();
 
         if (! $pluginManager->pluginEnabled($name)) {
@@ -47,6 +55,7 @@ class NetconfPluginProvider extends ServiceProvider
                 NetconfRunCommand::class,
                 NetconfValidateCommand::class,
                 NetconfPreviewCommand::class,
+                NetconfDeviceCommand::class,
             ]);
         }
 
@@ -85,7 +94,16 @@ class NetconfPluginProvider extends ServiceProvider
         }
 
         foreach (['poller_modules.netconf', 'discovery_modules.netconf'] as $key) {
-            LibrenmsConfig::set($key, LibrenmsConfig::get($key, true));
+            if (LibrenmsConfig::has($key)) {
+                continue;
+            }
+            // persist to the config table: commands that reload the config (device:poll -v)
+            // would otherwise lose an in-memory set() made at boot
+            try {
+                LibrenmsConfig::persist($key, true);
+            } catch (\Throwable) {
+                LibrenmsConfig::set($key, true);
+            }
         }
     }
 }
