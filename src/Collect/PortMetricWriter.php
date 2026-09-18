@@ -35,7 +35,11 @@ class PortMetricWriter
     {
         $matched = 0;
         $unmatched = [];
+        $now = now();
 
+        // resolve ports first, then one upsert per chunk instead of two statements per row
+        $resolved = [];
+        $records = [];
         foreach ($rows as $row) {
             $portId = $this->portId($row->matchField, $row->matchValue);
             if ($portId === null) {
@@ -44,18 +48,22 @@ class PortMetricWriter
             }
             $matched++;
             $this->written[$row->definition . '/' . $row->mapping->id][] = $portId;
-
-            NetconfPortMetric::query()->updateOrCreate([
+            $resolved[] = [$row, $portId];
+            $records[] = [
                 'port_id' => $portId,
                 'definition' => $row->definition,
                 'mapping' => $row->mapping->id,
-            ], [
                 'device_id' => $this->device->device_id,
-                'values' => $row->values,
-                'types' => $row->types,
-                'last_seen' => now(),
-            ]);
+                'values' => json_encode($row->values),
+                'types' => json_encode($row->types),
+                'last_seen' => $now,
+            ];
+        }
+        foreach (array_chunk($records, 200) as $chunk) {
+            NetconfPortMetric::query()->upsert($chunk, ['port_id', 'definition', 'mapping'], ['device_id', 'values', 'types', 'last_seen']);
+        }
 
+        foreach ($resolved as [$row, $portId]) {
             if ($datastore !== null && $row->values !== []) {
                 // every RRD field of the mapping, in definition order, whether present or not:
                 // the data source set must not depend on what this reply contained
@@ -115,13 +123,24 @@ class PortMetricWriter
 
     private function portId(string $field, string $value): ?int
     {
-        $key = "$field=$value";
-        if (! array_key_exists($key, $this->portCache)) {
-            $query = Port::query()->where('device_id', $this->device->device_id)->where('deleted', 0);
-            $query = $field === 'ifIndex' ? $query->where('ifIndex', (int) $value) : $query->where($field, $value);
-            $this->portCache[$key] = $query->value('port_id');
+        if ($this->portCache === []) {
+            // one query for every port of the device; first row wins on duplicate names
+            /** @var list<array<string, mixed>> $ports */
+            $ports = Port::query()->where('device_id', $this->device->device_id)->where('deleted', 0)
+                ->orderBy('port_id')->get(['port_id', 'ifIndex', 'ifName', 'ifDescr', 'ifAlias'])->toArray();
+            foreach ($ports as $port) {
+                foreach (['ifIndex', 'ifName', 'ifDescr', 'ifAlias'] as $f) {
+                    $v = (string) ($port[$f] ?? '');
+                    if ($v !== '') {
+                        $this->portCache["$f=$v"] ??= (int) $port['port_id'];
+                    }
+                }
+            }
+            $this->portCache[''] = null;   // marks the cache as loaded even for a device without ports
         }
 
-        return $this->portCache[$key] === null ? null : (int) $this->portCache[$key];
+        $key = $field === 'ifIndex' ? "$field=" . (int) $value : "$field=$value";
+
+        return $this->portCache[$key] ?? null;
     }
 }

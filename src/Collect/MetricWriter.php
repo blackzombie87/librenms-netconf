@@ -26,22 +26,29 @@ class MetricWriter
      */
     public function write(array $rows, ?DataStorageInterface $datastore): array
     {
-        $written = 0;
+        // one upsert per chunk instead of two statements per row (an EVPN leaf has hundreds)
+        $now = now();
+        $records = [];
         foreach ($rows as $row) {
-            NetconfMetric::query()->updateOrCreate([
+            $records[] = [
                 'device_id' => $this->device->device_id,
                 'definition' => $row->definition,
                 'mapping' => $row->mapping->id,
                 'metric_index' => mb_substr($row->index, 0, 191),
-            ], [
                 'descr' => mb_substr($row->descr, 0, 255),
                 'group' => $row->mapping->group,
-                'values' => $row->values,
-                'types' => $row->types,
-                'labels' => $row->strings,
-                'last_seen' => now(),
-            ]);
+                'values' => json_encode($row->values),
+                'types' => json_encode($row->types),
+                'labels' => json_encode($row->strings),
+                'last_seen' => $now,
+            ];
+        }
+        foreach (array_chunk($records, 200) as $chunk) {
+            NetconfMetric::query()->upsert($chunk, ['device_id', 'definition', 'mapping', 'metric_index'], ['descr', 'group', 'values', 'types', 'labels', 'last_seen']);
+        }
 
+        $written = 0;
+        foreach ($rows as $row) {
             if ($datastore !== null && $row->values !== []) {
                 // every RRD field of the mapping, in definition order, whether present or not:
                 // the data source set must not depend on what this reply contained
