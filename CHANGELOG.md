@@ -54,6 +54,9 @@ custom metrics through YAML definitions. See `README.md` for what is shipped.
 - Parser hints (bare-word `index:` expressions) are shown by `netconf:validate` and the
   definitions page; the unused sensor `entity:` key was removed.
 - `netconf_metrics.types` stores the RRD data source types per row (migration).
+- `composer.lock` is committed and resolved for PHP 8.2 (`config.platform`), so CI
+  installs the same dependency set on every PHP version; LibreNMS resolves the plugin
+  against its own lock, so installations are unaffected.
 
 ### Upgrade notes
 
@@ -69,4 +72,3 @@ custom metrics through YAML definitions. See `README.md` for what is shipped.
 - No license expiry sample yet (`junos-license` has licensed/used/needed/validity only).
 - No feature tests against a LibreNMS application; writers and HTTP controllers are
   covered indirectly (pure logic is unit-tested, including data source stability).
-- `composer.lock` is not committed; CI installs unpinned dependencies.

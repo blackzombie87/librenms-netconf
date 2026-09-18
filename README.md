@@ -321,6 +321,11 @@ composer install
 composer check          # php-cs-fixer, phpstan, pest
 ```
 
+`composer.lock` is committed and resolved for PHP 8.2 (`config.platform.php`), so every
+CI job and every checkout installs the same dependency set; run `composer update` on
+purpose only. LibreNMS resolves the plugin against its own lock file, so the platform pin
+has no effect on installations.
+
 Unit tests need no LibreNMS installation: the transports are exercised against a scripted
 NETCONF server (`tests/Support/NetconfServerScript.php`) and recorded, anonymised Junos
 replies in `tests/fixtures/junos/`.
