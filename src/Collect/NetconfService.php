@@ -166,8 +166,9 @@ class NetconfService
     private function store(Device $device, array $definitions, CollectionResult $result, ?DataStorageInterface $datastore, bool $discovery): array
     {
         $sensors = new SensorWriter($device);
-        $metrics = new MetricWriter($device);
-        $ports = new PortMetricWriter($device);
+        $layout = RrdLayout::make();
+        $metrics = new MetricWriter($device, $layout);
+        $ports = new PortMetricWriter($device, $layout);
 
         // mappings whose command did not deliver data this run keep their existing rows
         /** @var array<string, SensorMapping> $skipped */
@@ -220,6 +221,9 @@ class NetconfService
         $counts['metrics_pruned'] = $metrics->prune($result->metrics(), $mappingsWithData);
 
         $p = $ports->write($result->ports(), $discovery ? null : ($datastore ?? app('Datastore')));
+        if (($summary = $layout->summary()) !== null) {
+            Log::info('  ' . $summary);
+        }
         $counts['ports_matched'] = $p['matched'];
         $counts['ports_unmatched'] = count($p['unmatched']);
         $counts['ports_pruned'] = $ports->prune($portMappingsWithData);

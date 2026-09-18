@@ -120,6 +120,19 @@ class RrdLayout
     }
 
     /**
+     * One line for the poller log, null when no file layout had to be verified this run.
+     */
+    public function summary(): ?string
+    {
+        if ($this->stats['verified'] === 0 && $this->stats['failed'] === 0) {
+            return null;
+        }
+
+        return sprintf('rrd layout: %d file(s) verified, %d data source(s) added, %d rrdtool call(s) failed',
+            $this->stats['verified'], $this->stats['added'], $this->stats['failed']);
+    }
+
+    /**
      * @return array<string, string>|null
      */
     private function dataSources(string $file): ?array
