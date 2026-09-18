@@ -6,12 +6,12 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: Phase 2 — definition engine.** Transports, credentials and the settings page
-(Phase 1) are verified against an EX4650 (Junos 23.4R2) over the cli transport on port 22
-and the NETCONF subsystem on ports 830 and 22. The YAML definition loader, matcher and
-extractor are in place with the Tier 1 definitions below; `lnms netconf:validate --replay`
-and `lnms netconf:preview` show exactly what a poll would store. Writing sensors and
-metrics into LibreNMS (the poller module) is Phase 3. The
+**Status: Phase 3 — polling into LibreNMS works.** Transports, credentials and the
+settings page (Phase 1) and the YAML definition engine (Phase 2) are verified against an
+EX4650 (Junos 23.4R2). The `netconf` poller/discovery module stores the extracted values
+as native LibreNMS sensors (health tab, graphs, alert rules), as per-port metrics and as
+custom metrics with their own RRDs. Still to come: the device credentials page and
+overview panel (Phase 4) and graphs/UI for port and custom metrics (Phase 5). The
 definition engine and the poller/discovery module follow in the next phases
 (see `NETCONF_PLUGIN_PLAN.md` in the development notes).
 
@@ -30,6 +30,19 @@ cd /opt/librenms
 
 The plugin is enabled automatically. Open *Overview → Plugins → Plugin Admin → netconf* to
 set the global defaults (transport, port, username, password or SSH key).
+
+Then run the migrations and enable devices:
+
+```bash
+./lnms migrate
+./lnms netconf:device leaf1 --enable            # uses the global credentials
+./lnms netconf:device leaf1 --enable --set-username=librenms --set-key=/opt/librenms/.ssh/netconf_ed25519
+./lnms device:discover leaf1 -m netconf         # creates the sensors
+./lnms device:poll leaf1 -m netconf             # records values (the regular poller does this every cycle)
+```
+
+Instead of enabling devices one by one, set *Enable for all devices* on the settings page;
+`--disable` then opts a device out. The module also appears in the device's *Modules* tab.
 
 ## Device login class (Junos)
 
@@ -197,6 +210,29 @@ their local name (`elapsed-time/@seconds`). Rows inside `multi-routing-engine-re
 ./lnms netconf:preview leaf1                             # live dry run, nothing is stored
 ./lnms netconf:preview leaf1 --only=junos-evpn --save=/tmp/leaf1   # and record fixtures
 ```
+
+## What lands where
+
+| Definition section | LibreNMS object | Storage | Alerting |
+|---|---|---|---|
+| `sensors` | native sensors with `poller_type = netconf`, `sensor_type = netconf-<definition>-<id>`; state sensors get state translations | `sensors` table, `rrd/<host>/sensor-<class>-netconf-…rrd`, any other configured datastore | standard sensor alert rules (`sensors.sensor_current > sensors.sensor_limit`, state generic value); eventlog on threshold crossing and state change |
+| `ports` | rows matched to the `ports` table by ifIndex (or ifName/ifDescr/ifAlias) | `netconf_port_metrics` (last values as JSON), `rrd/<host>/netconf-port-<port_id>-<definition>-<mapping>.rrd`, one data source per field | Advanced-SQL alert rules on `netconf_port_metrics.values` |
+| `metrics` | free-form rows | `netconf_metrics` (last values + labels as JSON), `rrd/<host>/netconf-<definition>-<mapping>-<index>.rrd` | Advanced-SQL alert rules on `netconf_metrics.values` |
+
+Per device, `netconf_device_status` keeps the transport, matched definitions, poll count,
+last success, last error and the back-off: after a failed session the device is skipped
+for 1, 2, 4, … polls (capped by *Back-off maximum*), with one eventlog entry on the first
+failure and one on recovery. `lnms netconf:device <device>` shows this row.
+
+Notes:
+
+- Sensors whose command failed or was skipped in a run are kept, not deleted; sensors
+  disappear only when their command succeeded and the row is gone.
+- User-customised limits (sensor "custom" flag in the UI) survive rediscovery.
+- The RRD data sources of a metric or port row are fixed when the file is created. If a
+  definition later gains a numeric field, delete the RRD to recreate it.
+- The core `sensors` poller lists netconf sensors as "Checking (netconf) …" and skips
+  them; their `sensor_oid` is sysUpTime so that check stays cheap.
 
 ## Development
 
