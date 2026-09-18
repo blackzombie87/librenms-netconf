@@ -194,16 +194,8 @@ be shipped enabled. The LDP, RPKI and VRRP element paths come from junos_exporte
 collectors and were not yet verified on a device running those protocols; the other
 definitions are verified on an EX4650.
 
-Alert-rule examples beyond the sensor limits, using the JSON columns of `netconf_metrics`:
-
-```sql
--- configuration committed in the last 10 minutes (junos-system/uptime)
-SELECT * FROM netconf_metrics WHERE netconf_metrics.device_id = ? AND mapping = 'uptime'
-  AND JSON_EXTRACT(`values`, '$.config_age') < 600
--- BGP peer not established (junos-routing/bgp-peer)
-SELECT * FROM netconf_metrics WHERE netconf_metrics.device_id = ? AND mapping = 'bgp-peer'
-  AND JSON_UNQUOTE(JSON_EXTRACT(labels, '$.state')) != 'Established'
-```
+Alert rules for the sensors and for the JSON columns of `netconf_metrics` are in
+*Alerting* below.
 
 ### Schema
 
@@ -313,6 +305,77 @@ Notes:
   history stays and no value lands in the wrong data source.
 - The core `sensors` poller lists netconf sensors as "Checking (netconf) …" and skips
   them; their `sensor_oid` is sysUpTime so that check stays cheap.
+
+## Alerting
+
+Sensors work with the normal rule builder; the metric tables need *Override SQL* on the
+*Advanced* tab of the rule (the statement goes into *Query*, `?` is replaced by the device
+id, any returned row raises the alert). The builder rules below are written the way the
+rule list shows them. `sensors.sensor_alert = 1` keeps the per-sensor *alert* toggle of
+the health tab working; drop it if you do not use that toggle.
+
+**Duplicate MACs (count sensor).** One alert per EVPN instance that reports duplicate MACs;
+the sensor already carries `limit: 0`, so the generic *Sensor over limit* rule from the
+collection fires too. Use `netconf-junos-evpn-dup-mac-total` instead for one alert per
+device.
+
+```
+sensors.sensor_class = "count" AND sensors.sensor_type = "netconf-junos-evpn-dup-mac-instance"
+  AND sensors.sensor_current > 0 AND sensors.sensor_alert = 1 AND macros.device_up = 1
+```
+
+Template line: `{{ $value['sensor_descr'] }}: {{ $value['sensor_current'] }} duplicate MACs`
+inside the `@foreach ($alert->faults as $key => $value)` loop.
+
+**ESI-LAG down (state sensor).** The `state_sensor_critical` macro joins the state
+translations, so the rule fires on the state the definition marks `generic: 2` (`Down`)
+and stays quiet on `Unknown`:
+
+```
+sensors.sensor_type = "netconf-junos-evpn-esi-lag-status" AND macros.state_sensor_critical = 1
+  AND sensors.sensor_alert = 1
+```
+
+Replace the first condition with `sensors.sensor_type LIKE "netconf-%"` (operator *begins
+with*) for one rule that covers every critical netconf state: ESI unresolved, EVPN interface
+or IRB down, LACP member not distributing, LDP session, RPKI cache, VRRP group, SRX node.
+The template gets `{{ $value['state_descr'] }}` from the join.
+
+**BGP peer flapped (Override SQL on `netconf_metrics`).** `flaps` is a counter and the
+table holds only the last value, so SQL cannot compute an increase; the direct signal is
+`uptime`, the seconds since the session came up. A peer that has flapped at least once and
+whose session is younger than 15 minutes:
+
+```sql
+SELECT netconf_metrics.device_id, netconf_metrics.descr,
+       JSON_EXTRACT(`values`, '$.flaps') AS flaps, JSON_EXTRACT(`values`, '$.uptime') AS uptime,
+       JSON_UNQUOTE(JSON_EXTRACT(labels, '$.state')) AS state
+FROM netconf_metrics
+WHERE netconf_metrics.device_id = ? AND definition = 'junos-routing' AND mapping = 'bgp-peer'
+  AND JSON_EXTRACT(`values`, '$.flaps') > 0 AND JSON_EXTRACT(`values`, '$.uptime') < 900
+```
+
+The alert clears by itself once the session is 15 minutes old; the flap history is on the
+peer's graph on the metrics page. `values` needs the backticks (reserved word); numeric
+fields are stored as numbers, labels as strings (`JSON_UNQUOTE`).
+
+More one-liners of the same kind:
+
+```sql
+-- BGP peer not established (junos-routing/bgp-peer)
+SELECT * FROM netconf_metrics WHERE netconf_metrics.device_id = ? AND mapping = 'bgp-peer'
+  AND JSON_UNQUOTE(JSON_EXTRACT(labels, '$.state')) != 'Established'
+-- configuration committed in the last 10 minutes (junos-system/uptime)
+SELECT * FROM netconf_metrics WHERE netconf_metrics.device_id = ? AND mapping = 'uptime'
+  AND JSON_EXTRACT(`values`, '$.config_age') < 600
+-- the plugin cannot reach the device: three failed sessions in a row (the status page shows the error)
+SELECT devices.hostname, netconf_device_status.consecutive_failures, netconf_device_status.last_error
+FROM netconf_device_status JOIN devices USING (device_id)
+WHERE netconf_device_status.device_id = ? AND netconf_device_status.consecutive_failures >= 3
+```
+
+Rows in `netconf_metrics` keep the values of the last successful poll, so a device in
+back-off alerts through the last rule rather than through stale metric rows.
 
 ## Upgrade and uninstall
 
