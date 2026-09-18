@@ -1,5 +1,7 @@
 # VRRP group state per interface (VRRP-MIB is not polled by LibreNMS).
 name: junos-vrrp
+# Paths verified on a Junos 22.2 router (2026-09-18). A dual-stack interface reports one row per address
+# family with the same interface/group, hence the '/v6' index suffix.
 description: VRRP state per interface and group
 
 match:
@@ -15,8 +17,8 @@ sensors:
     class: state
     command: summary
     rows: //vrrp-interface
-    index: concat(interface, '/', group)
-    descr: 'VRRP {row:interface} group {row:group}'
+    index: concat(interface, '/', group, substring('/v6', 1, 3 * contains(local-interface-address, ':')))
+    descr: 'VRRP {row:interface} group {row:group}{row:substring(" (IPv6)", 1, 7 * contains(local-interface-address, ":"))}'
     value: string(vrrp-state)
     group: VRRP
     states:
@@ -38,8 +40,8 @@ metrics:
   - id: group
     command: summary
     rows: //vrrp-interface
-    index: concat(interface, '/', group)
-    descr: 'VRRP {row:interface} group {row:group}'
+    index: concat(interface, '/', group, substring('/v6', 1, 3 * contains(local-interface-address, ':')))
+    descr: 'VRRP {row:interface} group {row:group}{row:substring(" (IPv6)", 1, 7 * contains(local-interface-address, ":"))}'
     fields:
       master:   number(translate(vrrp-state, 'MASTER', 'master') = 'master')
       state:
@@ -49,7 +51,7 @@ metrics:
         xpath: string(vrrp-mode)
         type: string
       vip:
-        xpath: string(virtual-ip-address)
+        xpath: string(virtual-ip-address[not(starts-with(., 'fe80'))][1])   # skip the IPv6 link-local VIP
         type: string
       if_state:
         xpath: string(interface-state)

@@ -1,0 +1,48 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S3.9/junos">
+    <evpn-instance-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <evpn-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+            <evpn-instance-name>EVPN-FABRIC</evpn-instance-name>
+            <evpn-num-neighbors>13</evpn-num-neighbors>
+            <evpn-neighbor xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-neighbor-route-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-neighbor-address>192.0.2.11</evpn-neighbor-address>
+                    <evpn-num-mac-routes>557</evpn-num-mac-routes>
+                    <evpn-num-mac-ip-routes>538</evpn-num-mac-ip-routes>
+                    <evpn-num-ethernet-autodiscovery-routes>14</evpn-num-ethernet-autodiscovery-routes>
+                    <evpn-num-inclusive-multicast-routes>284</evpn-num-inclusive-multicast-routes>
+                    <evpn-num-ethernet-segment-routes>0</evpn-num-ethernet-segment-routes>
+                    <evpn-flow-label>NO</evpn-flow-label>
+                </evpn-neighbor-route-information>
+            </evpn-neighbor>
+            <evpn-neighbor xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-neighbor-route-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-neighbor-address>192.0.2.61</evpn-neighbor-address>
+                    <evpn-num-mac-routes>1448</evpn-num-mac-routes>
+                    <evpn-num-mac-ip-routes>1506</evpn-num-mac-ip-routes>
+                    <evpn-num-ethernet-autodiscovery-routes>34</evpn-num-ethernet-autodiscovery-routes>
+                    <evpn-num-inclusive-multicast-routes>33</evpn-num-inclusive-multicast-routes>
+                    <evpn-num-ethernet-segment-routes>0</evpn-num-ethernet-segment-routes>
+                    <evpn-flow-label>NO</evpn-flow-label>
+                </evpn-neighbor-route-information>
+            </evpn-neighbor>
+            <evpn-neighbor xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-neighbor-route-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-neighbor-address>198.51.100.6</evpn-neighbor-address>
+                    <evpn-num-mac-routes>53</evpn-num-mac-routes>
+                    <evpn-num-mac-ip-routes>61</evpn-num-mac-ip-routes>
+                    <evpn-num-ethernet-autodiscovery-routes>0</evpn-num-ethernet-autodiscovery-routes>
+                    <evpn-num-inclusive-multicast-routes>53</evpn-num-inclusive-multicast-routes>
+                    <evpn-num-ethernet-segment-routes>0</evpn-num-ethernet-segment-routes>
+                    <evpn-flow-label>NO</evpn-flow-label>
+                </evpn-neighbor-route-information>
+            </evpn-neighbor>
+        </evpn-instance>
+        <evpn-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+            <evpn-instance-name>__default_evpn__</evpn-instance-name>
+            <evpn-num-neighbors>0</evpn-num-neighbors>
+        </evpn-instance>
+    </evpn-instance-information>
+    <cli>
+        <banner></banner>
+    </cli>
+</rpc-reply>

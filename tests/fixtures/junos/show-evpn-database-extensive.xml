@@ -1,0 +1,145 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <evpn-database-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <evpn-database-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+            <instance-name>default-switch</instance-name>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <vlan-id></vlan-id>
+                <vni-id>239</vni-id>
+                <mac-address>02:00:00:00:00:0e</mac-address>
+                <mac-state-value>0x0</mac-state-value>
+                <mobility-history xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <mobility-event xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <event-time>Sep 17 11:36:06.021827</event-time>
+                        <event-type>remote</event-type>
+                        <event-source>192.0.2.252</event-source>
+                        <event-seq-num>0</event-seq-num>
+                    </mobility-event>
+                </mobility-history>
+                <mac-source xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <source-name>192.0.2.252</source-name>
+                    <source-rank>1</source-rank>
+                    <source-status>Active</source-status>
+                    <source-mobility-seq-num>0</source-mobility-seq-num>
+                    <source-mobility-min-origin-address>192.0.2.252</source-mobility-min-origin-address>
+                    <source-timestamp>Sep 17 11:36:05.274096</source-timestamp>
+                    <source-timestamp-value>0x6aabb485</source-timestamp-value>
+                    <source-state>&lt;Remote-Gateway Remote-To-Local-Adv-Done&gt;</source-state>
+                    <source-mac-adv-route-status>not created (no local state present)</source-mac-adv-route-status>
+                    <mac-ip-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <address>203.0.113.19</address>
+                    </mac-ip-information>
+                </mac-source>
+                <mac-source xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <source-name>192.0.2.253</source-name>
+                    <source-rank>2</source-rank>
+                    <source-status>Inactive</source-status>
+                    <source-mobility-seq-num>0</source-mobility-seq-num>
+                    <source-mobility-min-origin-address>192.0.2.253</source-mobility-min-origin-address>
+                    <source-timestamp>Sep 17 11:36:02.412435</source-timestamp>
+                    <source-timestamp-value>0x6aabb482</source-timestamp-value>
+                    <source-state>&lt;Remote-Gateway&gt;</source-state>
+                    <source-mac-adv-route-status>not created (inactive source)</source-mac-adv-route-status>
+                    <mac-ip-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <address>203.0.113.19</address>
+                    </mac-ip-information>
+                </mac-source>
+                <history-db junos:style="extensive" junos:indent="4">
+                    <history-db-heading>History db: </history-db-heading>
+                    <history-db-maximum-size>10</history-db-maximum-size>
+                    <history-db-current-size>9</history-db-current-size>
+                    <history-db-entries junos:indent="2">
+                        <history-db-entries-heading>Time                       Event</history-db-entries-heading>
+                        <history-db-entry>
+                            <history-db-entry-timestamp>Sep 17 11:36:02.412 2026</history-db-entry-timestamp>
+                            <history-db-entry-event>192.0.2.253 : Remote peer 192.0.2.253 created, fl: 0x5, state: 0x0, chg: 0x80</history-db-entry-event>
+                        </history-db-entry>
+                        <history-db-entry>
+                            <history-db-entry-timestamp>Sep 17 11:36:02.412 2026</history-db-entry-timestamp>
+                            <history-db-entry-event>192.0.2.253 : Created</history-db-entry-event>
+                        </history-db-entry>
+                        <history-db-entry>
+                            <history-db-entry-timestamp>Sep 17 11:36:02.412 2026</history-db-entry-timestamp>
+                            <history-db-entry-event>Updating output state (change flags 0x1 &lt;ESI-Added&gt;)</history-db-entry-event>
+                        </history-db-entry>
+                    </history-db-entries>
+                </history-db>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <vlan-id></vlan-id>
+                <vni-id>160</vni-id>
+                <mac-address>02:00:00:00:00:07</mac-address>
+                <mac-state-value>0x0</mac-state-value>
+                <mac-source xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <source-name>01:00:60:00:11:00:00:00:24:00</source-name>
+                    <source-rank>1</source-rank>
+                    <source-status>Active</source-status>
+                    <source-local-origin>ae36.0</source-local-origin>
+                    <source-remote-origin>192.0.2.62</source-remote-origin>
+                    <source-remote-state>&lt;Mac-Only-Adv&gt;</source-remote-state>
+                    <source-mobility-seq-num>0</source-mobility-seq-num>
+                    <source-mobility-min-origin-address>192.0.2.61</source-mobility-min-origin-address>
+                    <source-timestamp>Sep 18 14:51:10.458437</source-timestamp>
+                    <source-timestamp-value>0x6aad33be</source-timestamp-value>
+                    <source-state>&lt;Local-MAC-Only Local-To-Remote-Adv-Allowed Remote-To-Local-Adv-Done&gt;</source-state>
+                    <source-mac-adv-route-status>created</source-mac-adv-route-status>
+                    <mac-ip-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <address>203.0.113.20</address>
+                        <mac-ip-flags>&lt;Local-Adv Local-Mh-Adv-Proxy-Bit&gt;</mac-ip-flags>
+                        <mac-ip-origin xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                            <ip-local-origin>ae36.0</ip-local-origin>
+                        </mac-ip-origin>
+                        <mac-ip-origin xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                            <ip-remote-origin>192.0.2.62</ip-remote-origin>
+                            <ip-remote-state>&lt;Sent-to-l2ald&gt;</ip-remote-state>
+                        </mac-ip-origin>
+                    </mac-ip-information>
+                    <mac-ip-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <address>2a05:3241::1:5</address>
+                        <mac-ip-flags>&lt;Local-Adv&gt;</mac-ip-flags>
+                        <mac-ip-origin xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                            <ip-local-origin>ae36.0</ip-local-origin>
+                        </mac-ip-origin>
+                        <mac-ip-origin xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                            <ip-remote-origin>192.0.2.62</ip-remote-origin>
+                            <ip-remote-state>&lt;Sent-to-l2ald&gt;</ip-remote-state>
+                        </mac-ip-origin>
+                    </mac-ip-information>
+                    <mac-ip-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <address>fe80::209:fff:fe09:1a</address>
+                        <mac-ip-flags>&lt;Local-Adv&gt;</mac-ip-flags>
+                        <mac-ip-origin xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                            <ip-local-origin>ae36.0</ip-local-origin>
+                        </mac-ip-origin>
+                        <mac-ip-origin xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                            <ip-remote-origin>192.0.2.62</ip-remote-origin>
+                            <ip-remote-state>&lt;Sent-to-l2ald&gt;</ip-remote-state>
+                        </mac-ip-origin>
+                    </mac-ip-information>
+                </mac-source>
+                <history-db junos:style="extensive" junos:indent="4">
+                    <history-db-heading>History db: </history-db-heading>
+                    <history-db-maximum-size>10</history-db-maximum-size>
+                    <history-db-current-size>10</history-db-current-size>
+                    <history-db-entries junos:indent="2">
+                        <history-db-entries-heading>Time                       Event</history-db-entries-heading>
+                        <history-db-entry>
+                            <history-db-entry-timestamp>Sep 18 14:31:57.358 2026</history-db-entry-timestamp>
+                            <history-db-entry-event>01:00:60:00:11:00:00:00:24:00 : Updating output state (change flags 0x200 &lt;IP-Added&gt;)</history-db-entry-event>
+                        </history-db-entry>
+                        <history-db-entry>
+                            <history-db-entry-timestamp>Sep 18 14:35:11.782 2026</history-db-entry-timestamp>
+                            <history-db-entry-event>01:00:60:00:11:00:00:00:24:00 : 203.0.113.20 Deleting</history-db-entry-event>
+                        </history-db-entry>
+                        <history-db-entry>
+                            <history-db-entry-timestamp>Sep 18 14:35:11.782 2026</history-db-entry-timestamp>
+                            <history-db-entry-event>01:00:60:00:11:00:00:00:24:00 : Updating output state (change flags 0x400 &lt;IP-Deleted&gt;)</history-db-entry-event>
+                        </history-db-entry>
+                    </history-db-entries>
+                </history-db>
+            </mac-entry>
+        </evpn-database-instance>
+    </evpn-database-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

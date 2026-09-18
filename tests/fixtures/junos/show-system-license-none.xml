@@ -1,0 +1,45 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <license-summary-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-license">
+        <license-usage-summary>
+            <features-used/>
+            <feature-summary>
+                <name>bgp</name>
+                <description>BGP Routing Protocol</description>
+                <licensed>0</licensed>
+                <used-licensed>1</used-licensed>
+                <needed>1</needed>
+                <validity-type>invalid</validity-type>
+            </feature-summary>
+            <feature-summary>
+                <name>vxlan</name>
+                <description>VxLAN</description>
+                <licensed>0</licensed>
+                <used-licensed>1</used-licensed>
+                <needed>1</needed>
+                <validity-type>invalid</validity-type>
+            </feature-summary>
+            <feature-summary>
+                <name>esi-lag</name>
+                <description>ESI-LAG</description>
+                <licensed>0</licensed>
+                <used-licensed>1</used-licensed>
+                <needed>1</needed>
+                <validity-type>invalid</validity-type>
+            </feature-summary>
+            <feature-summary>
+                <name>evpn-vxlan</name>
+                <description>EVPN feature with VXLAN encapsulation</description>
+                <licensed>0</licensed>
+                <used-licensed>1</used-licensed>
+                <needed>1</needed>
+                <validity-type>invalid</validity-type>
+            </feature-summary>
+        </license-usage-summary>
+        <license-information>
+            <no-licenses-installed/>
+        </license-information>
+    </license-summary-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

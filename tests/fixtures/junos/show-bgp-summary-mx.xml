@@ -1,0 +1,228 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S3.9/junos">
+    <bgp-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <bgp-thread-mode>BGP I/O</bgp-thread-mode>
+        <thread-state></thread-state>
+        <default-ebgp-advertise-mode>accept</default-ebgp-advertise-mode>
+        <default-ebgp-receive-mode>accept</default-ebgp-receive-mode>
+        <group-count>13</group-count>
+        <peer-count>28</peer-count>
+        <down-peer-count>0</down-peer-count>
+        <bgp-rib junos:style="brief">
+            <name>inet.0</name>
+            <total-prefix-count>2246666</total-prefix-count>
+            <received-prefix-count>2246666</received-prefix-count>
+            <accepted-prefix-count>2246666</accepted-prefix-count>
+            <active-prefix-count>1068838</active-prefix-count>
+            <suppressed-prefix-count>0</suppressed-prefix-count>
+            <history-prefix-count>0</history-prefix-count>
+            <damped-prefix-count>0</damped-prefix-count>
+            <total-external-prefix-count>1297706</total-external-prefix-count>
+            <active-external-prefix-count>845182</active-external-prefix-count>
+            <accepted-external-prefix-count>1297706</accepted-external-prefix-count>
+            <suppressed-external-prefix-count>0</suppressed-external-prefix-count>
+            <total-internal-prefix-count>948960</total-internal-prefix-count>
+            <active-internal-prefix-count>223656</active-internal-prefix-count>
+            <accepted-internal-prefix-count>948960</accepted-internal-prefix-count>
+            <suppressed-internal-prefix-count>0</suppressed-internal-prefix-count>
+            <pending-prefix-count>0</pending-prefix-count>
+            <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+        </bgp-rib>
+        <bgp-rib junos:style="brief">
+            <name>bgp.evpn.0</name>
+            <total-prefix-count>11036</total-prefix-count>
+            <received-prefix-count>11036</received-prefix-count>
+            <accepted-prefix-count>11036</accepted-prefix-count>
+            <active-prefix-count>11036</active-prefix-count>
+            <suppressed-prefix-count>0</suppressed-prefix-count>
+            <history-prefix-count>0</history-prefix-count>
+            <damped-prefix-count>0</damped-prefix-count>
+            <total-external-prefix-count>0</total-external-prefix-count>
+            <active-external-prefix-count>0</active-external-prefix-count>
+            <accepted-external-prefix-count>0</accepted-external-prefix-count>
+            <suppressed-external-prefix-count>0</suppressed-external-prefix-count>
+            <total-internal-prefix-count>11036</total-internal-prefix-count>
+            <active-internal-prefix-count>11036</active-internal-prefix-count>
+            <accepted-internal-prefix-count>11036</accepted-internal-prefix-count>
+            <suppressed-internal-prefix-count>0</suppressed-internal-prefix-count>
+            <pending-prefix-count>0</pending-prefix-count>
+            <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+            <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+        </bgp-rib>
+        <bgp-peer junos:style="terse" heading="Peer                     AS      InPkt     OutPkt    OutQ   Flaps Last Up/Dwn State|#Active/Received/Accepted/Damped...">
+            <peer-address>192.0.2.11</peer-address>
+            <peer-as>65000</peer-as>
+            <input-messages>69584562</input-messages>
+            <output-messages>1297191</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>0</flap-count>
+            <elapsed-time junos:seconds="37693626">62w2d 6:27:06</elapsed-time>
+            <description>LEAF-01</description>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>bgp.evpn.0</name>
+                <active-prefix-count>1397</active-prefix-count>
+                <received-prefix-count>1397</received-prefix-count>
+                <accepted-prefix-count>1397</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>EVPN-FABRIC.evpn.0</name>
+                <active-prefix-count>1397</active-prefix-count>
+                <received-prefix-count>1397</received-prefix-count>
+                <accepted-prefix-count>1397</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>__default_evpn__.evpn.0</name>
+                <active-prefix-count>0</active-prefix-count>
+                <received-prefix-count>0</received-prefix-count>
+                <accepted-prefix-count>0</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+        <bgp-peer junos:style="terse">
+            <peer-address>192.0.2.62</peer-address>
+            <peer-as>65000</peer-as>
+            <input-messages>5048995</input-messages>
+            <output-messages>100292</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>3</flap-count>
+            <elapsed-time junos:seconds="2913100">4w5d 17:11:40</elapsed-time>
+            <description>LEAF-12</description>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>bgp.evpn.0</name>
+                <active-prefix-count>3103</active-prefix-count>
+                <received-prefix-count>3103</received-prefix-count>
+                <accepted-prefix-count>3103</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>EVPN-FABRIC.evpn.0</name>
+                <active-prefix-count>3103</active-prefix-count>
+                <received-prefix-count>3103</received-prefix-count>
+                <accepted-prefix-count>3103</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>__default_evpn__.evpn.0</name>
+                <active-prefix-count>0</active-prefix-count>
+                <received-prefix-count>0</received-prefix-count>
+                <accepted-prefix-count>0</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+        <bgp-peer junos:style="terse">
+            <peer-address>198.51.100.20</peer-address>
+            <peer-as>64496</peer-as>
+            <input-messages>691554683</input-messages>
+            <output-messages>1816801</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>0</flap-count>
+            <elapsed-time junos:seconds="52771737">87w1d 18:48:57</elapsed-time>
+            <description>UPSTREAM-A</description>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>inet.0</name>
+                <active-prefix-count>725304</active-prefix-count>
+                <received-prefix-count>1065834</received-prefix-count>
+                <accepted-prefix-count>1065834</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+        <bgp-peer junos:style="terse">
+            <peer-address>192.0.2.242</peer-address>
+            <peer-as>64500</peer-as>
+            <input-messages>184919</input-messages>
+            <output-messages>190725</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>23</flap-count>
+            <elapsed-time junos:seconds="5547525">9w1d 4:58:45</elapsed-time>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>inet.0</name>
+                <active-prefix-count>0</active-prefix-count>
+                <received-prefix-count>0</received-prefix-count>
+                <accepted-prefix-count>0</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+        <bgp-peer junos:style="terse">
+            <peer-address>192.0.2.253</peer-address>
+            <peer-as>64500</peer-as>
+            <input-messages>118375749</input-messages>
+            <output-messages>114735704</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>5</flap-count>
+            <elapsed-time junos:seconds="10611798">17w3d 19:43:18</elapsed-time>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>inet.0</name>
+                <active-prefix-count>223656</active-prefix-count>
+                <received-prefix-count>948960</received-prefix-count>
+                <accepted-prefix-count>948960</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>bgp.evpn.0</name>
+                <active-prefix-count>167</active-prefix-count>
+                <received-prefix-count>167</received-prefix-count>
+                <accepted-prefix-count>167</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>EVPN-FABRIC.evpn.0</name>
+                <active-prefix-count>167</active-prefix-count>
+                <received-prefix-count>167</received-prefix-count>
+                <accepted-prefix-count>167</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+            <bgp-rib junos:style="terse">
+                <name>__default_evpn__.evpn.0</name>
+                <active-prefix-count>0</active-prefix-count>
+                <received-prefix-count>0</received-prefix-count>
+                <accepted-prefix-count>0</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+        <bgp-peer junos:style="terse">
+            <peer-address>198.51.100.21</peer-address>
+            <peer-as>64497</peer-as>
+            <input-messages>2205582</input-messages>
+            <output-messages>274362</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>6</flap-count>
+            <elapsed-time junos:seconds="7983234">13w1d 9:33:54</elapsed-time>
+            <description>IX-RS1</description>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>inet.0</name>
+                <active-prefix-count>99135</active-prefix-count>
+                <received-prefix-count>111877</received-prefix-count>
+                <accepted-prefix-count>111877</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+        <bgp-peer junos:style="terse">
+            <peer-address>2001:db8:1::1</peer-address>
+            <peer-as>64498</peer-as>
+            <input-messages>451827</input-messages>
+            <output-messages>440680</output-messages>
+            <route-queue-count>0</route-queue-count>
+            <flap-count>11</flap-count>
+            <elapsed-time junos:seconds="12823978">21w1d 10:12:58</elapsed-time>
+            <description>PEER-A</description>
+            <peer-state junos:format="Establ">Established</peer-state>
+            <bgp-rib junos:style="terse">
+                <name>inet6.0</name>
+                <active-prefix-count>571</active-prefix-count>
+                <received-prefix-count>575</received-prefix-count>
+                <accepted-prefix-count>575</accepted-prefix-count>
+                <suppressed-prefix-count>0</suppressed-prefix-count>
+            </bgp-rib>
+        </bgp-peer>
+    </bgp-information>
+    <cli>
+        <banner></banner>
+    </cli>
+</rpc-reply>

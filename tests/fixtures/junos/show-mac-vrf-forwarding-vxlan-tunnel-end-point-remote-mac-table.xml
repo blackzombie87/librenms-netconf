@@ -1,0 +1,57 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <vxlan-remote-vtep-mactable>
+        <l2-mac-logical-system>&lt;default&gt;</l2-mac-logical-system>
+        <l2-mac-routing-instance>default-switch</l2-mac-routing-instance>
+        <l2-mac-bridging-domain>VX10+10</l2-mac-bridging-domain>
+        <l2-bridge-vlan>10</l2-bridge-vlan>
+        <l2rtb-active-bd-vnid>10</l2rtb-active-bd-vnid>
+        <l2ald-mac-entry junos:style="brief-rvtep">
+            <l2-mac-address>02:00:00:00:00:01</l2-mac-address>
+            <l2-mac-flags>DR</l2-mac-flags>
+            <l2-mac-logical-interface>esi.1930</l2-mac-logical-interface>
+            <l2-active-source>00:11:22:33:44:55:00:00:02:00</l2-active-source>
+            <l2-remote-vtep-address>192.0.2.22 192.0.2.21 </l2-remote-vtep-address>
+        </l2ald-mac-entry>
+        <l2ald-mac-entry junos:style="brief-rvtep">
+            <l2-mac-address>02:00:00:00:00:02</l2-mac-address>
+            <l2-mac-flags>DR</l2-mac-flags>
+            <l2-mac-logical-interface>esi.1930</l2-mac-logical-interface>
+            <l2-active-source>00:11:22:33:44:55:00:00:02:00</l2-active-source>
+            <l2-remote-vtep-address>192.0.2.22 192.0.2.21 </l2-remote-vtep-address>
+        </l2ald-mac-entry>
+        <l2ald-mac-entry junos:style="brief-rvtep">
+            <l2-mac-address>02:00:00:00:00:03</l2-mac-address>
+            <l2-mac-flags>DR</l2-mac-flags>
+            <l2-mac-logical-interface>esi.1930</l2-mac-logical-interface>
+            <l2-active-source>00:11:22:33:44:55:00:00:02:00</l2-active-source>
+            <l2-remote-vtep-address>192.0.2.22 192.0.2.21 </l2-remote-vtep-address>
+        </l2ald-mac-entry>
+        <l2-mac-bridging-domain>VX1001+1001</l2-mac-bridging-domain>
+        <l2-bridge-vlan>1001</l2-bridge-vlan>
+        <l2rtb-active-bd-vnid>1001</l2rtb-active-bd-vnid>
+        <l2ald-mac-entry junos:style="brief-rvtep">
+            <l2-mac-address>02:00:00:00:00:04</l2-mac-address>
+            <l2-mac-flags>DR</l2-mac-flags>
+            <l2-mac-logical-interface>esi.2135</l2-mac-logical-interface>
+            <l2-active-source>00:11:22:33:44:55:00:00:03:00</l2-active-source>
+            <l2-remote-vtep-address>192.0.2.11 192.0.2.12 </l2-remote-vtep-address>
+        </l2ald-mac-entry>
+        <l2ald-mac-entry junos:style="brief-rvtep">
+            <l2-mac-address>02:00:00:00:00:05</l2-mac-address>
+            <l2-mac-flags>DR</l2-mac-flags>
+            <l2-mac-logical-interface>esi.2136</l2-mac-logical-interface>
+            <l2-active-source>00:11:22:33:44:55:00:00:04:00</l2-active-source>
+            <l2-remote-vtep-address>192.0.2.11 192.0.2.12 </l2-remote-vtep-address>
+        </l2ald-mac-entry>
+        <l2ald-mac-entry junos:style="brief-rvtep">
+            <l2-mac-address>02:00:00:00:00:06</l2-mac-address>
+            <l2-mac-flags>DR</l2-mac-flags>
+            <l2-mac-logical-interface>esi.2138</l2-mac-logical-interface>
+            <l2-active-source>00:11:22:33:44:55:00:00:05:00</l2-active-source>
+            <l2-remote-vtep-address>192.0.2.11 192.0.2.12 </l2-remote-vtep-address>
+        </l2ald-mac-entry>
+            </vxlan-remote-vtep-mactable>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

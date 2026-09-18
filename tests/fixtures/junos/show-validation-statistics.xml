@@ -1,16 +1,42 @@
-<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R0/junos">
-    <!-- synthetic sample built from junos_exporter's element names (MIT), not a device capture -->
-    <rv-statistics-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/22.2R0/junos">
+    <rv-statistics-information>
         <rv-statistics>
-            <rv-record-count>510000</rv-record-count>
-            <rv-replication-record-count>510000</rv-replication-record-count>
-            <rv-prefix-count>412000</rv-prefix-count>
-            <rv-origin-as-count>41000</rv-origin-as-count>
-            <rv-memory-utilization>73400320</rv-memory-utilization>
-            <rv-policy-origin-validation-results-valid>250000</rv-policy-origin-validation-results-valid>
-            <rv-policy-origin-validation-results-invalid>1200</rv-policy-origin-validation-results-invalid>
-            <rv-policy-origin-validation-results-unknown>640000</rv-policy-origin-validation-results-unknown>
+            <rv-record-count>1007657</rv-record-count>
+            <rv-replication-record-count>1007657</rv-replication-record-count>
+            <rv-prefix-count>881451</rv-prefix-count>
+            <rv-origin-as-count>1007657</rv-origin-as-count>
+            <rv-memory-utilization>547150560</rv-memory-utilization>
+            <rv-database-statistics>
+                <rv-database-name>default</rv-database-name>
+                <rv-database-record-count>1007657</rv-database-record-count>
+                <rv-database-origin-as-count>1007657</rv-database-origin-as-count>
+                <rv-database-origin-validation-requests>4285623575</rv-database-origin-validation-requests>
+                <rv-database-origin-validation-results-valid>1493048028</rv-database-origin-validation-results-valid>
+                <rv-database-origin-validation-results-invalid>936368</rv-database-origin-validation-results-invalid>
+                <rv-database-origin-validation-results-unknown>2791639179</rv-database-origin-validation-results-unknown>
+                <rv-bgp-import-policy-database-reevaluations>12498735</rv-bgp-import-policy-database-reevaluations>
+                <rv-bgp-import-policy-database-rib-statistics>
+                    <rv-bgp-import-policy-database-rib-name>inet.0</rv-bgp-import-policy-database-rib-name>
+                    <rv-bgp-import-policy-database-rib-reevaluations>12498669</rv-bgp-import-policy-database-rib-reevaluations>
+                </rv-bgp-import-policy-database-rib-statistics>
+                <rv-bgp-import-policy-database-rib-statistics>
+                    <rv-bgp-import-policy-database-rib-name>inet6.0</rv-bgp-import-policy-database-rib-name>
+                    <rv-bgp-import-policy-database-rib-reevaluations>66</rv-bgp-import-policy-database-rib-reevaluations>
+                </rv-bgp-import-policy-database-rib-statistics>
+            </rv-database-statistics>
+            <rv-policy-origin-validation-requests>4285623575</rv-policy-origin-validation-requests>
+            <rv-policy-origin-validation-results-valid>1493048028</rv-policy-origin-validation-results-valid>
+            <rv-policy-origin-validation-results-invalid>936368</rv-policy-origin-validation-results-invalid>
+            <rv-policy-origin-validation-results-unknown>2791639179</rv-policy-origin-validation-results-unknown>
+            <rv-bgp-import-policy-reevaluations>12498735</rv-bgp-import-policy-reevaluations>
+            <rv-resync-conn-flaps>0</rv-resync-conn-flaps>
+            <last-resync-started>90350713.687330</last-resync-started>
+            <last-resync-complete>90350713.687338</last-resync-complete>
+            <last-resync-conn-down>90350713.687344</last-resync-conn-down>
+            <last-resync-conn-ready>90350713.687347</last-resync-conn-ready>
         </rv-statistics>
     </rv-statistics-information>
-    <cli><banner></banner></cli>
+    <cli>
+        <banner></banner>
+    </cli>
 </rpc-reply>

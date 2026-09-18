@@ -1,0 +1,7 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <evpn-ip-prefix-database-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+    </evpn-ip-prefix-database-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

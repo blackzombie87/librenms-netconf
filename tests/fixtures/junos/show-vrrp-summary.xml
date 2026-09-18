@@ -1,33 +1,62 @@
-<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R0/junos">
-    <!-- synthetic sample built from junos_exporter's element names (MIT), not a device capture -->
-    <vrrp-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-vrrp">
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/22.2R0/junos">
+    <vrrp-information xmlns="http://xml.juniper.net/junos/22.2R0/junos-vrrpd" junos:style="summary">
         <vrrp-interface>
-            <interface>irb.100</interface>
+            <interface>ae1.600</interface>
             <interface-state>up</interface-state>
-            <group>100</group>
+            <group>1</group>
             <vrrp-state>master</vrrp-state>
             <vrrp-mode>Active</vrrp-mode>
-            <local-interface-address>198.51.100.2</local-interface-address>
-            <virtual-ip-address>198.51.100.1</virtual-ip-address>
+            <local-interface-address>198.51.100.8</local-interface-address>
+            <virtual-ip-address>198.51.100.9</virtual-ip-address>
         </vrrp-interface>
         <vrrp-interface>
-            <interface>irb.200</interface>
+            <interface>et-0/0/1.12</interface>
+            <interface-state>up</interface-state>
+            <group>112</group>
+            <vrrp-state>master</vrrp-state>
+            <vrrp-mode>Active</vrrp-mode>
+            <local-interface-address>198.51.100.10</local-interface-address>
+            <virtual-ip-address>198.51.100.11</virtual-ip-address>
+        </vrrp-interface>
+        <vrrp-interface>
+            <interface>et-0/0/1.1205</interface>
             <interface-state>up</interface-state>
             <group>200</group>
-            <vrrp-state>backup</vrrp-state>
+            <vrrp-state>master</vrrp-state>
             <vrrp-mode>Active</vrrp-mode>
-            <local-interface-address>198.51.100.66</local-interface-address>
-            <virtual-ip-address>198.51.100.65</virtual-ip-address>
+            <local-interface-address>198.51.100.12</local-interface-address>
+            <virtual-ip-address>198.51.100.13</virtual-ip-address>
         </vrrp-interface>
         <vrrp-interface>
-            <interface>irb.300</interface>
-            <interface-state>down</interface-state>
-            <group>300</group>
-            <vrrp-state>init</vrrp-state>
+            <interface>lt-0/0/0.13</interface>
+            <interface-state>up</interface-state>
+            <group>99</group>
+            <vrrp-state>master</vrrp-state>
             <vrrp-mode>Active</vrrp-mode>
-            <local-interface-address>198.51.100.130</local-interface-address>
-            <virtual-ip-address>198.51.100.129</virtual-ip-address>
+            <local-interface-address>198.51.100.14</local-interface-address>
+            <virtual-ip-address>198.51.100.15</virtual-ip-address>
+        </vrrp-interface>
+        <vrrp-interface>
+            <interface>lt-0/0/0.13</interface>
+            <interface-state>up</interface-state>
+            <group>99</group>
+            <vrrp-state>master</vrrp-state>
+            <vrrp-mode>Active</vrrp-mode>
+            <local-interface-address>2001:db8:100::2</local-interface-address>
+            <virtual-ip-address>fe80::200:5eff:fe00:263</virtual-ip-address>
+            <virtual-ip-address>2001:db8:100::3</virtual-ip-address>
+        </vrrp-interface>
+        <vrrp-interface>
+            <interface>xe-0/1/5.2103</interface>
+            <interface-state>up</interface-state>
+            <group>3</group>
+            <vrrp-state>master</vrrp-state>
+            <vrrp-mode>Active</vrrp-mode>
+            <local-interface-address>198.51.100.16</local-interface-address>
+            <virtual-ip-address>198.51.100.17</virtual-ip-address>
         </vrrp-interface>
     </vrrp-information>
-    <cli><banner></banner></cli>
+    <cli>
+        <banner></banner>
+    </cli>
 </rpc-reply>

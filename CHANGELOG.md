@@ -6,6 +6,24 @@ First release. LibreNMS plugin that runs `show … | display xml` (SSH exec) or 
 RPCs on Junos devices and maps the replies onto native sensors, per-port metrics and
 custom metrics through YAML definitions. See `README.md` for what is shipped.
 
+### Fixed after the first live samples from other devices (2026-09-18)
+
+- `junos-evpn`: EVPN L3 gateways (MX204 sample) list one type-5 ESI per anycast IRB with an
+  empty status and no remote PE. Those were treated as ESI-LAGs and would have produced one
+  "Unknown" resolution state per IRB and an "ESIs without remote PE" alarm equal to the IRB
+  count. IRB-backed ESIs are now excluded from the ESI-LAG sensors, the ESI metric and that
+  count; a new `count` sensor reports the number of anycast gateway IRBs.
+- `junos-vrrp`: a dual-stack interface reports one row per address family with the same
+  interface/group, which collided on one sensor index. The IPv6 row is now suffixed `/v6`
+  and the VIP field skips the link-local address.
+- Fixtures: the synthetic LDP, RPKI and VRRP samples are replaced by real (anonymised) replies
+  from a Junos 22.2 router; EVPN fabric samples from the EX4650 (VXLAN source/remote/remote
+  MAC table, `show interfaces vtep`, `show evpn database`, `show bgp neighbor`, `show vlans`,
+  neighbour-info) and from an MX204 L3 gateway (`-mx` variants) were added; the license
+  "none installed" and the empty ip-prefix / mac-ip replies cover the negative cases.
+- Docs: the implementation plan (`docs/PLAN.md`, with the §6 work list and the §7 EVPN fabric
+  view design) and the September review (`docs/REVIEW-2026-09.md`) now live in this repo.
+
 ### Fixed before release (review of 2026-09-18)
 
 - RRD data source drift: metric and port RRDs are now created from every numeric field
@@ -49,8 +67,6 @@ custom metrics through YAML definitions. See `README.md` for what is shipped.
 
 - EVPN multihoming peers are metrics only (`junos-evpn-esi`), not LibreNMS neighbours.
 - No license expiry sample yet (`junos-license` has licensed/used/needed/validity only).
-- `junos-ldp`, `junos-rpki`, `junos-vrrp` use element paths from junos_exporter with
-  synthetic fixtures; not verified on a device running those protocols.
 - No feature tests against a LibreNMS application; writers and HTTP controllers are
   covered indirectly (pure logic is unit-tested, including data source stability).
 - `composer.lock` is not committed; CI installs unpinned dependencies.

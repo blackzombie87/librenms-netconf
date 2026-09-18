@@ -1,0 +1,23 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <evpn-instance-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <evpn-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+            <evpn-instance-name>__default_evpn__</evpn-instance-name>
+            <evpn-num-neighbors>1</evpn-num-neighbors>
+        </evpn-instance>
+        <evpn-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+            <evpn-instance-name>default-switch</evpn-instance-name>
+            <num-local-macs>1448</num-local-macs>
+            <num-remote-macs>3388</num-remote-macs>
+            <local-interfaces>22</local-interfaces>
+            <local-interfaces-up>20</local-interfaces-up>
+            <irb-interfaces>0</irb-interfaces>
+            <irb-interfaces-up>0</irb-interfaces-up>
+            <num-protect-interfaces>0</num-protect-interfaces>
+            <evpn-num-neighbors>13</evpn-num-neighbors>
+            <evpn-num-esi>35</evpn-num-esi>
+        </evpn-instance>
+    </evpn-instance-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

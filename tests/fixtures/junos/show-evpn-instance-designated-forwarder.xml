@@ -1,0 +1,29 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <evpn-instance-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <evpn-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="df-only">
+            <evpn-instance-name>default-switch</evpn-instance-name>
+            <evpn-num-esi>35</evpn-num-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="df-only">
+                <evpn-esi-value>01:00:60:00:11:00:00:00:01:00</evpn-esi-value>
+                <evpn-esi-df-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="df-only">
+                    <esi-designated-forwarder>192.0.2.61</esi-designated-forwarder>
+                </evpn-esi-df-information>
+            </evpn-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="df-only">
+                <evpn-esi-value>01:00:60:00:11:00:00:00:02:00</evpn-esi-value>
+                <evpn-esi-df-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="df-only">
+                    <esi-designated-forwarder>192.0.2.61</esi-designated-forwarder>
+                </evpn-esi-df-information>
+            </evpn-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="df-only">
+                <evpn-esi-value>00:11:22:33:44:55:00:00:07:00</evpn-esi-value>
+            </evpn-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="df-only">
+                <evpn-esi-value>00:11:22:33:44:55:00:00:08:00</evpn-esi-value>
+            </evpn-esi>
+        </evpn-instance>
+    </evpn-instance-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

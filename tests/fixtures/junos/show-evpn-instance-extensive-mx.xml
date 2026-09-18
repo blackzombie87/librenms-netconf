@@ -1,0 +1,222 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S3.9/junos">
+    <evpn-instance-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <evpn-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+            <evpn-instance-name>EVPN-FABRIC</evpn-instance-name>
+            <route-distinguisher>192.0.2.252:1</route-distinguisher>
+            <evpn-encap-type>VXLAN</evpn-encap-type>
+            <duplicate-mac-detection-threshold>5</duplicate-mac-detection-threshold>
+            <duplicate-mac-detection-window>180</duplicate-mac-detection-window>
+            <duplicate-mac-auto-recovery-time>5</duplicate-mac-auto-recovery-time>
+            <mac-database-status-table xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <local-macs>53</local-macs>
+                <remote-macs>4727</remote-macs>
+                <local-mac-ips>61</local-mac-ips>
+                <remote-mac-ips>2514</remote-mac-ips>
+                <local-default-gateway-macs>53</local-default-gateway-macs>
+                <remote-default-gateway-macs>53</remote-default-gateway-macs>
+            </mac-database-status-table>
+            <local-interfaces>1</local-interfaces>
+            <local-interfaces-up>1</local-interfaces-up>
+            <evpn-interface-status-table xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-interface xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-interface-name>.local..9</evpn-interface-name>
+                    <evpn-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-interface-esi>
+                    <evpn-interface-mode>single-homed</evpn-interface-mode>
+                    <evpn-interface-status>Up</evpn-interface-status>
+                    <evpn-interface-etree-role>Root</evpn-interface-etree-role>
+                </evpn-interface>
+            </evpn-interface-status-table>
+            <irb-interfaces>53</irb-interfaces>
+            <irb-interfaces-up>53</irb-interfaces-up>
+            <irb-interface-status-table xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <irb-interface xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <irb-interface-name>irb.101</irb-interface-name>
+                    <irb-interface-vni-id>101</irb-interface-vni-id>
+                    <irb-interface-status>Up</irb-interface-status>
+                    <irb-interface-l3-context>master</irb-interface-l3-context>
+                </irb-interface>
+                <irb-interface xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <irb-interface-name>irb.102</irb-interface-name>
+                    <irb-interface-vni-id>102</irb-interface-vni-id>
+                    <irb-interface-status>Up</irb-interface-status>
+                    <irb-interface-l3-context>master</irb-interface-l3-context>
+                </irb-interface>
+                <irb-interface xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <irb-interface-name>irb.12</irb-interface-name>
+                    <irb-interface-vni-id>12</irb-interface-vni-id>
+                    <irb-interface-status>Up</irb-interface-status>
+                    <irb-interface-l3-context>master</irb-interface-l3-context>
+                </irb-interface>
+            </irb-interface-status-table>
+            <num-protect-interfaces>0</num-protect-interfaces>
+            <evpn-protect-interface-status-table xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+            </evpn-protect-interface-status-table>
+            <num-bridge-domains>53</num-bridge-domains>
+            <bridge-domain-status-table xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <bridge-domain xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <vlan-id>12</vlan-id>
+                    <domain-id>12</domain-id>
+                    <interfaces>0</interfaces>
+                    <interfaces-up>0</interfaces-up>
+                    <irb-interface>irb.12</irb-interface>
+                    <mode>Extended</mode>
+                    <mac-sync-status>Enabled</mac-sync-status>
+                    <sg-sync-status>Disabled</sg-sync-status>
+                    <v6-sg-sync-status>Disabled</v6-sg-sync-status>
+                </bridge-domain>
+                <bridge-domain xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <vlan-id>101</vlan-id>
+                    <domain-id>101</domain-id>
+                    <interfaces>0</interfaces>
+                    <interfaces-up>0</interfaces-up>
+                    <irb-interface>irb.101</irb-interface>
+                    <mode>Extended</mode>
+                    <mac-sync-status>Enabled</mac-sync-status>
+                    <sg-sync-status>Disabled</sg-sync-status>
+                    <v6-sg-sync-status>Disabled</v6-sg-sync-status>
+                </bridge-domain>
+                <bridge-domain xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <vlan-id>102</vlan-id>
+                    <domain-id>102</domain-id>
+                    <interfaces>0</interfaces>
+                    <interfaces-up>0</interfaces-up>
+                    <irb-interface>irb.102</irb-interface>
+                    <mode>Extended</mode>
+                    <mac-sync-status>Enabled</mac-sync-status>
+                    <sg-sync-status>Disabled</sg-sync-status>
+                    <v6-sg-sync-status>Disabled</v6-sg-sync-status>
+                </bridge-domain>
+            </bridge-domain-status-table>
+            <evpn-num-neighbors>13</evpn-num-neighbors>
+            <evpn-neighbor xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-neighbor-route-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-neighbor-address>192.0.2.11</evpn-neighbor-address>
+                    <evpn-num-mac-routes>567</evpn-num-mac-routes>
+                    <evpn-num-mac-ip-routes>532</evpn-num-mac-ip-routes>
+                    <evpn-num-ethernet-autodiscovery-routes>14</evpn-num-ethernet-autodiscovery-routes>
+                    <evpn-num-inclusive-multicast-routes>284</evpn-num-inclusive-multicast-routes>
+                    <evpn-num-ethernet-segment-routes>0</evpn-num-ethernet-segment-routes>
+                    <evpn-flow-label>NO</evpn-flow-label>
+                </evpn-neighbor-route-information>
+            </evpn-neighbor>
+            <evpn-neighbor xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-neighbor-route-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-neighbor-address>192.0.2.61</evpn-neighbor-address>
+                    <evpn-num-mac-routes>1425</evpn-num-mac-routes>
+                    <evpn-num-mac-ip-routes>1504</evpn-num-mac-ip-routes>
+                    <evpn-num-ethernet-autodiscovery-routes>34</evpn-num-ethernet-autodiscovery-routes>
+                    <evpn-num-inclusive-multicast-routes>33</evpn-num-inclusive-multicast-routes>
+                    <evpn-num-ethernet-segment-routes>0</evpn-num-ethernet-segment-routes>
+                    <evpn-flow-label>NO</evpn-flow-label>
+                </evpn-neighbor-route-information>
+            </evpn-neighbor>
+            <evpn-neighbor xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-neighbor-route-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-neighbor-address>192.0.2.253</evpn-neighbor-address>
+                    <evpn-num-mac-routes>53</evpn-num-mac-routes>
+                    <evpn-num-mac-ip-routes>61</evpn-num-mac-ip-routes>
+                    <evpn-num-ethernet-autodiscovery-routes>0</evpn-num-ethernet-autodiscovery-routes>
+                    <evpn-num-inclusive-multicast-routes>53</evpn-num-inclusive-multicast-routes>
+                    <evpn-num-ethernet-segment-routes>0</evpn-num-ethernet-segment-routes>
+                    <evpn-flow-label>NO</evpn-flow-label>
+                </evpn-neighbor-route-information>
+            </evpn-neighbor>
+            <evpn-num-esi>88</evpn-num-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-esi-value>00:11:22:33:44:55:00:00:02:00</evpn-esi-value>
+                <evpn-esi-status>Resolved</evpn-esi-status>
+                <evpn-esi-remote-pe-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-esi-num-remote-pe>2</evpn-esi-num-remote-pe>
+                    <evpn-esi-remote-pe xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <evpn-esi-remote-pe-ipaddr>192.0.2.11</evpn-esi-remote-pe-ipaddr>
+                        <evpn-esi-remote-mac-label>10</evpn-esi-remote-mac-label>
+                        <evpn-esi-remote-aliasing-label>0</evpn-esi-remote-aliasing-label>
+                        <evpn-esi-remote-pe-mode>all-active</evpn-esi-remote-pe-mode>
+                    </evpn-esi-remote-pe>
+                    <evpn-esi-remote-pe xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <evpn-esi-remote-pe-ipaddr>192.0.2.12</evpn-esi-remote-pe-ipaddr>
+                        <evpn-esi-remote-mac-label>10</evpn-esi-remote-mac-label>
+                        <evpn-esi-remote-aliasing-label>0</evpn-esi-remote-aliasing-label>
+                        <evpn-esi-remote-pe-mode>all-active</evpn-esi-remote-pe-mode>
+                    </evpn-esi-remote-pe>
+                </evpn-esi-remote-pe-information>
+            </evpn-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-esi-value>00:11:22:33:44:55:00:00:03:00</evpn-esi-value>
+                <evpn-esi-status>Resolved</evpn-esi-status>
+                <evpn-esi-remote-pe-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-esi-num-remote-pe>1</evpn-esi-num-remote-pe>
+                    <evpn-esi-remote-pe xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <evpn-esi-remote-pe-ipaddr>192.0.2.22</evpn-esi-remote-pe-ipaddr>
+                        <evpn-esi-remote-mac-label>212</evpn-esi-remote-mac-label>
+                        <evpn-esi-remote-aliasing-label>0</evpn-esi-remote-aliasing-label>
+                        <evpn-esi-remote-pe-mode>all-active</evpn-esi-remote-pe-mode>
+                    </evpn-esi-remote-pe>
+                </evpn-esi-remote-pe-information>
+            </evpn-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-esi-value>00:11:22:33:44:55:00:00:04:00</evpn-esi-value>
+                <evpn-esi-status>Resolved</evpn-esi-status>
+                <evpn-esi-remote-pe-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-esi-num-remote-pe>2</evpn-esi-num-remote-pe>
+                    <evpn-esi-remote-pe xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <evpn-esi-remote-pe-ipaddr>192.0.2.61</evpn-esi-remote-pe-ipaddr>
+                        <evpn-esi-remote-mac-label>800</evpn-esi-remote-mac-label>
+                        <evpn-esi-remote-aliasing-label>0</evpn-esi-remote-aliasing-label>
+                        <evpn-esi-remote-pe-mode>all-active</evpn-esi-remote-pe-mode>
+                    </evpn-esi-remote-pe>
+                    <evpn-esi-remote-pe xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <evpn-esi-remote-pe-ipaddr>192.0.2.62</evpn-esi-remote-pe-ipaddr>
+                        <evpn-esi-remote-mac-label>800</evpn-esi-remote-mac-label>
+                        <evpn-esi-remote-aliasing-label>0</evpn-esi-remote-aliasing-label>
+                        <evpn-esi-remote-pe-mode>all-active</evpn-esi-remote-pe-mode>
+                    </evpn-esi-remote-pe>
+                </evpn-esi-remote-pe-information>
+            </evpn-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-esi-value>05:00:00:fb:f4:00:00:00:0c:00</evpn-esi-value>
+                <evpn-esi-status></evpn-esi-status>
+                <evpn-esi-local-intf-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-esi-local-intf-name>irb.12</evpn-esi-local-intf-name>
+                    <evpn-esi-local-intf-status>Up/Forwarding</evpn-esi-local-intf-status>
+                </evpn-esi-local-intf-information>
+                <evpn-esi-remote-pe-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                </evpn-esi-remote-pe-information>
+            </evpn-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-esi-value>05:00:00:fb:f4:00:00:00:65:00</evpn-esi-value>
+                <evpn-esi-status></evpn-esi-status>
+                <evpn-esi-local-intf-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-esi-local-intf-name>irb.101</evpn-esi-local-intf-name>
+                    <evpn-esi-local-intf-status>Up/Forwarding</evpn-esi-local-intf-status>
+                </evpn-esi-local-intf-information>
+                <evpn-esi-remote-pe-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                </evpn-esi-remote-pe-information>
+            </evpn-esi>
+            <evpn-esi xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <evpn-esi-value>05:00:00:fb:f4:00:00:00:66:00</evpn-esi-value>
+                <evpn-esi-status></evpn-esi-status>
+                <evpn-esi-local-intf-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <evpn-esi-local-intf-name>irb.102</evpn-esi-local-intf-name>
+                    <evpn-esi-local-intf-status>Up/Forwarding</evpn-esi-local-intf-status>
+                </evpn-esi-local-intf-information>
+                <evpn-esi-remote-pe-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                </evpn-esi-remote-pe-information>
+            </evpn-esi>
+            <evpn-router-id>192.0.2.252</evpn-router-id>
+            <evpn-source-vtep-ipaddr>192.0.2.252</evpn-source-vtep-ipaddr>
+            <evpn-smet-forwarding>Disabled</evpn-smet-forwarding>
+        </evpn-instance>
+        <evpn-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+            <evpn-instance-name>__default_evpn__</evpn-instance-name>
+            <route-distinguisher>192.0.2.252:0</route-distinguisher>
+            <num-bridge-domains>0</num-bridge-domains>
+            <bridge-domain-status-table xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+            </bridge-domain-status-table>
+            <evpn-num-neighbors>0</evpn-num-neighbors>
+        </evpn-instance>
+    </evpn-instance-information>
+    <cli>
+        <banner></banner>
+    </cli>
+</rpc-reply>

@@ -1,20 +1,28 @@
-<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R0/junos">
-    <!-- synthetic sample built from junos_exporter's element names (MIT), not a device capture -->
-    <ldp-session-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/22.2R0/junos">
+    <ldp-session-information xmlns="http://xml.juniper.net/junos/22.2R0/junos-routing" junos:style="brief">
         <ldp-session>
-            <ldp-neighbor-address>192.0.2.101</ldp-neighbor-address>
+            <ldp-neighbor-address>198.51.100.1</ldp-neighbor-address>
             <ldp-session-state>Operational</ldp-session-state>
             <ldp-connection-state>Open</ldp-connection-state>
-            <ldp-remaining-time>26</ldp-remaining-time>
+            <ldp-remaining-time>28</ldp-remaining-time>
             <ldp-session-adv-mode>DU</ldp-session-adv-mode>
         </ldp-session>
         <ldp-session>
-            <ldp-neighbor-address>192.0.2.102</ldp-neighbor-address>
-            <ldp-session-state>Nonexistent</ldp-session-state>
-            <ldp-connection-state>Closed</ldp-connection-state>
-            <ldp-remaining-time>0</ldp-remaining-time>
+            <ldp-neighbor-address>198.51.100.2</ldp-neighbor-address>
+            <ldp-session-state>Operational</ldp-session-state>
+            <ldp-connection-state>Open</ldp-connection-state>
+            <ldp-remaining-time>22</ldp-remaining-time>
+            <ldp-session-adv-mode>DU</ldp-session-adv-mode>
+        </ldp-session>
+        <ldp-session>
+            <ldp-neighbor-address>198.51.100.4</ldp-neighbor-address>
+            <ldp-session-state>Operational</ldp-session-state>
+            <ldp-connection-state>Open</ldp-connection-state>
+            <ldp-remaining-time>25</ldp-remaining-time>
             <ldp-session-adv-mode>DU</ldp-session-adv-mode>
         </ldp-session>
     </ldp-session-information>
-    <cli><banner></banner></cli>
+    <cli>
+        <banner></banner>
+    </cli>
 </rpc-reply>

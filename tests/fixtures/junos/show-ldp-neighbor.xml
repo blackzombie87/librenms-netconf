@@ -1,18 +1,31 @@
-<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R0/junos">
-    <!-- synthetic sample built from junos_exporter's element names (MIT), not a device capture -->
-    <ldp-neighbor-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/22.2R0/junos">
+    <ldp-neighbor-information xmlns="http://xml.juniper.net/junos/22.2R0/junos-routing">
         <ldp-neighbor>
-            <ldp-neighbor-address>192.0.2.101</ldp-neighbor-address>
+            <ldp-neighbor-address>198.51.100.1</ldp-neighbor-address>
+            <interface-name>lo0.0</interface-name>
+            <ldp-label-space-id>198.51.100.1:0</ldp-label-space-id>
+            <ldp-remaining-time>35</ldp-remaining-time>
+        </ldp-neighbor>
+        <ldp-neighbor>
+            <ldp-neighbor-address>198.51.100.2</ldp-neighbor-address>
+            <interface-name>lo0.0</interface-name>
+            <ldp-label-space-id>198.51.100.2:0</ldp-label-space-id>
+            <ldp-remaining-time>39</ldp-remaining-time>
+        </ldp-neighbor>
+        <ldp-neighbor>
+            <ldp-neighbor-address>198.51.100.3</ldp-neighbor-address>
             <interface-name>et-0/0/0.0</interface-name>
-            <ldp-label-space-id>192.0.2.101:0</ldp-label-space-id>
+            <ldp-label-space-id>198.51.100.4:0</ldp-label-space-id>
+            <ldp-remaining-time>11</ldp-remaining-time>
+        </ldp-neighbor>
+        <ldp-neighbor>
+            <ldp-neighbor-address>198.51.100.5</ldp-neighbor-address>
+            <interface-name>et-0/0/2.0</interface-name>
+            <ldp-label-space-id>198.51.100.1:0</ldp-label-space-id>
             <ldp-remaining-time>12</ldp-remaining-time>
         </ldp-neighbor>
-        <ldp-neighbor>
-            <ldp-neighbor-address>192.0.2.102</ldp-neighbor-address>
-            <interface-name>et-0/0/1.0</interface-name>
-            <ldp-label-space-id>192.0.2.102:0</ldp-label-space-id>
-            <ldp-remaining-time>14</ldp-remaining-time>
-        </ldp-neighbor>
     </ldp-neighbor-information>
-    <cli><banner></banner></cli>
+    <cli>
+        <banner></banner>
+    </cli>
 </rpc-reply>

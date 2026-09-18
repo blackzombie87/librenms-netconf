@@ -1,0 +1,82 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <evpn-database-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <evpn-database-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+            <instance-name>default-switch</instance-name>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>10</vni-id>
+                <mac-address>02:00:00:00:00:07</mac-address>
+                <active-source>00:11:22:33:44:55:00:00:06:00</active-source>
+                <active-source-timestamp>Aug 15 22:16:18</active-source-timestamp>
+                <ip-address>203.0.113.10</ip-address>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>10</vni-id>
+                <mac-address>02:00:00:00:00:01</mac-address>
+                <active-source>00:11:22:33:44:55:00:00:02:00</active-source>
+                <active-source-timestamp>Sep 18 14:15:11</active-source-timestamp>
+                <ip-address>203.0.113.11</ip-address>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>10</vni-id>
+                <mac-address>02:00:00:00:00:02</mac-address>
+                <active-source>00:11:22:33:44:55:00:00:02:00</active-source>
+                <active-source-timestamp>Sep 18 14:29:42</active-source-timestamp>
+                <ip-address>203.0.113.12</ip-address>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>10</vni-id>
+                <mac-address>02:00:00:00:00:08</mac-address>
+                <active-source>00:11:22:33:44:55:00:00:07:00</active-source>
+                <active-source-timestamp>Sep 18 14:49:48</active-source-timestamp>
+                <ip-address>203.0.113.13</ip-address>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>10</vni-id>
+                <mac-address>02:00:00:00:00:09</mac-address>
+                <active-source>192.0.2.11</active-source>
+                <active-source-timestamp>Sep 14 13:56:21</active-source-timestamp>
+                <ip-address>203.0.113.14</ip-address>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>10</vni-id>
+                <mac-address>02:00:00:00:00:0a</mac-address>
+                <active-source>192.0.2.12</active-source>
+                <active-source-timestamp>Aug 15 22:16:14</active-source-timestamp>
+                <ip-address>203.0.113.15</ip-address>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>10</vni-id>
+                <mac-address>02:00:00:00:00:0b</mac-address>
+                <active-source>192.0.2.22</active-source>
+                <active-source-timestamp>Sep 18 14:49:13</active-source-timestamp>
+                <ip-address>203.0.113.16</ip-address>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>1001</vni-id>
+                <mac-address>02:00:00:00:00:0c</mac-address>
+                <active-source>ge-0/0/28.0</active-source>
+                <active-source-timestamp>Aug 24 11:46:27</active-source-timestamp>
+                <ip-address>203.0.113.17</ip-address>
+            </mac-entry>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>1001</vni-id>
+                <mac-address>02:00:00:00:00:0d</mac-address>
+                <active-source>ge-0/0/29.0</active-source>
+                <active-source-timestamp>Aug 29 12:06:09</active-source-timestamp>
+                <ip-address>203.0.113.18</ip-address>
+            </mac-entry>
+        </evpn-database-instance>
+    </evpn-database-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

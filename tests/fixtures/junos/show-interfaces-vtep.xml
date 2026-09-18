@@ -1,0 +1,167 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <interface-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-interface" junos:style="normal">
+        <physical-interface>
+            <name>vtep</name>
+            <admin-status junos:format="Enabled">up</admin-status>
+            <oper-status>up</oper-status>
+            <local-index>660</local-index>
+            <snmp-index>509</snmp-index>
+            <if-type>Software-Pseudo</if-type>
+            <link-level-type>VxLAN-Tunnel-Endpoint</link-level-type>
+            <mtu>Unlimited</mtu>
+            <speed>Unlimited</speed>
+            <if-device-flags>
+                <ifdf-present/>
+                <ifdf-running/>
+            </if-device-flags>
+            <ifd-specific-config-flags>
+            </ifd-specific-config-flags>
+            <if-config-flags>
+            </if-config-flags>
+            <link-type>Full-Duplex</link-type>
+            <if-media-flags>
+                <ifmf-none/>
+            </if-media-flags>
+            <interface-flapped junos:seconds="0">Never</interface-flapped>
+            <traffic-statistics junos:style="brief">
+                <input-packets>0</input-packets>
+                <output-packets>0</output-packets>
+            </traffic-statistics>
+            <logical-interface>
+                <name>vtep.32768</name>
+                <local-index>826</local-index>
+                <snmp-index>522</snmp-index>
+                <if-config-flags>
+                    <iff-up/>
+                    <iff-snmp-traps/>
+                    <internal-flags>0x4000</internal-flags>
+                </if-config-flags>
+                <encapsulation>ENET2</encapsulation>
+                <policer-overhead>
+                </policer-overhead>
+                <vtep-info>
+                    <vtep-type>Shared Source</vtep-type>
+                    <vtep-address>192.0.2.61</vtep-address>
+                    <vtep-l3-routing-instance>default</vtep-l3-routing-instance>
+                </vtep-info>
+                <traffic-statistics junos:style="brief">
+                    <input-packets>0</input-packets>
+                    <output-packets>0</output-packets>
+                </traffic-statistics>
+                <filter-information>
+                </filter-information>
+            </logical-interface>
+            <logical-interface>
+                <name>vtep.32769</name>
+                <local-index>864</local-index>
+                <snmp-index>523</snmp-index>
+                <if-config-flags>
+                    <iff-up/>
+                    <iff-snmp-traps/>
+                    <internal-flags>0x4000</internal-flags>
+                </if-config-flags>
+                <encapsulation>ENET2</encapsulation>
+                <policer-overhead>
+                </policer-overhead>
+                <vtep-info>
+                    <vtep-type>Shared Remote</vtep-type>
+                    <vtep-address>192.0.2.62</vtep-address>
+                    <vtep-l3-routing-instance>default</vtep-l3-routing-instance>
+                    <vtep-token-count>2</vtep-token-count>
+                    <vtep-token-array> Additional VTEP token[0] 24 </vtep-token-array>
+                    <vtep-token-array> Additional VTEP token[1] 25 </vtep-token-array>
+                </vtep-info>
+                <traffic-statistics junos:style="brief">
+                    <input-packets>456893296</input-packets>
+                    <output-packets>25562531695</output-packets>
+                </traffic-statistics>
+                <filter-information>
+                </filter-information>
+                <address-family>
+                    <address-family-name>eth-switch</address-family-name>
+                    <mtu>Unlimited</mtu>
+                    <address-family-flags>
+                        <ifff-is-primary/>
+                        <ifff-port-mode-trunk/>
+                        <internal-flags>0x8000000</internal-flags>
+                    </address-family-flags>
+                </address-family>
+            </logical-interface>
+            <logical-interface>
+                <name>vtep.32770</name>
+                <local-index>865</local-index>
+                <snmp-index>524</snmp-index>
+                <if-config-flags>
+                    <iff-up/>
+                    <iff-snmp-traps/>
+                    <internal-flags>0x4000</internal-flags>
+                </if-config-flags>
+                <encapsulation>ENET2</encapsulation>
+                <policer-overhead>
+                </policer-overhead>
+                <vtep-info>
+                    <vtep-type>Shared Remote</vtep-type>
+                    <vtep-address>192.0.2.21</vtep-address>
+                    <vtep-l3-routing-instance>default</vtep-l3-routing-instance>
+                    <vtep-token-count>3</vtep-token-count>
+                    <vtep-token-array> Additional VTEP token[0] 27 </vtep-token-array>
+                    <vtep-token-array> Additional VTEP token[1] 28 </vtep-token-array>
+                    <vtep-token-array> Additional VTEP token[2] 36 </vtep-token-array>
+                </vtep-info>
+                <traffic-statistics junos:style="brief">
+                    <input-packets>0</input-packets>
+                    <output-packets>1000048926</output-packets>
+                </traffic-statistics>
+                <filter-information>
+                </filter-information>
+                <address-family>
+                    <address-family-name>eth-switch</address-family-name>
+                    <mtu>Unlimited</mtu>
+                    <address-family-flags>
+                        <ifff-port-mode-trunk/>
+                        <internal-flags>0x8000000</internal-flags>
+                    </address-family-flags>
+                </address-family>
+            </logical-interface>
+            <logical-interface>
+                <name>vtep.32771</name>
+                <local-index>866</local-index>
+                <snmp-index>525</snmp-index>
+                <if-config-flags>
+                    <iff-up/>
+                    <iff-snmp-traps/>
+                    <internal-flags>0x4000</internal-flags>
+                </if-config-flags>
+                <encapsulation>ENET2</encapsulation>
+                <policer-overhead>
+                </policer-overhead>
+                <vtep-info>
+                    <vtep-type>Shared Remote</vtep-type>
+                    <vtep-address>192.0.2.41</vtep-address>
+                    <vtep-l3-routing-instance>default</vtep-l3-routing-instance>
+                    <vtep-token-count>3</vtep-token-count>
+                    <vtep-token-array> Additional VTEP token[0] 31 </vtep-token-array>
+                    <vtep-token-array> Additional VTEP token[1] 32 </vtep-token-array>
+                    <vtep-token-array> Additional VTEP token[2] 35 </vtep-token-array>
+                </vtep-info>
+                <traffic-statistics junos:style="brief">
+                    <input-packets>2064</input-packets>
+                    <output-packets>19191244</output-packets>
+                </traffic-statistics>
+                <filter-information>
+                </filter-information>
+                <address-family>
+                    <address-family-name>eth-switch</address-family-name>
+                    <mtu>Unlimited</mtu>
+                    <address-family-flags>
+                        <ifff-port-mode-trunk/>
+                        <internal-flags>0x8000000</internal-flags>
+                    </address-family-flags>
+                </address-family>
+            </logical-interface>
+        </physical-interface>
+    </interface-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

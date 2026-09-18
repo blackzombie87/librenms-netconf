@@ -168,19 +168,23 @@ it('extracts the Tier 2 system, NTP, license and LACP data', function () {
         ->and(sensorsOf('junos-lacp', 'members-degraded')['ae1']->value)->toBe(0.0);
 });
 
-it('extracts the synthetic LDP, RPKI and VRRP samples', function () {
-    expect(sensorsOf('junos-ldp', 'neighbors')['total']->value)->toBe(2.0)
-        ->and(sensorsOf('junos-ldp', 'sessions-down')['total']->value)->toBe(1.0)
-        ->and(sensorsOf('junos-ldp', 'session-state')['192.0.2.101']->state?->label)->toBe('Operational')
-        ->and(sensorsOf('junos-ldp', 'session-state')['192.0.2.102']->state?->generic)->toBe(2);
+it('extracts the LDP, RPKI and VRRP samples from a Junos 22.2 router', function () {
+    expect(sensorsOf('junos-ldp', 'neighbors')['total']->value)->toBe(4.0)
+        ->and(sensorsOf('junos-ldp', 'sessions-down')['total']->value)->toBe(0.0)
+        ->and(array_keys(sensorsOf('junos-ldp', 'session-state')))->toBe(['198.51.100.1', '198.51.100.2', '198.51.100.4'])
+        ->and(sensorsOf('junos-ldp', 'session-state')['198.51.100.1']->state?->label)->toBe('Operational');
 
-    expect(sensorsOf('junos-rpki', 'session-state')['192.0.2.202']->state?->label)->toBe('Transition')
-        ->and(sensorsOf('junos-rpki', 'sessions-down')['total']->value)->toBe(1.0)
-        ->and(sensorsOf('junos-rpki', 'invalid-origins')['invalid']->value)->toBe(1200.0)
-        ->and(metricsOf('junos-rpki', 'session')['192.0.2.201']->types['flaps'])->toBe('COUNTER');
+    expect(sensorsOf('junos-rpki', 'session-state')['198.51.100.7']->state?->label)->toBe('Up')
+        ->and(sensorsOf('junos-rpki', 'sessions-down')['total']->value)->toBe(0.0)
+        ->and(sensorsOf('junos-rpki', 'invalid-origins')['invalid']->value)->toBe(936368.0)
+        ->and(metricsOf('junos-rpki', 'session')['198.51.100.7']->types['flaps'])->toBe('COUNTER')
+        ->and(metricsOf('junos-rpki', 'session')['198.51.100.7']->values['v6'])->toBe(233566.0);
 
-    expect(array_keys(sensorsOf('junos-vrrp', 'state')))->toBe(['irb.100/100', 'irb.200/200', 'irb.300/300'])
-        ->and(sensorsOf('junos-vrrp', 'state')['irb.300/300']->state?->label)->toBe('Init')
-        ->and(sensorsOf('junos-vrrp', 'groups-degraded')['total']->value)->toBe(1.0)
-        ->and(metricsOf('junos-vrrp', 'group')['irb.100/100']->values['master'])->toBe(1.0);
+    // a dual-stack interface reports one row per address family with the same interface/group
+    expect(array_keys(sensorsOf('junos-vrrp', 'state')))
+        ->toBe(['ae1.600/1', 'et-0/0/1.12/112', 'et-0/0/1.1205/200', 'lt-0/0/0.13/99', 'lt-0/0/0.13/99/v6', 'xe-0/1/5.2103/3'])
+        ->and(sensorsOf('junos-vrrp', 'state')['lt-0/0/0.13/99/v6']->state?->label)->toBe('Master')
+        ->and(sensorsOf('junos-vrrp', 'groups-degraded')['total']->value)->toBe(0.0)
+        ->and(metricsOf('junos-vrrp', 'group')['ae1.600/1']->values['master'])->toBe(1.0)
+        ->and(metricsOf('junos-vrrp', 'group')['lt-0/0/0.13/99/v6']->strings['vip'])->toStartWith('2001:db8:');
 });

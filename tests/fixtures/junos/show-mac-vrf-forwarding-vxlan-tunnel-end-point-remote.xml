@@ -1,0 +1,123 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <vxlan-source-vtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+        <svtep-format>
+            <vtep-logical-system-name>&lt;default&gt;</vtep-logical-system-name>
+            <vtep-logical-system-id>0</vtep-logical-system-id>
+            <source-vtep-address>192.0.2.61</source-vtep-address>
+            <source-vtep-interface>lo0.0</source-vtep-interface>
+            <source-vtep-interface-id>802</source-vtep-interface-id>
+            <l3-id>0</l3-id>
+            <vxlan-real-rvtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+                <remote-vtep-address>192.0.2.11</remote-vtep-address>
+                <vtep-routing-instance-name></vtep-routing-instance-name>
+                <remote-vtep-interface-index>871</remote-vtep-interface-index>
+                <remote-vtep-interface-name>vtep.32776</remote-vtep-interface-name>
+                <remote-vtep-nh-id>2445</remote-vtep-nh-id>
+                <remote-vtep-mode>RNVE</remote-vtep-mode>
+                <vxlan-dynamic-information junos:style="without-nhid">
+                </vxlan-dynamic-information>
+            </vxlan-real-rvtep-information>
+            <vxlan-real-rvtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+                <remote-vtep-address>192.0.2.12</remote-vtep-address>
+                <vtep-routing-instance-name></vtep-routing-instance-name>
+                <remote-vtep-interface-index>868</remote-vtep-interface-index>
+                <remote-vtep-interface-name>vtep.32773</remote-vtep-interface-name>
+                <remote-vtep-nh-id>2134</remote-vtep-nh-id>
+                <remote-vtep-mode>RNVE</remote-vtep-mode>
+                <vxlan-dynamic-information junos:style="without-nhid">
+                </vxlan-dynamic-information>
+            </vxlan-real-rvtep-information>
+            <vxlan-real-rvtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+                <remote-vtep-address>192.0.2.13</remote-vtep-address>
+                <vtep-routing-instance-name></vtep-routing-instance-name>
+                <remote-vtep-interface-index>869</remote-vtep-interface-index>
+                <remote-vtep-interface-name>vtep.32774</remote-vtep-interface-name>
+                <remote-vtep-nh-id>2442</remote-vtep-nh-id>
+                <remote-vtep-mode>RNVE</remote-vtep-mode>
+                <vxlan-dynamic-information junos:style="without-nhid">
+                </vxlan-dynamic-information>
+            </vxlan-real-rvtep-information>
+            <vxlan-remote-vtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+                <remote-vtep-address>192.0.2.11</remote-vtep-address>
+                <vtep-routing-instance-name>default-switch</vtep-routing-instance-name>
+                <remote-vtep-interface-index>671088648</remote-vtep-interface-index>
+                <remote-vtep-interface-name>vtep-4.32776</remote-vtep-interface-name>
+                <remote-vtep-nh-id>2445</remote-vtep-nh-id>
+                <remote-vtep-mode>RNVE</remote-vtep-mode>
+                <vxlan-dynamic-information junos:style="without-nhid">
+                    <vxlan-format>
+                        <vn-id>2141</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>1251</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>452</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>453</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                </vxlan-dynamic-information>
+            </vxlan-remote-vtep-information>
+            <vxlan-remote-vtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+                <remote-vtep-address>192.0.2.12</remote-vtep-address>
+                <vtep-routing-instance-name>default-switch</vtep-routing-instance-name>
+                <remote-vtep-interface-index>671088645</remote-vtep-interface-index>
+                <remote-vtep-interface-name>vtep-4.32773</remote-vtep-interface-name>
+                <remote-vtep-nh-id>2134</remote-vtep-nh-id>
+                <remote-vtep-mode>RNVE</remote-vtep-mode>
+                <vxlan-dynamic-information junos:style="without-nhid">
+                    <vxlan-format>
+                        <vn-id>3571</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>900</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>810</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>800</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                </vxlan-dynamic-information>
+            </vxlan-remote-vtep-information>
+            <vxlan-remote-vtep-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-l2al">
+                <remote-vtep-address>192.0.2.13</remote-vtep-address>
+                <vtep-routing-instance-name>default-switch</vtep-routing-instance-name>
+                <remote-vtep-interface-index>671088646</remote-vtep-interface-index>
+                <remote-vtep-interface-name>vtep-4.32774</remote-vtep-interface-name>
+                <remote-vtep-nh-id>2442</remote-vtep-nh-id>
+                <remote-vtep-mode>RNVE</remote-vtep-mode>
+                <vxlan-dynamic-information junos:style="without-nhid">
+                    <vxlan-format>
+                        <vn-id>71</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>1705</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>1704</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                    <vxlan-format>
+                        <vn-id>1703</vn-id>
+                        <multicast-address>0.0.0.0</multicast-address>
+                    </vxlan-format>
+                </vxlan-dynamic-information>
+            </vxlan-remote-vtep-information>
+        </svtep-format>
+    </vxlan-source-vtep-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

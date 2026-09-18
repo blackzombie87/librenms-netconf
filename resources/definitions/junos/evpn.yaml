@@ -1,5 +1,7 @@
 # EVPN-VXLAN state on Junos. There is no EVPN MIB, so all of this is NETCONF/CLI only.
-# Paths confirmed on EX4650 23.4R2 (plan §3.1/§3.7).
+# Paths confirmed on EX4650 23.4R2 (plan §3.1/§3.7) and MX204 23.4R2 L3 gateway (plan §7.2).
+# L3 gateways list one type-5 ESI per anycast IRB (local interface irb.N, empty status, no remote PE);
+# those are not ESI-LAGs and are excluded from the ESI sensors and the "without remote PE" count.
 name: junos-evpn
 description: EVPN-VXLAN duplicate MACs, ESI / interface states and MAC / route counts
 
@@ -40,7 +42,7 @@ sensors:
   - id: esi-resolution
     class: state
     command: evpn_inst
-    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information]
+    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information][not(starts-with(evpn-esi-local-intf-information/evpn-esi-local-intf-name, 'irb.'))]
     index: string(evpn-esi-local-intf-information/evpn-esi-local-intf-name)
     descr: 'ESI {index} resolution ({row:evpn-esi-value})'
     value: string(evpn-esi-status)
@@ -53,7 +55,7 @@ sensors:
   - id: esi-lag-status
     class: state
     command: evpn_inst
-    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information]
+    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information][not(starts-with(evpn-esi-local-intf-information/evpn-esi-local-intf-name, 'irb.'))]
     index: string(evpn-esi-local-intf-information/evpn-esi-local-intf-name)
     descr: 'ESI-LAG {index}'
     value: string(evpn-esi-local-intf-information/evpn-esi-local-intf-status)
@@ -94,7 +96,7 @@ sensors:
     command: evpn_inst
     index: "'total'"
     descr: Local ESIs without remote PE
-    value: count(//evpn-esi[evpn-esi-local-intf-information and not(evpn-esi-remote-pe-information/evpn-esi-remote-pe)])
+    value: count(//evpn-esi[evpn-esi-local-intf-information and not(starts-with(evpn-esi-local-intf-information/evpn-esi-local-intf-name, 'irb.')) and not(evpn-esi-remote-pe-information/evpn-esi-remote-pe)])
     group: EVPN
     limit: 0
 
@@ -106,6 +108,14 @@ sensors:
     value: count(//bridge-domain[number(interfaces-up) < number(interfaces)])
     group: EVPN
     limit: 0
+
+  - id: gateway-irbs
+    class: count
+    command: evpn_inst
+    index: "'total'"
+    descr: EVPN anycast gateway IRBs (type-5 ESIs)
+    value: count(//evpn-esi[starts-with(evpn-esi-local-intf-information/evpn-esi-local-intf-name, 'irb.')])
+    group: EVPN
 
   - id: l3-contexts
     class: count
@@ -151,7 +161,7 @@ metrics:
 
   - id: esi
     command: evpn_inst
-    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information]
+    rows: //evpn-instance/evpn-esi[evpn-esi-local-intf-information][not(starts-with(evpn-esi-local-intf-information/evpn-esi-local-intf-name, 'irb.'))]
     index: string(evpn-esi-local-intf-information/evpn-esi-local-intf-name)
     descr: 'ESI-LAG {index}'
     fields:
