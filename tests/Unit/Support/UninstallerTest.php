@@ -13,6 +13,26 @@ it('recognises the RRD files the plugin writes', function () {
         ->and(Uninstaller::isMetricRrd('sensor-count-netconf-junos-alarms-major-major.rrd'))->toBeFalse();
 });
 
+it('resolves rrdcached listings against the host directory', function () {
+    $dir = sys_get_temp_dir() . '/netconf-uninstall-' . uniqid();
+    mkdir($dir . '/leaf1', 0777, true);
+    touch($dir . '/leaf1/netconf-junos-system-uptime-uptime.rrd');
+    try {
+        $absolute = $dir . '/leaf1/netconf-junos-system-uptime-uptime.rrd';
+        expect(Uninstaller::localRrdPath($absolute, $dir . '/leaf1'))->toBe($absolute)
+            // bare name relative to the host directory
+            ->and(Uninstaller::localRrdPath('netconf-junos-system-uptime-uptime.rrd', $dir . '/leaf1'))->toBe($absolute)
+            // /<host>/<file> relative to the daemon base looks absolute but is not
+            ->and(Uninstaller::localRrdPath('/leaf1/netconf-junos-system-uptime-uptime.rrd', $dir . '/leaf1'))->toBe($absolute)
+            // unknown file: the host-directory path is reported, nothing invented
+            ->and(Uninstaller::localRrdPath('/leaf1/netconf-gone.rrd', $dir . '/leaf1/'))->toBe($dir . '/leaf1/netconf-gone.rrd');
+    } finally {
+        unlink($dir . '/leaf1/netconf-junos-system-uptime-uptime.rrd');
+        rmdir($dir . '/leaf1');
+        rmdir($dir);
+    }
+});
+
 it('lists every shipped migration by its recorded name', function () {
     $names = Uninstaller::migrationNames();
     $files = glob(__DIR__ . '/../../../database/migrations/*.php') ?: [];

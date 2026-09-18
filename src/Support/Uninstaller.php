@@ -55,6 +55,24 @@ class Uninstaller
     }
 
     /**
+     * Local path of a file returned by Rrd::getRrdFiles(). Without rrdcached that is an
+     * absolute path; with rrdcached, `rrdtool list` prints names relative to the daemon's
+     * base directory (bare file name or /<host>/<file>), so the candidates are tried in
+     * order and the host-directory path is returned when none exists (for the report).
+     */
+    public static function localRrdPath(string $file, string $hostDir): string
+    {
+        $inHostDir = rtrim($hostDir, '/') . '/' . basename($file);
+        foreach ([$file, rtrim($hostDir, '/') . '/' . ltrim($file, '/'), $inHostDir] as $candidate) {
+            if (str_starts_with($candidate, '/') && is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $inHostDir;
+    }
+
+    /**
      * What is currently stored, without changing anything.
      *
      * @return array{
@@ -189,8 +207,7 @@ class Uninstaller
     }
 
     /**
-     * Plugin RRD files of one device as absolute paths (rrdcached lists names relative to
-     * the host directory).
+     * Plugin RRD files of one device as local absolute paths (see localRrdPath()).
      *
      * @return list<string>
      */
@@ -202,7 +219,7 @@ class Uninstaller
         );
         $dir = Rrd::dirFromHost($hostname);
 
-        return array_values(array_map(fn (string $file) => str_starts_with($file, '/') ? $file : $dir . '/' . $file, $files));
+        return array_values(array_unique(array_map(fn (string $file) => self::localRrdPath($file, $dir), $files)));
     }
 
     /**
