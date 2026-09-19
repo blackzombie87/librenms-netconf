@@ -326,6 +326,30 @@ Notes:
 - The core `sensors` poller lists netconf sensors as "Checking (netconf) …" and skips
   them; their `sensor_oid` is sysUpTime so that check stays cheap.
 
+## EVPN fabric view (preview)
+
+Enable *EVPN fabric view* on the settings page to collect the per-leaf EVPN tables
+(`junos-evpn-fabric`, four extra commands per leaf) and to aggregate them across devices:
+every VTEP or EVPN peer address becomes a node, resolved to a LibreNMS device where one owns
+the address; EVPN neighbours, ESI peers, VXLAN tunnels, EVPN BGP sessions and confirmed
+underlay links (shared point-to-point subnet with a BGP or OSPF session, LLDP as
+confirmation) connect the nodes, and every connected component is one fabric
+(`netconf_evpn_fabric`, key = lowest VTEP address, members in `netconf_evpn_fabric_member`).
+Roles: `leaf` (terminates VXLAN), `gateway` (anycast IRBs), `spine` (EVPN session only),
+plus a `border` flag for L3 contexts. VTEPs that are not monitored devices are kept as
+"unknown" members. A member row with `pinned = 1` keeps its fabric and role on recompute.
+
+```bash
+./lnms netconf:fabric --links            # fabrics, members, underlay links
+./lnms netconf:fabric --resolve          # recompute from the current tables
+```
+
+The MAC database (`netconf_evpn_mac`, ~5 000 rows and 1.3 MB per busy leaf) is opt-in per
+device like the queue counters: set the device attribute `netconf_evpn_mac` to `1`.
+
+The UI for this (fabric pages, topology map, consistency checks) follows in later phases,
+see `docs/PLAN.md` §7.
+
 ## Alerting
 
 Sensors work with the normal rule builder; the metric tables need *Override SQL* on the

@@ -12,6 +12,7 @@ use LibreNMS\Interfaces\Plugins\Hooks\SinglePageHook;
 use LibreNMS\Interfaces\Plugins\PluginManagerInterface;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Console\NetconfDeviceCommand;
+use SafferIt\LibrenmsNetconf\Console\NetconfFabricCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfPreviewCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfRunCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfTestCommand;
@@ -76,6 +77,7 @@ class NetconfPluginProvider extends ServiceProvider
                 NetconfValidateCommand::class,
                 NetconfPreviewCommand::class,
                 NetconfDeviceCommand::class,
+                NetconfFabricCommand::class,
             ]);
         }
 

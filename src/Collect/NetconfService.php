@@ -14,6 +14,7 @@ use SafferIt\LibrenmsNetconf\Definitions\DefinitionMatcher;
 use SafferIt\LibrenmsNetconf\Definitions\DeviceFacts;
 use SafferIt\LibrenmsNetconf\Definitions\SensorMapping;
 use SafferIt\LibrenmsNetconf\Extract\Extractor;
+use SafferIt\LibrenmsNetconf\Fabric\FabricResolver;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
 use SafferIt\LibrenmsNetconf\NetconfSettings;
 use SafferIt\LibrenmsNetconf\Transport\DeviceCredentials;
@@ -256,6 +257,16 @@ class NetconfService
             $rows = $result->tables();
             $counts['table_rows'] = $tables->write($rows)['rows'];
             $counts['tables_pruned'] = $tables->prune($rows, array_keys(array_filter($tableComplete)));
+
+            // cross-device aggregation: cheap (hundreds of nodes), so every leaf poll refreshes it
+            $fabric = FabricResolver::make()->run();
+            if ($fabric === null) {
+                Log::debug('  fabric resolver skipped: another poller holds the lock');
+            } else {
+                $counts['fabric_nodes'] = $fabric['nodes'];
+                $counts['fabrics'] = $fabric['fabrics'];
+                Log::info(sprintf('  fabric: %d nodes on %d devices (%d unknown), %d fabric(s), %d underlay links', $fabric['nodes'], $fabric['devices'], $fabric['unknown'], $fabric['fabrics'], $fabric['links']));
+            }
         }
 
         return $counts;

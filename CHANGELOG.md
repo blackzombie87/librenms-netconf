@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased (1.1)
+
+EVPN fabric view, phase F1 (`docs/PLAN.md` §7), feature-flagged by the new *EVPN fabric view*
+setting (`evpn_fabric`, default off).
+
+- New YAML mapping kind `tables:`: rows of a reply are written to the plugin's
+  `netconf_evpn_*` tables (neighbor, esi, vni, vni_vtep, tunnel, mac) with fixed key columns
+  and column types, merged on the key across mappings and pruned per device.
+- New tables `netconf_evpn_{neighbor,esi,vni,vni_vtep,tunnel,mac,vtep,fabric,fabric_member,underlay_link}`.
+- `junos-evpn-fabric` fills the per-leaf tables (four extra commands per leaf, the remote
+  MAC table every third poll); `junos-evpn-fabric-mac` the MAC database (opt-in per device,
+  attribute `netconf_evpn_mac`).
+- `FabricResolver`: VTEP address → device, roles (leaf, spine, L3 gateway, border flag),
+  union-find over EVPN neighbours, ESI peers, tunnels, EVPN BGP sessions and confirmed
+  underlay links → fabrics and members (manual `pinned` members survive); underlay links from
+  core ipv4/BGP/OSPF/LLDP tables. Runs after every leaf poll under a cache lock.
+- `lnms netconf:fabric [--resolve] [--links]` prints the resolved fabrics.
+
 ## 1.0.1 – 2026-09-18
 
 Fixes from the external review of 1.0.0 (`docs/REVIEW-2026-09-v1.0.0.md`).
