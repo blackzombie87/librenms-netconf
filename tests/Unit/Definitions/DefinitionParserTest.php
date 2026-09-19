@@ -42,7 +42,7 @@ it('rejects unknown keys, bad names and missing pieces', function () {
     expect(fn () => parseDef(minimal(['bogus' => 1])))->toThrow(DefinitionException::class, 'unknown key')
         ->and(fn () => parseDef(minimal(['name' => 'Bad Name'])))->toThrow(DefinitionException::class, 'lowercase')
         ->and(fn () => parseDef(['name' => 'x', 'commands' => []]))->toThrow(DefinitionException::class, 'at least one command')
-        ->and(fn () => parseDef(['name' => 'x', 'commands' => ['a' => 'show a']]))->toThrow(DefinitionException::class, 'no sensors, ports or metrics');
+        ->and(fn () => parseDef(['name' => 'x', 'commands' => ['a' => 'show a']]))->toThrow(DefinitionException::class, 'no sensors, ports, metrics or tables');
 });
 
 it('only allows show commands and exactly one of cli/rpc', function () {
@@ -142,4 +142,39 @@ it('matches with regex, lists and attribs', function () {
         ->and($d->matches(new DeviceFacts(os: 'junos', hardware: 'EX4650-48Y', attribs: ['netconf_evpn' => '0'])))->toBeFalse()
         ->and($d->matches(new DeviceFacts(os: 'junos', hardware: 'SRX345', attribs: ['netconf_evpn' => 'yes'])))->toBeFalse()
         ->and($d->match->describe())->toBe(['os' => 'junos|junos-evo', 'hardware' => '/^ex46/i', 'attrib' => 'netconf_evpn']);
+});
+
+it('parses table mappings against the table schema', function () {
+    $d = parseDef(minimal(['sensors' => null, 'tables' => [[
+        'table' => 'vni',
+        'command' => 'ver',
+        'rows' => '//vxlan-format',
+        'columns' => [
+            'vni' => 'number(vn-id)',
+            'instance' => ['xpath' => 'string(routing-instance-name)'],
+            'source_vtep' => 'string(../../source-vtep-address)',
+        ],
+    ]]]));
+
+    expect($d->tables)->toHaveCount(1)
+        ->and($d->tables[0]->id)->toBe('table1')
+        ->and($d->tables[0]->table)->toBe('vni')
+        ->and($d->tables[0]->keyColumns())->toBe(['vni'])
+        ->and($d->tables[0]->columnNames())->toBe(['vni', 'instance', 'source_vtep'])
+        ->and($d->tables[0]->columns[0]->type)->toBe('int')
+        ->and($d->tables[0]->columns[2]->type)->toBe('ip')
+        ->and($d->counts()['tables'])->toBe(1);
+});
+
+it('rejects table mappings that do not fit the schema', function () {
+    $table = fn (array $overrides) => parseDef(minimal(['tables' => [array_replace_recursive([
+        'table' => 'vni', 'command' => 'ver', 'columns' => ['vni' => 'number(vn-id)'],
+    ], $overrides)]]));
+
+    expect(fn () => $table(['table' => 'vtep']))->toThrow(DefinitionException::class, 'unknown table "vtep"')
+        ->and(fn () => $table(['columns' => ['bogus' => 'string(x)']]))->toThrow(DefinitionException::class, 'unknown column of table "vni"')
+        ->and(fn () => parseDef(minimal(['tables' => [['table' => 'vni', 'command' => 'ver', 'columns' => ['instance' => 'string(x)']]]])))->toThrow(DefinitionException::class, 'key column "vni" of table "vni" is required')
+        ->and(fn () => $table(['columns' => ['vni' => ['xpath' => 'number(vn-id)', 'transform' => 'shout']]]))->toThrow(DefinitionException::class, 'transform')
+        ->and(fn () => $table(['columns' => ['vni' => 'number(vn-id']]))->toThrow(DefinitionException::class, 'tables[0].columns.vni')
+        ->and(fn () => parseDef(minimal(['tables' => [['table' => 'vni', 'command' => 'ver', 'columns' => []]]])))->toThrow(DefinitionException::class, 'at least one column');
 });

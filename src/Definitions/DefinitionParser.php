@@ -33,7 +33,7 @@ class DefinitionParser
         if (! preg_match('/^[a-z0-9][a-z0-9_.-]*$/', $name)) {
             throw $this->error('name', 'must be lowercase letters, digits, "-", "_" or "." (used in sensor_type and RRD names)');
         }
-        $this->knownKeys($data, ['name', 'description', 'enabled', 'match', 'commands', 'sensors', 'ports', 'metrics'], '');
+        $this->knownKeys($data, ['name', 'description', 'enabled', 'match', 'commands', 'sensors', 'ports', 'metrics', 'tables'], '');
 
         $commands = $this->commands($data['commands'] ?? null);
         $definition = new Definition(
@@ -44,12 +44,13 @@ class DefinitionParser
             sensors: $this->sensors($data['sensors'] ?? [], $commands),
             ports: $this->ports($data['ports'] ?? [], $commands),
             metrics: $this->metrics($data['metrics'] ?? [], $commands),
+            tables: $this->tables($data['tables'] ?? [], $commands),
             source: $source,
             enabled: $this->bool($data, 'enabled', true),
         );
 
-        if ($definition->sensors === [] && $definition->ports === [] && $definition->metrics === []) {
-            throw $this->error('', 'definition has no sensors, ports or metrics');
+        if ($definition->sensors === [] && $definition->ports === [] && $definition->metrics === [] && $definition->tables === []) {
+            throw $this->error('', 'definition has no sensors, ports, metrics or tables');
         }
 
         return $definition;
@@ -309,6 +310,82 @@ class DefinitionParser
         }
 
         return $result;
+    }
+
+    /**
+     * @param  array<string, CommandSpec>  $commands
+     * @return list<TableMapping>
+     */
+    private function tables(mixed $list, array $commands): array
+    {
+        $result = [];
+        $ids = [];
+        foreach ($this->list($list, 'tables') as $i => $item) {
+            $path = "tables[$i]";
+            $this->knownKeys($item, ['id', 'table', 'command', 'rows', 'when', 'repeat', 'columns'], $path);
+
+            $table = $this->string($item, 'table', $path, true);
+            if (! TableSchema::isWritable($table)) {
+                throw $this->error("$path.table", "unknown table \"$table\" (allowed: " . implode(', ', TableSchema::writable()) . ')');
+            }
+
+            $columns = $this->columns($item['columns'] ?? null, $table, "$path.columns");
+            $names = array_map(fn (TableColumn $c) => $c->name, $columns);
+            foreach (TableSchema::key($table) as $key) {
+                if (! in_array($key, $names, true)) {
+                    throw $this->error("$path.columns", "key column \"$key\" of table \"$table\" is required");
+                }
+            }
+
+            $result[] = new TableMapping(
+                id: $this->id($item, $path, 'table' . ($i + 1), $ids),
+                table: $table,
+                command: $this->commandRef($item, $commands, $path),
+                columns: $columns,
+                rows: $this->xpath($this->string($item, 'rows', $path), "$path.rows"),
+                when: $this->xpath($this->string($item, 'when', $path), "$path.when"),
+                repeat: $this->xpath($this->string($item, 'repeat', $path), "$path.repeat"),
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Columns of a table mapping: `{column: xpath}` or `{column: {xpath, transform}}`; the
+     * type comes from TableSchema.
+     *
+     * @return list<TableColumn>
+     */
+    private function columns(mixed $data, string $table, string $path): array
+    {
+        if (! is_array($data) || $data === [] || array_is_list($data)) {
+            throw $this->error($path, 'must be a mapping of column => xpath with at least one column');
+        }
+
+        $columns = [];
+        foreach ($data as $name => $spec) {
+            $name = (string) $name;
+            $type = TableSchema::type($table, $name);
+            if ($type === null) {
+                throw $this->error("$path.$name", "unknown column of table \"$table\" (allowed: " . implode(', ', array_keys(TableSchema::columns($table))) . ')');
+            }
+            if (is_string($spec)) {
+                $spec = ['xpath' => $spec];
+            }
+            if (! is_array($spec) || ! isset($spec['xpath'])) {
+                throw $this->error("$path.$name", 'needs an xpath');
+            }
+            $this->knownKeys($spec, ['xpath', 'transform'], "$path.$name");
+            $transform = isset($spec['transform']) ? (string) $spec['transform'] : null;
+            if ($transform !== null && ! in_array($transform, TableSchema::TRANSFORMS, true)) {
+                throw $this->error("$path.$name.transform", 'must be one of ' . implode(', ', TableSchema::TRANSFORMS));
+            }
+
+            $columns[] = new TableColumn($name, $this->xpath((string) $spec['xpath'], "$path.$name") ?? '', $type, $transform);
+        }
+
+        return $columns;
     }
 
     /**

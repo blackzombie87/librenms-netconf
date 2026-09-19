@@ -68,7 +68,7 @@ class NetconfValidateCommand extends Command
         }
 
         $this->line('<info>Definition directories:</info> ' . implode(', ', $dirs));
-        $this->table(['Name', 'Description', 'Match', 'Cmds', 'Sensors', 'Ports', 'Metrics', 'Source'], array_map(fn ($d) => [
+        $this->table(['Name', 'Description', 'Match', 'Cmds', 'Sensors', 'Ports', 'Metrics', 'Tables', 'Source'], array_map(fn ($d) => [
             $d->name,
             mb_strimwidth($d->description, 0, 50, '…'),
             implode(' ', array_map(fn ($k, $v) => "$k=$v", array_keys($d->match->describe()), $d->match->describe())),

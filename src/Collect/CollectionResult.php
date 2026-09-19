@@ -46,6 +46,14 @@ final class CollectionResult
     }
 
     /**
+     * @return list<\SafferIt\LibrenmsNetconf\Extract\TableRow>
+     */
+    public function tables(): array
+    {
+        return array_merge(...array_values(array_map(fn ($d) => $d->tables, $this->definitions)) ?: [[]]);
+    }
+
+    /**
      * @return list<string>
      */
     public function warnings(): array
@@ -76,6 +84,7 @@ final class CollectionResult
             'sensors' => count($this->sensors()),
             'port_rows' => count($this->ports()),
             'metric_rows' => count($this->metrics()),
+            'table_rows' => count($this->tables()),
             'warnings' => count($this->warnings()),
         ];
     }

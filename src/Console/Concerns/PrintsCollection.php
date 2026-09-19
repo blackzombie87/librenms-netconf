@@ -59,6 +59,14 @@ trait PrintsCollection
                     $this->fields($m->values + $m->strings, $m->types, $verbose),
                 ], $def->metrics));
             }
+            if ($def->tables !== []) {
+                $this->table(['Table mapping', 'Table', 'Key', 'Columns'], array_map(fn ($t) => [
+                    $t->mapping->id,
+                    $t->mapping->table,
+                    $t->key,
+                    $this->columns($t->values, $verbose),
+                ], $def->tables));
+            }
             foreach ($def->warnings as $warning) {
                 $this->warn('  ' . $warning);
             }
@@ -70,7 +78,7 @@ trait PrintsCollection
 
         $summary = $result->summary();
         $this->line(sprintf(
-            '%d definitions, commands ok/skipped/failed %d/%d/%d, %d sensors, %d port rows, %d metric rows, %d warnings, %.2fs',
+            '%d definitions, commands ok/skipped/failed %d/%d/%d, %d sensors, %d port rows, %d metric rows, %d table rows, %d warnings, %.2fs',
             $summary['definitions'],
             $summary['commands_ok'],
             $summary['commands_skipped'],
@@ -78,6 +86,7 @@ trait PrintsCollection
             $summary['sensors'],
             $summary['port_rows'],
             $summary['metric_rows'],
+            $summary['table_rows'],
             $summary['warnings'],
             $result->duration
         ));
@@ -93,6 +102,23 @@ trait PrintsCollection
         foreach ($values as $name => $value) {
             $type = ($types[$name] ?? 'GAUGE') === 'GAUGE' ? '' : '*';
             $parts[] = $name . $type . '=' . (is_float($value) ? Template::stringify($value) : $value);
+        }
+        $text = implode(' ', $parts);
+
+        return $verbose ? wordwrap($text, 90, "\n", true) : mb_strimwidth($text, 0, 90, '…');
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     */
+    private function columns(array $values, bool $verbose): string
+    {
+        $parts = [];
+        foreach ($values as $name => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $parts[] = $name . '=' . (is_array($value) ? implode(',', $value) : (is_float($value) ? Template::stringify($value) : (is_bool($value) ? ($value ? '1' : '0') : (string) $value)));
         }
         $text = implode(' ', $parts);
 

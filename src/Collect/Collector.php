@@ -174,6 +174,16 @@ class Collector
             }
         }
 
+        foreach ($definition->tables as $mapping) {
+            if ($doc = $document($mapping->command, $mapping->id)) {
+                try {
+                    array_push($out->tables, ...$this->extractor->tables($definition, $mapping, $doc));
+                } catch (ExtractionException $e) {
+                    $out->warnings[] = "$definition->name/{$mapping->id}: " . $e->getMessage();
+                }
+            }
+        }
+
         array_push($out->warnings, ...$this->extractor->warnings());
 
         return $out;

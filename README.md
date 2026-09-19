@@ -265,7 +265,24 @@ metrics:
       total:  number(total-route-count)
       flaps:  { xpath: number(flap-count), type: COUNTER }
       state:  { xpath: string(peer-state), type: string }   # label only, never an RRD data source
+
+tables:                        # rows for the plugin's EVPN fabric tables (netconf_evpn_*), no RRD
+  - id: vni
+    table: vni                 # neighbor, esi, vni, vni_vtep, tunnel or mac; column types are fixed
+    command: key
+    rows: //vxlan-format[vn-id]
+    columns:                   # every key column of the table is required (vni here)
+      vni: number(vn-id)
+      instance: string(routing-instance-name)
+      source_vtep: string(ancestor::svtep-format/source-vtep-address)
+      irb_ifname: { xpath: string(irb), transform: duration }   # transforms: duration, evpn_source, timestamp
 ```
+
+Table columns are coerced to the column type (`int`, `string`, `ip`, `mac` as 12 hex digits,
+`bool` from XPath booleans or Up/Down/Yes/No texts, `json` from a node-set or a space separated
+text, `datetime`); a value that does not fit is stored as null with a warning. Rows are merged on
+the key, so several mappings (and commands) may fill different columns of the same row; rows that
+vanish from a reply are deleted per device once every mapping of that table delivered data.
 
 Namespaces are stripped before evaluation, so paths never need prefixes; attributes keep
 their local name (`elapsed-time/@seconds`). Prefer `string(...)` over `number(...)` for

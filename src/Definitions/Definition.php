@@ -12,6 +12,7 @@ final class Definition
      * @param  list<SensorMapping>  $sensors
      * @param  list<PortMapping>  $ports
      * @param  list<MetricMapping>  $metrics
+     * @param  list<TableMapping>  $tables
      */
     public function __construct(
         public readonly string $name,
@@ -21,6 +22,7 @@ final class Definition
         public readonly array $sensors = [],
         public readonly array $ports = [],
         public readonly array $metrics = [],
+        public readonly array $tables = [],
         public readonly string $source = '',
         public readonly bool $enabled = true,
     ) {
@@ -50,6 +52,7 @@ final class Definition
             'sensors' => count($this->sensors),
             'ports' => count($this->ports),
             'metrics' => count($this->metrics),
+            'tables' => count($this->tables),
         ];
     }
 }

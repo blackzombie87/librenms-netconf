@@ -8,6 +8,9 @@ use SafferIt\LibrenmsNetconf\Definitions\MetricField;
 use SafferIt\LibrenmsNetconf\Definitions\MetricMapping;
 use SafferIt\LibrenmsNetconf\Definitions\PortMapping;
 use SafferIt\LibrenmsNetconf\Definitions\SensorMapping;
+use SafferIt\LibrenmsNetconf\Definitions\TableColumn;
+use SafferIt\LibrenmsNetconf\Definitions\TableMapping;
+use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 
 /**
  * Applies the mappings of a definition to parsed replies. Pure PHP, no LibreNMS.
@@ -186,6 +189,213 @@ class Extractor
         }
 
         return $result;
+    }
+
+    /**
+     * Rows for a plugin table: every column of the mapping is coerced to its TableSchema
+     * type (null when the reply has no usable value); rows whose key column is empty are
+     * skipped, duplicate keys keep the first row.
+     *
+     * @return list<TableRow>
+     */
+    public function tables(Definition $definition, TableMapping $mapping, XmlDocument $doc): array
+    {
+        $result = [];
+        $seen = [];
+        $label = "$definition->name/{$mapping->id}";
+        $keyColumns = $mapping->keyColumns();
+
+        foreach ($this->iterate($doc, $mapping->rows, $mapping->when, $mapping->repeat, $label) as [$row, $n]) {
+            $values = [];
+            foreach ($mapping->columns as $column) {
+                $values[$column->name] = $this->column($column, $doc, $row, $n, $label);
+            }
+
+            $incomplete = false;
+            foreach ($keyColumns as $key) {
+                if ($values[$key] === null || $values[$key] === '' || $values[$key] === []) {
+                    $this->warn("$label: row without $key, skipped");
+                    $incomplete = true;
+                    break;
+                }
+            }
+            if ($incomplete) {
+                continue;
+            }
+
+            $key = TableRow::keyOf($keyColumns, $values);
+            if (isset($seen[$key])) {
+                $this->warn("$label: duplicate key \"$key\", keeping the first row");
+                continue;
+            }
+            $seen[$key] = true;
+
+            $result[] = new TableRow($definition->name, $mapping, $key, $values);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Evaluate one table column: node-sets collapse to the first node (json columns keep
+     * every node), the transform runs on the text, then the type coercion.
+     *
+     * @return int|string|bool|list<string>|null
+     */
+    private function column(TableColumn $column, XmlDocument $doc, DOMElement $row, ?string $n, string $label): int|string|bool|array|null
+    {
+        $raw = $doc->evaluateRaw(Template::substituteN($column->xpath, $n), $row);
+
+        if ($column->type === TableSchema::TYPE_JSON) {
+            return $this->list($raw);
+        }
+
+        if ($raw instanceof \DOMNodeList) {
+            $first = $raw->item(0);
+            $raw = $first === null ? '' : trim($first->textContent);
+        } elseif (is_float($raw) && is_nan($raw)) {
+            $raw = null;
+        }
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        $text = Template::stringify($raw);
+        if ($column->transform !== null) {
+            $text = self::transform($column->transform, $text);
+            if ($text === null) {
+                $this->warn("$label: {$column->name} \"" . Template::stringify($raw) . "\" has no {$column->transform} value, left empty");
+
+                return null;
+            }
+        }
+
+        $value = self::coerce($text, $column->type, is_bool($raw) ? $raw : null);
+        if ($value === null && $text !== '') {
+            $this->warn("$label: {$column->name} \"$text\" is not a valid {$column->type}, left empty");
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function list(mixed $raw): array
+    {
+        $items = [];
+        if ($raw instanceof \DOMNodeList) {
+            foreach ($raw as $node) {
+                $items[] = trim($node->textContent);
+            }
+        } elseif (is_string($raw)) {
+            $items = preg_split('/[\s,]+/', trim($raw)) ?: [];
+        } elseif ($raw !== null && ! (is_float($raw) && is_nan($raw))) {
+            $items[] = Template::stringify($raw);
+        }
+
+        return array_values(array_unique(array_filter($items, fn (string $item) => $item !== '')));
+    }
+
+    /**
+     * Text transforms for table columns: "duration" (Junos "1w2d 03:04:05" -> seconds),
+     * "evpn_source" (an EVPN active source -> esi | remote | local), "timestamp" (Junos
+     * "Sep 18 14:15:11" without a year -> "Y-m-d H:i:s", never in the future).
+     */
+    public static function transform(string $transform, string $text): ?string
+    {
+        switch ($transform) {
+            case 'duration':
+                $seconds = self::duration($text);
+
+                return $seconds === null ? null : (string) (int) $seconds;
+            case 'evpn_source':
+                return self::evpnSourceType($text);
+            case 'timestamp':
+                return self::junosTimestamp($text);
+        }
+
+        return $text;
+    }
+
+    /** ESI (10 octets) -> esi, IP address -> remote, anything else (a local IFL) -> local. */
+    public static function evpnSourceType(string $text): string
+    {
+        if (preg_match('/^([0-9a-f]{2}:){9}[0-9a-f]{2}$/i', $text)) {
+            return 'esi';
+        }
+        if (filter_var($text, FILTER_VALIDATE_IP) !== false) {
+            return 'remote';
+        }
+
+        return 'local';
+    }
+
+    /** "Sep 18 14:15:11" (no year) -> "Y-m-d H:i:s" using the current year, or last year when that lies ahead of now. */
+    public static function junosTimestamp(string $text, ?int $now = null): ?string
+    {
+        $now ??= time();
+        if (preg_match('/^([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/', trim($text), $m)) {
+            $year = (int) date('Y', $now);
+            $ts = strtotime(sprintf('%s %d %d %02d:%02d:%02d', $m[1], (int) $m[2], $year, (int) $m[3], (int) $m[4], (int) ($m[5] ?? 0)));
+            if ($ts === false) {
+                return null;
+            }
+            if ($ts > $now + 86400) {
+                $ts = strtotime(sprintf('%s %d %d %02d:%02d:%02d', $m[1], (int) $m[2], $year - 1, (int) $m[3], (int) $m[4], (int) ($m[5] ?? 0))) ?: $ts;
+            }
+
+            return date('Y-m-d H:i:s', $ts);
+        }
+
+        $ts = strtotime($text);
+
+        return $ts === false ? null : date('Y-m-d H:i:s', $ts);
+    }
+
+    /**
+     * Coerce a text to a TableSchema type; null when it does not fit.
+     */
+    public static function coerce(string $text, string $type, ?bool $bool = null): int|string|bool|null
+    {
+        $text = trim($text);
+        switch ($type) {
+            case TableSchema::TYPE_INT:
+                $number = (new self)->number($text);
+
+                return $number === null ? null : (int) round($number);
+            case TableSchema::TYPE_BOOL:
+                if ($bool !== null) {
+                    return $bool;
+                }
+                if (is_numeric($text)) {
+                    return (float) $text != 0;
+                }
+                $lower = strtolower($text);
+                if (in_array($lower, ['true', 'yes', 'on', 'up', 'enabled', 'aliasing', 'active', 'y'], true) || str_starts_with($lower, 'up/')) {
+                    return true;
+                }
+                if (in_array($lower, ['false', 'no', 'off', 'down', 'disabled', 'inactive', 'n', 'none', 'no aliasing'], true) || str_starts_with($lower, 'down/')) {
+                    return false;
+                }
+
+                return null;
+            case TableSchema::TYPE_IP:
+                return filter_var($text, FILTER_VALIDATE_IP) === false ? null : $text;
+            case TableSchema::TYPE_MAC:
+                $hex = strtolower(preg_replace('/[^0-9a-f]/i', '', $text) ?? '');
+
+                return strlen($hex) === 12 ? $hex : null;
+            case TableSchema::TYPE_DATETIME:
+                if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $text)) {
+                    return $text;
+                }
+                $ts = strtotime($text);
+
+                return $ts === false ? null : date('Y-m-d H:i:s', $ts);
+        }
+
+        return $text === '' ? null : mb_substr($text, 0, 255);
     }
 
     /**
