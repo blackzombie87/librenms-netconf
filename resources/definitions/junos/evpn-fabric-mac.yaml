@@ -1,0 +1,30 @@
+# EVPN MAC database per leaf for the fabric view (plan §7.1, caveat 3): ~5 000 MACs and 1.3 MB
+# on a busy leaf, so this is opt-in per device (attribute netconf_evpn_mac=1) and runs every
+# third poll. active-source is an ESI, a remote VTEP address or a local IFL; the transform
+# classifies it. Never use "show evpn database extensive" here (15 MB, 20 s).
+name: junos-evpn-fabric-mac
+description: EVPN MAC database per leaf with active source and IPs (opt-in, attribute netconf_evpn_mac)
+
+match:
+  os: junos
+  attrib: netconf_evpn_mac
+
+commands:
+  evpn_db:
+    cli: show evpn database
+    optional: true
+    every: 3
+
+tables:
+  - id: mac
+    table: mac
+    command: evpn_db
+    rows: //evpn-database-instance/mac-entry[mac-address]
+    columns:
+      vni:          number(vni-id)
+      mac_address:  string(mac-address)
+      instance:     string(../instance-name)
+      ip_addresses: ip-address
+      source:       string(active-source)
+      source_type:  { xpath: string(active-source), transform: evpn_source }
+      active_since: { xpath: string(active-source-timestamp), transform: timestamp }

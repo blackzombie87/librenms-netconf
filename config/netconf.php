@@ -20,4 +20,5 @@ return [
     'definitions_dir' => '',
     'enable_by_default' => false,
     'backoff_max' => 32,
+    'evpn_fabric' => false,    // EVPN fabric view: run definitions with tables: mappings and the fabric resolver
 ];

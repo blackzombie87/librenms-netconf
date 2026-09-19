@@ -1,0 +1,150 @@
+# EVPN fabric view (plan §7): per-leaf rows for the netconf_evpn_* tables, aggregated across
+# devices by the FabricResolver. The tables are defined by column, this file fills them from
+# Junos. Only runs when the "EVPN fabric view" setting is enabled. Paths confirmed on an EX4650
+# (23.4R2-S7.4) and an MX204 L3 gateway (23.4R2-S3.9), see docs/PLAN.md §7.2.
+name: junos-evpn-fabric
+description: EVPN fabric tables - neighbours, ESIs, VNIs, flood lists and VXLAN tunnels per leaf
+
+match:
+  os: junos
+
+commands:
+  evpn_inst:
+    cli: show evpn instance extensive          # shared with junos-evpn, runs once per poll
+  vtep_source:
+    cli: show mac-vrf forwarding vxlan-tunnel-end-point source
+    optional: true                             # VXLAN leaves only
+    description: VNI list and source VTEP address
+  vtep_remote:
+    cli: show mac-vrf forwarding vxlan-tunnel-end-point remote
+    optional: true
+    description: remote VTEPs with their kernel / per-instance IFL names and VNI flood lists
+  vtep_esi:
+    cli: show mac-vrf forwarding vxlan-tunnel-end-point esi    # shared with junos-evpn-esi
+    optional: true
+  vtep_if:
+    cli: show interfaces vtep
+    optional: true
+    description: vtep.N IFL per remote VTEP with its snmp-index (the ports row)
+  remote_mac_table:
+    cli: show mac-vrf forwarding vxlan-tunnel-end-point remote mac-table
+    optional: true
+    every: 3                                   # ~600 kB on a busy leaf; only the VLAN tag per VNI is taken
+    description: VLAN tag and remote MAC count per bridge domain
+
+tables:
+  # one directed edge per EVPN neighbour, with the route counts by type
+  - id: neighbor
+    table: neighbor
+    command: evpn_inst
+    rows: //evpn-instance/evpn-neighbor
+    columns:
+      instance:      string(../evpn-instance-name)
+      neighbor_ip:   string(.//evpn-neighbor-address)
+      router_id:     string(../evpn-router-id)
+      mac_routes:    number(.//evpn-num-mac-routes)
+      mac_ip_routes: number(.//evpn-num-mac-ip-routes)
+      ead_routes:    number(.//evpn-num-ethernet-autodiscovery-routes)
+      imet_routes:   number(.//evpn-num-inclusive-multicast-routes)
+      es_routes:     number(.//evpn-num-ethernet-segment-routes)
+
+  # ESIs with local interface, DF election and remote PEs; type-5 gateway ESIs (irb.N) excluded
+  - id: esi
+    table: esi
+    command: evpn_inst
+    rows: //evpn-instance/evpn-esi[not(starts-with(evpn-esi-local-intf-information/evpn-esi-local-intf-name, 'irb.'))]
+    columns:
+      esi:             string(evpn-esi-value)
+      instance:        string(../evpn-instance-name)
+      local_ifname:    string(evpn-esi-local-intf-information/evpn-esi-local-intf-name)
+      status:          string(evpn-esi-status)
+      lag_status:      string(evpn-esi-local-intf-information/evpn-esi-local-intf-status)
+      mode:            string(evpn-esi-remote-pe-information/evpn-esi-remote-pe[1]/evpn-esi-remote-pe-mode)
+      is_df:           evpn-esi-df-information/esi-designated-forwarder = ../evpn-router-id
+      df_ip:           string(evpn-esi-df-information/esi-designated-forwarder[contains(., '.')])   # "DF not elected yet" -> empty
+      bdf_ip:          string(evpn-esi-df-information/esi-backup-forwarder[contains(., '.')])
+      remote_vtep_ips: evpn-esi-remote-pe-information/evpn-esi-remote-pe/evpn-esi-remote-pe-ipaddr
+
+  # aliasing flag and remote MAC count per ESI from the forwarding table
+  - id: esi-forwarding
+    table: esi
+    command: vtep_esi
+    rows: //esi-format[esi-value]
+    columns:
+      esi:              string(esi-value)
+      aliasing:         string(esi-aliasing-enabled)
+      remote_mac_count: sum(esi-remote-vtep-information/esi-remote-vtep-entry/remote-vtep-mac-count)
+
+  # VNIs of the leaf with the source VTEP; the bridge-domain name is "<vlan-name>+<vni>"
+  - id: vni
+    table: vni
+    command: vtep_source
+    rows: //vxlan-format[vn-id]
+    columns:
+      vni:             number(vn-id)
+      instance:        string(routing-instance-name)
+      vlan_name:       substring-before(bridge-domain-vni-name, '+')
+      source_vtep:     string(ancestor::svtep-format/source-vtep-address)
+      multicast_group: string(multicast-address)
+
+  # VLAN tag per VNI (the source table has none) and the remote MACs learnt per bridge domain;
+  # the reply is flattened, so each bridge domain owns the mac entries up to the next one
+  - id: vni-vlan
+    table: vni
+    command: remote_mac_table
+    rows: //vxlan-remote-vtep-mactable/l2-mac-bridging-domain
+    columns:
+      vni:         number(following-sibling::l2rtb-active-bd-vnid[1])
+      vlan_id:     number(following-sibling::l2-bridge-vlan[1])
+      vlan_name:   substring-before(., '+')
+      remote_macs: count(following-sibling::l2ald-mac-entry) - count(following-sibling::l2-mac-bridging-domain[1]/following-sibling::l2ald-mac-entry)
+
+  # L3 gateways: anycast IRB per VNI
+  - id: vni-irb
+    table: vni
+    command: evpn_inst
+    rows: //irb-interface-status-table/irb-interface[irb-interface-vni-id]
+    columns:
+      vni:        number(irb-interface-vni-id)
+      instance:   string(ancestor::evpn-instance/evpn-instance-name)
+      irb_ifname: string(irb-interface-name)
+      irb_status: string(irb-interface-status)
+
+  # flood list: which remote VTEP the leaf has for which VNI
+  - id: vni-vtep
+    table: vni_vtep
+    command: vtep_remote
+    rows: //vxlan-remote-vtep-information/vxlan-dynamic-information/vxlan-format[vn-id]
+    columns:
+      vni:            number(vn-id)
+      remote_vtep_ip: string(../../remote-vtep-address)
+      instance:       string(../../vtep-routing-instance-name)
+
+  # VXLAN tunnel per remote VTEP: the kernel vtep.N IFL and its snmp-index (= ifIndex of the ports row)
+  - id: tunnel
+    table: tunnel
+    command: vtep_if
+    rows: //physical-interface[name = 'vtep']/logical-interface[vtep-info/vtep-type = 'Shared Remote']
+    columns:
+      remote_vtep_ip: string(vtep-info/vtep-address)
+      ifname:         string(name)
+      snmp_index:     number(snmp-index)
+
+  # next-hop id and mode of the same tunnels, plus the per-routing-instance name (vtep-4.N)
+  - id: tunnel-nexthop
+    table: tunnel
+    command: vtep_remote
+    rows: //vxlan-real-rvtep-information[remote-vtep-address]
+    columns:
+      remote_vtep_ip: string(remote-vtep-address)
+      ifname:         string(remote-vtep-interface-name)
+      mode:           string(remote-vtep-mode)
+      nh_id:          number(remote-vtep-nh-id)
+
+  - id: tunnel-instance
+    table: tunnel
+    command: vtep_remote
+    rows: //vxlan-remote-vtep-information[remote-vtep-address]
+    columns:
+      remote_vtep_ip: string(remote-vtep-address)
+      ri_ifname:      string(remote-vtep-interface-name)

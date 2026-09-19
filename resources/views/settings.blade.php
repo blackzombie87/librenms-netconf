@@ -139,6 +139,18 @@
                 <td><code>{{ $effective['backoff_max'] }}</code></td>
             </tr>
             <tr>
+                <td><label for="evpn_fabric">EVPN fabric view</label></td>
+                <td>
+                    <input type="hidden" name="settings[evpn_fabric]" value="0">
+                    <label style="font-weight: normal;">
+                        <input type="checkbox" id="evpn_fabric" name="settings[evpn_fabric]" value="1"
+                               {{ filter_var($settings['evpn_fabric'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+                        collect the per-leaf EVPN tables (definitions with <code>tables:</code>, four extra commands per leaf) and resolve fabrics
+                    </label>
+                </td>
+                <td><code>{{ $effective['evpn_fabric'] ? 'yes' : 'no' }}</code></td>
+            </tr>
+            <tr>
                 <td><label for="definitions_dir">User definitions directory</label></td>
                 <td><input class="form-control" id="definitions_dir" type="text" name="settings[definitions_dir]"
                            value="{{ $settings['definitions_dir'] ?? '' }}" placeholder="storage/app/netconf-definitions"></td>

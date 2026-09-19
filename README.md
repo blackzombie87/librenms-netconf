@@ -188,6 +188,8 @@ Shipped (Junos):
 | `junos-ldp` | `show ldp neighbor`, `show ldp session` | neighbour count, sessions not operational (`limit: 0`), state sensor per session |
 | `junos-rpki` | `show validation session`, `show validation statistics` | state sensor per cache session, sessions not up (`limit: 0`), invalid origin count; metrics per session (flaps, prefixes) and the validation statistics |
 | `junos-vrrp` | `show vrrp summary` | state sensor per interface/group (master, backup, init), groups neither master nor backup (`limit: 0`) |
+| `junos-evpn-fabric` | `show evpn instance extensive`, `show mac-vrf forwarding vxlan-tunnel-end-point source` / `remote` / `esi` / `remote mac-table` (every 3rd poll), `show interfaces vtep` | rows for the EVPN fabric tables (`netconf_evpn_neighbor`, `_esi`, `_vni`, `_vni_vtep`, `_tunnel`); only with the *EVPN fabric view* setting |
+| `junos-evpn-fabric-mac` | `show evpn database` (every 3rd poll) | `netconf_evpn_mac`: the EVPN MAC database with active source (ESI / remote VTEP / local IFL) and IPs; opt-in per device via attribute `netconf_evpn_mac=1`, and only with the *EVPN fabric view* setting |
 
 Commands whose subsystem is not running ("LDP instance is not running", "vrrp subsystem
 not running") are recognised and skipped without creating sensors, so every definition can

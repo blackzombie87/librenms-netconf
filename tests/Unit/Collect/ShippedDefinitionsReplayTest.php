@@ -27,6 +27,18 @@ function replayShipped(): CollectionResult
     return $result;
 }
 
+function tablesOf(string $definition, string $mapping): array
+{
+    $out = [];
+    foreach (replayShipped()->definitions[$definition]->tables as $t) {
+        if ($t->mapping->id === $mapping) {
+            $out[$t->key] = $t;
+        }
+    }
+
+    return $out;
+}
+
 function sensorsOf(string $definition, string $mapping): array
 {
     $out = [];
@@ -56,7 +68,7 @@ it('replays every shipped definition without errors or warnings', function () {
 
     expect($result->ok())->toBeTrue()
         ->and($result->warnings())->toBe([])
-        ->and($result->summary()['commands_ok'])->toBe(23) // distinct commands across the shipped definitions
+        ->and($result->summary()['commands_ok'])->toBe(28) // distinct commands across the shipped definitions
         ->and($result->summary()['commands_skipped'])->toBe(0)
         ->and($result->summary()['commands_failed'])->toBe(0)
         ->and(count($result->sensors()))->toBeGreaterThanOrEqual(33)
@@ -187,4 +199,37 @@ it('extracts the LDP, RPKI and VRRP samples from a Junos 22.2 router', function 
         ->and(sensorsOf('junos-vrrp', 'groups-degraded')['total']->value)->toBe(0.0)
         ->and(metricsOf('junos-vrrp', 'group')['ae1.600/1']->values['master'])->toBe(1.0)
         ->and(metricsOf('junos-vrrp', 'group')['lt-0/0/0.13/99/v6']->strings['vip'])->toStartWith('2001:db8:');
+});
+
+it('fills the EVPN fabric tables of the leaf', function () {
+    $neighbors = tablesOf('junos-evpn-fabric', 'neighbor');
+    expect(array_keys($neighbors))->toBe(['__default_evpn__/192.0.2.12', 'default-switch/192.0.2.12', 'default-switch/192.0.2.61'])
+        ->and($neighbors['default-switch/192.0.2.61']->values['router_id'])->toBe('192.0.2.11')
+        ->and($neighbors['default-switch/192.0.2.61']->values['mac_routes'])->toBe(1482);
+
+    $esi = tablesOf('junos-evpn-fabric', 'esi');
+    expect(array_keys($esi))->toBe(['00:11:22:33:44:55:00:00:02:00', '00:11:22:33:44:55:00:00:04:00', '00:11:22:33:44:66:00:00:01:00'])
+        ->and($esi['00:11:22:33:44:55:00:00:02:00']->values)->toMatchArray(['local_ifname' => 'ae2.0', 'lag_status' => 'Up/Forwarding', 'mode' => 'all-active', 'is_df' => true, 'df_ip' => '192.0.2.11', 'bdf_ip' => '192.0.2.12', 'remote_vtep_ips' => ['192.0.2.12']])
+        ->and($esi['00:11:22:33:44:55:00:00:04:00']->values)->toMatchArray(['lag_status' => 'Down', 'is_df' => false, 'df_ip' => null, 'remote_vtep_ips' => []])
+        ->and($esi['00:11:22:33:44:66:00:00:01:00']->values['local_ifname'])->toBeNull()
+        ->and(tablesOf('junos-evpn-fabric', 'esi-forwarding')['00:11:22:33:44:55:00:00:02:00']->values)->toBe(['esi' => '00:11:22:33:44:55:00:00:02:00', 'aliasing' => true, 'remote_mac_count' => 81]);
+
+    $vni = tablesOf('junos-evpn-fabric', 'vni');
+    expect(array_keys($vni))->toBe([10, 100, 1001, 1002, 1003])
+        ->and($vni['10']->values)->toBe(['vni' => 10, 'instance' => 'default-switch', 'vlan_name' => 'VX10', 'source_vtep' => '192.0.2.61', 'multicast_group' => '0.0.0.0'])
+        ->and(tablesOf('junos-evpn-fabric', 'vni-vlan')['1001']->values)->toBe(['vni' => 1001, 'vlan_id' => 1001, 'vlan_name' => 'VX1001', 'remote_macs' => 3])
+        ->and(tablesOf('junos-evpn-fabric', 'vni-irb'))->toBe([]);
+
+    expect(tablesOf('junos-evpn-fabric', 'vni-vtep'))->toHaveCount(12)
+        ->and(tablesOf('junos-evpn-fabric', 'vni-vtep')['452/192.0.2.11']->values['instance'])->toBe('default-switch')
+        ->and(tablesOf('junos-evpn-fabric', 'tunnel')['192.0.2.21']->values)->toBe(['remote_vtep_ip' => '192.0.2.21', 'ifname' => 'vtep.32770', 'snmp_index' => 524])
+        ->and(tablesOf('junos-evpn-fabric', 'tunnel-nexthop')['192.0.2.11']->values)->toBe(['remote_vtep_ip' => '192.0.2.11', 'ifname' => 'vtep.32776', 'mode' => 'RNVE', 'nh_id' => 2445])
+        ->and(tablesOf('junos-evpn-fabric', 'tunnel-instance')['192.0.2.11']->values['ri_ifname'])->toBe('vtep-4.32776');
+
+    $mac = tablesOf('junos-evpn-fabric-mac', 'mac');
+    expect($mac)->toHaveCount(9)
+        ->and($mac['10/020000000009']->values)->toMatchArray(['source' => '192.0.2.11', 'source_type' => 'remote', 'ip_addresses' => ['203.0.113.14']])
+        ->and($mac['1001/02000000000c']->values['source_type'])->toBe('local')
+        ->and($mac['10/020000000001']->values['source_type'])->toBe('esi')
+        ->and($mac['10/020000000001']->values['active_since'])->toEndWith('-09-18 14:15:11');
 });

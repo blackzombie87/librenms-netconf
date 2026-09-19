@@ -53,11 +53,24 @@ class NetconfService
     }
 
     /**
+     * Definitions matching the device. Definitions with `tables:` mappings belong to the EVPN
+     * fabric view and only run while that setting is enabled (they add commands per leaf).
+     *
      * @return list<Definition>
      */
     public function matchingDefinitions(Device $device): array
     {
-        return (new DefinitionMatcher)->matching(DeviceFacts::fromDevice($device), $this->loader->all());
+        $matching = (new DefinitionMatcher)->matching(DeviceFacts::fromDevice($device), $this->loader->all());
+        if (! self::fabricEnabled()) {
+            $matching = array_values(array_filter($matching, fn (Definition $d) => $d->tables === []));
+        }
+
+        return $matching;
+    }
+
+    public static function fabricEnabled(): bool
+    {
+        return (bool) (NetconfSettings::effective()['evpn_fabric'] ?? false);
     }
 
     /**
@@ -148,10 +161,11 @@ class NetconfService
             Log::debug('netconf warning: ' . $warning);
         }
         Log::info(sprintf(
-            'netconf: %d sensors, %d port rows, %d metric rows, %d warnings in %.2fs',
+            'netconf: %d sensors, %d port rows, %d metric rows, %d table rows, %d warnings in %.2fs',
             $summary['sensors'] ?? 0,
             $summary['port_rows'] ?? 0,
             $summary['metric_rows'] ?? 0,
+            $summary['table_rows'] ?? 0,
             $summary['warnings'] ?? 0,
             $duration
         ));
@@ -169,6 +183,7 @@ class NetconfService
         $layout = RrdLayout::make();
         $metrics = new MetricWriter($device, $layout);
         $ports = new PortMetricWriter($device, $layout);
+        $tables = new TableWriter($device);
 
         // mappings whose command did not deliver data this run keep their existing rows
         /** @var array<string, SensorMapping> $skipped */
@@ -176,6 +191,8 @@ class NetconfService
         $classes = [];
         $mappingsWithData = [];
         $portMappingsWithData = [];
+        /** @var array<string, bool> $tableComplete  logical table => every mapping delivered data */
+        $tableComplete = [];
         foreach ($definitions as $definition) {
             $def = $result->definitions[$definition->name] ?? null;
             foreach ($definition->sensors as $mapping) {
@@ -195,6 +212,10 @@ class NetconfService
                 if ($def !== null && ! in_array($mapping->id, $def->skippedMappings, true)) {
                     $portMappingsWithData[] = $definition->name . '/' . $mapping->id;
                 }
+            }
+            foreach ($definition->tables as $mapping) {
+                $hasData = $def !== null && ! in_array($mapping->id, $def->skippedMappings, true);
+                $tableComplete[$mapping->table] = ($tableComplete[$mapping->table] ?? true) && $hasData;
             }
         }
 
@@ -229,6 +250,12 @@ class NetconfService
         $counts['ports_pruned'] = $ports->prune($portMappingsWithData);
         if ($p['unmatched'] !== []) {
             Log::debug('netconf: unmatched ports: ' . implode(', ', array_slice($p['unmatched'], 0, 20)));
+        }
+
+        if ($tableComplete !== []) {
+            $rows = $result->tables();
+            $counts['table_rows'] = $tables->write($rows)['rows'];
+            $counts['tables_pruned'] = $tables->prune($rows, array_keys(array_filter($tableComplete)));
         }
 
         return $counts;
