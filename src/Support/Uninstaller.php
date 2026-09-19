@@ -13,7 +13,7 @@ use SafferIt\LibrenmsNetconf\NetconfSettings;
 /**
  * Everything the plugin leaves in a LibreNMS installation and how to remove it.
  *
- * `lnms plugin:remove` only edits the composer files. The sensors, the three tables, the
+ * `lnms plugin:remove` only edits the composer files. The sensors, the plugin tables, the
  * RRD files, the device attributes and the module config keys stay behind; this class
  * lists them (inventory) and deletes them in an order that a concurrently running poller
  * cannot undo: plugin disabled and module keys erased first, rows and files afterwards,
@@ -21,7 +21,17 @@ use SafferIt\LibrenmsNetconf\NetconfSettings;
  */
 class Uninstaller
 {
-    public const TABLES = ['netconf_port_metrics', 'netconf_metrics', 'netconf_device_status'];
+    public const TABLES = [
+        'netconf_evpn_underlay_link', 'netconf_evpn_fabric_member', 'netconf_evpn_fabric', 'netconf_evpn_vtep', 'netconf_evpn_mac',
+        'netconf_evpn_tunnel', 'netconf_evpn_vni_vtep', 'netconf_evpn_vni', 'netconf_evpn_esi', 'netconf_evpn_neighbor',
+        'netconf_port_metrics', 'netconf_metrics', 'netconf_device_status',
+    ];
+
+    /** Tables with a device_id column (everything except the fabric-level ones). */
+    public const DEVICE_TABLES = [
+        'netconf_evpn_mac', 'netconf_evpn_tunnel', 'netconf_evpn_vni_vtep', 'netconf_evpn_vni', 'netconf_evpn_esi', 'netconf_evpn_neighbor',
+        'netconf_port_metrics', 'netconf_metrics', 'netconf_device_status',
+    ];
 
     public const CONFIG_KEYS = ['poller_modules.netconf', 'discovery_modules.netconf'];
 
@@ -190,7 +200,9 @@ class Uninstaller
     {
         $ids = DB::table('sensors')->where('poller_type', SensorWriter::POLLER_TYPE)->distinct()->pluck('device_id')->all();
         foreach ($tables as $table) {
-            $ids = array_merge($ids, DB::table($table)->distinct()->pluck('device_id')->all());
+            if (in_array($table, self::DEVICE_TABLES, true)) {
+                $ids = array_merge($ids, DB::table($table)->distinct()->pluck('device_id')->all());
+            }
         }
         $ids = array_merge($ids, DB::table('devices_attribs')->where('attrib_type', 'like', self::ATTRIB_PATTERN)->distinct()->pluck('device_id')->all());
         $ids = array_values(array_unique(array_map('intval', $ids)));

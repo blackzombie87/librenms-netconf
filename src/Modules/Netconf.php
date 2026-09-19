@@ -16,6 +16,7 @@ use SafferIt\LibrenmsNetconf\Collect\MetricWriter;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Collect\PortMetricWriter;
 use SafferIt\LibrenmsNetconf\Collect\SensorWriter;
+use SafferIt\LibrenmsNetconf\Collect\TableWriter;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
@@ -63,7 +64,8 @@ class Netconf implements Module
         return (new SensorWriter($device))->count() > 0
             || NetconfMetric::query()->where('device_id', $device->device_id)->exists()
             || NetconfPortMetric::query()->where('device_id', $device->device_id)->exists()
-            || NetconfDeviceStatus::query()->where('device_id', $device->device_id)->exists();
+            || NetconfDeviceStatus::query()->where('device_id', $device->device_id)->exists()
+            || (new TableWriter($device))->exists();
     }
 
     public function cleanup(Device $device): int
@@ -71,7 +73,8 @@ class Netconf implements Module
         return (new SensorWriter($device))->deleteAll()
             + (new MetricWriter($device))->deleteAll()
             + (new PortMetricWriter($device))->deleteAll()
-            + NetconfDeviceStatus::query()->where('device_id', $device->device_id)->delete();
+            + NetconfDeviceStatus::query()->where('device_id', $device->device_id)->delete()
+            + (new TableWriter($device))->deleteAll();
     }
 
     public function dump(Device $device, string $type): ?array
