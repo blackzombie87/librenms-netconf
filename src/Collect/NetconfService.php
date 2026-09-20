@@ -253,19 +253,38 @@ class NetconfService
             Log::debug('netconf: unmatched ports: ' . implode(', ', array_slice($p['unmatched'], 0, 20)));
         }
 
-        if ($tableComplete !== []) {
+        if (self::fabricEnabled()) {
             $rows = $result->tables();
-            $counts['table_rows'] = $tables->write($rows)['rows'];
-            $counts['tables_pruned'] = $tables->prune($rows, array_keys(array_filter($tableComplete)));
+            $written = 0;
+            $pruned = 0;
+            if ($tableComplete !== []) {
+                $written = $tables->write($rows)['rows'];
+                $pruned = $tables->prune($rows, array_keys(array_filter($tableComplete)));
+            }
+            // tables the device used to fill but no matched definition covers any more (opt-in
+            // attribute cleared, definition edited or gone): their rows go too. While the fabric
+            // setting is off nothing is collected and nothing is deleted.
+            $orphans = array_values(array_diff($tables->owned(), array_keys($tableComplete)));
+            if ($orphans !== []) {
+                $pruned += $tables->deleteTables($orphans);
+                Log::info('  table rows deleted, no matching definition fills them any more: ' . implode(', ', $orphans));
+            }
+            $counts['table_rows'] = $written;
+            $counts['tables_pruned'] = $pruned;
 
-            // cross-device aggregation: cheap (hundreds of nodes), so every leaf poll refreshes it
-            $fabric = FabricResolver::make()->run();
-            if ($fabric === null) {
-                Log::debug('  fabric resolver skipped: another poller holds the lock');
+            // cross-device aggregation: cheap (hundreds of nodes), refreshed by every leaf poll
+            // that changed a row; a device whose fabric commands were all skipped changes nothing
+            if ($written === 0 && $pruned === 0) {
+                Log::debug('  fabric resolver skipped: no table rows written or pruned for this device');
             } else {
-                $counts['fabric_nodes'] = $fabric['nodes'];
-                $counts['fabrics'] = $fabric['fabrics'];
-                Log::info(sprintf('  fabric: %d nodes on %d devices (%d unknown), %d fabric(s), %d underlay links', $fabric['nodes'], $fabric['devices'], $fabric['unknown'], $fabric['fabrics'], $fabric['links']));
+                $fabric = FabricResolver::make()->run();
+                if ($fabric === null) {
+                    Log::debug('  fabric resolver skipped: another poller holds the lock');
+                } else {
+                    $counts['fabric_nodes'] = $fabric['nodes'];
+                    $counts['fabrics'] = $fabric['fabrics'];
+                    Log::info(sprintf('  fabric: %d nodes on %d devices (%d unknown), %d fabric(s), %d underlay links', $fabric['nodes'], $fabric['devices'], $fabric['unknown'], $fabric['fabrics'], $fabric['links']));
+                }
             }
         }
 

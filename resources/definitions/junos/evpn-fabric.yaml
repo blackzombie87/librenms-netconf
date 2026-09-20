@@ -5,6 +5,10 @@
 name: junos-evpn-fabric
 description: EVPN fabric tables - neighbours, ESIs, VNIs, flood lists and VXLAN tunnels per leaf
 
+# Matches every Junos device on purpose (same policy as junos-evpn / junos-evpn-esi): the VXLAN
+# commands are optional and fail fast on a box without EVPN (one SSH round-trip each), and a
+# device that wrote no table rows does not trigger the fabric resolver. Narrow the match in a
+# user copy (hardware: or attrib:) for fleets with many non-EVPN Junos devices.
 match:
   os: junos
 

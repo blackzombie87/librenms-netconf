@@ -109,6 +109,33 @@ class TableWriter
         return false;
     }
 
+    /**
+     * Logical tables that hold rows of this device.
+     *
+     * @return list<string>
+     */
+    public function owned(): array
+    {
+        return array_values(array_filter(TableSchema::writable(), fn (string $table) => DB::table(TableSchema::tableName($table))->where('device_id', $this->device->device_id)->exists()));
+    }
+
+    /**
+     * Delete every row of the device in the given logical tables.
+     *
+     * @param  list<string>  $tables
+     */
+    public function deleteTables(array $tables): int
+    {
+        $deleted = 0;
+        foreach (array_unique($tables) as $table) {
+            if (TableSchema::isWritable($table)) {
+                $deleted += DB::table(TableSchema::tableName($table))->where('device_id', $this->device->device_id)->delete();
+            }
+        }
+
+        return $deleted;
+    }
+
     public function deleteAll(): int
     {
         $deleted = 0;
