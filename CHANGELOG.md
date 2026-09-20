@@ -18,6 +18,24 @@ setting (`evpn_fabric`, default off).
   core ipv4/BGP/OSPF/LLDP tables. Runs after every leaf poll under a cache lock.
 - `lnms netconf:fabric [--resolve] [--links]` prints the resolved fabrics.
 
+Polish from the F1 review (`docs/REVIEW-2026-09-f1.md`, plan item F1a):
+
+- One fabric member per device: a device's addresses (source VTEP, router-id) pool their
+  role evidence and only the first becomes the member; `vtep` rows no longer in the graph
+  and automatic fabrics without members are deleted on every resolve.
+- Deleting a device nulls its `vtep` rows, drops its underlay edges and MAC source links and
+  recomputes the fabrics; the module `dump()` includes the `netconf_evpn_*` tables keyed by
+  their natural key.
+- Rows of a table that no matched definition fills any more are pruned on the next poll
+  (clearing `netconf_evpn_mac` removes the device's MAC rows); the resolver only runs when
+  the device wrote or pruned table rows. While the *EVPN fabric view* setting is off nothing
+  is collected and nothing is deleted.
+- `junos-evpn-fabric` replayed against the MX204 gateway sample (IRB rows, leaf ESIs only);
+  `df_ip`/`bdf_ip` keep IPv6 DF addresses.
+- `netconf:uninstall` lists per-table `netconf_evpn_*` row counts and scans every table
+  that references a device; `netconf:fabric --resolve` takes the resolver lock and sorts
+  IPv6 members correctly; README storage table gains the `tables` row.
+
 ## 1.0.1 – 2026-09-18
 
 Fixes from the external review of 1.0.0 (`docs/REVIEW-2026-09-v1.0.0.md`).
