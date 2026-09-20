@@ -5,6 +5,7 @@ namespace LibreNMS\Modules;
 use App\Models\Device;
 use App\Models\Port;
 use App\Models\Sensor;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
 use LibreNMS\Interfaces\Module;
@@ -17,6 +18,8 @@ use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Collect\PortMetricWriter;
 use SafferIt\LibrenmsNetconf\Collect\SensorWriter;
 use SafferIt\LibrenmsNetconf\Collect\TableWriter;
+use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\FabricResolver;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
@@ -70,11 +73,21 @@ class Netconf implements Module
 
     public function cleanup(Device $device): int
     {
-        return (new SensorWriter($device))->deleteAll()
+        $deleted = (new SensorWriter($device))->deleteAll()
             + (new MetricWriter($device))->deleteAll()
             + (new PortMetricWriter($device))->deleteAll()
             + NetconfDeviceStatus::query()->where('device_id', $device->device_id)->delete()
             + (new TableWriter($device))->deleteAll();
+
+        // the device's VTEP addresses become unknown VTEPs, its underlay edges go, and the
+        // fabrics are recomputed from what the remaining leaves still see
+        $resolver = FabricResolver::make();
+        $deleted += $resolver->forget($device->device_id);
+        if (NetconfService::fabricEnabled()) {
+            $resolver->run();
+        }
+
+        return $deleted;
     }
 
     public function dump(Device $device, string $type): ?array
@@ -94,11 +107,28 @@ class Netconf implements Module
             ->sortBy(fn (NetconfPortMetric $port) => sprintf('%010d|%s|%s', (int) $port->getAttribute('ifIndex'), $port->definition, $port->mapping))->values()
             ->map(fn (NetconfPortMetric $port) => $port->makeHidden(['id', 'device_id', 'port_id', 'last_seen', 'created_at', 'updated_at']));
 
-        return [
+        $dump = [
             'sensors' => $sensors,
             'netconf_metrics' => $metrics,
             'netconf_port_metrics' => $ports,
         ];
+
+        // EVPN fabric rows keyed by their natural key; ids and the install-specific links
+        // (port_id, source_device_id) are left out so the dump is stable across installs
+        foreach (TableSchema::writable() as $table) {
+            $query = DB::table(TableSchema::tableName($table))->where('device_id', $device->device_id);
+            foreach (TableSchema::key($table) as $column) {
+                $query->orderBy($column);
+            }
+            $dump[TableSchema::tableName($table)] = $query->get()->map(function ($row) {
+                $values = (array) $row;
+                unset($values['id'], $values['device_id'], $values['first_seen'], $values['last_seen'], $values['port_id'], $values['local_port_id'], $values['source_device_id']);
+
+                return $values;
+            })->values()->all();
+        }
+
+        return $dump;
     }
 
     private function should(OS $os, ModuleStatus $status, ConnectivityHelper $connectivity, bool $poll): bool
