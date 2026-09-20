@@ -21,7 +21,7 @@ function replayGateway(): \SafferIt\LibrenmsNetconf\Collect\CollectionResult
             ->on('show evpn database state duplicate', (string) file_get_contents($fixtures . 'show-evpn-database-state-duplicate.xml'))
             ->on('show evpn l3-context', (string) file_get_contents($fixtures . 'show-evpn-l3-context.xml'));
         $all = (new DefinitionLoader([DefinitionLoader::shippedDirectory()]))->all();
-        $result = (new Collector($transport))->collect([$all['junos-evpn'], $all['junos-routing']]);
+        $result = (new Collector($transport))->collect([$all['junos-evpn'], $all['junos-routing'], $all['junos-evpn-fabric']]);
     }
 
     return $result;
@@ -70,4 +70,40 @@ it('keeps overlay and Internet BGP peers apart on the gateway', function () {
     expect($peers)->toHaveCount(7)
         ->and($ribs)->toBe(['192.0.2.11', '192.0.2.62', '192.0.2.253'])
         ->and(gatewaySensors('junos-routing', 'bgp-peers-down')['total']->value)->toBe(0.0);
+});
+
+function gatewayTables(string $mapping): array
+{
+    $out = [];
+    foreach (replayGateway()->definitions['junos-evpn-fabric']->tables as $t) {
+        if ($t->mapping->id === $mapping) {
+            $out[$t->key] = $t;
+        }
+    }
+
+    return $out;
+}
+
+it('fills the fabric tables of an L3 gateway: IRB per VNI, leaf ESIs only, overlay neighbours', function () {
+    // the VXLAN forwarding commands have no gateway fixture and are optional: skipped, not failed
+    $skipped = array_map(fn ($c) => $c->label, array_filter(replayGateway()->commands, fn ($c) => $c->status === \SafferIt\LibrenmsNetconf\Collect\CommandRun::SKIPPED));
+    expect(replayGateway()->ok())->toBeTrue()
+        ->and(array_values($skipped))->toContain('show mac-vrf forwarding vxlan-tunnel-end-point source', 'show interfaces vtep')
+        ->and(gatewayTables('vni'))->toBe([])
+        ->and(gatewayTables('tunnel'))->toBe([]);
+
+    $irb = gatewayTables('vni-irb');
+    expect(array_keys($irb))->toBe([101, 102, 12])
+        ->and($irb['12']->values)->toBe(['vni' => 12, 'instance' => 'EVPN-FABRIC', 'irb_ifname' => 'irb.12', 'irb_status' => 'Up'])
+        ->and($irb['101']->values['irb_ifname'])->toBe('irb.101');
+
+    // type-5 gateway ESIs (05:…, local interface irb.N) are not ESI-LAGs and stay out of the esi table
+    $esi = gatewayTables('esi');
+    expect(array_keys($esi))->toBe(['00:11:22:33:44:55:00:00:02:00', '00:11:22:33:44:55:00:00:03:00', '00:11:22:33:44:55:00:00:04:00'])
+        ->and($esi['00:11:22:33:44:55:00:00:02:00']->values)->toMatchArray(['instance' => 'EVPN-FABRIC', 'local_ifname' => null, 'status' => 'Resolved', 'mode' => 'all-active', 'is_df' => false, 'df_ip' => null, 'remote_vtep_ips' => ['192.0.2.11', '192.0.2.12']])
+        ->and($esi['00:11:22:33:44:55:00:00:03:00']->values['remote_vtep_ips'])->toBe(['192.0.2.22']);
+
+    $neighbors = gatewayTables('neighbor');
+    expect(array_keys($neighbors))->toBe(['EVPN-FABRIC/192.0.2.11', 'EVPN-FABRIC/192.0.2.61', 'EVPN-FABRIC/192.0.2.253'])
+        ->and($neighbors['EVPN-FABRIC/192.0.2.11']->values['router_id'])->toBe('192.0.2.252');
 });

@@ -65,8 +65,8 @@ tables:
       lag_status:      string(evpn-esi-local-intf-information/evpn-esi-local-intf-status)
       mode:            string(evpn-esi-remote-pe-information/evpn-esi-remote-pe[1]/evpn-esi-remote-pe-mode)
       is_df:           evpn-esi-df-information/esi-designated-forwarder = ../evpn-router-id
-      df_ip:           string(evpn-esi-df-information/esi-designated-forwarder[contains(., '.')])   # "DF not elected yet" -> empty
-      bdf_ip:          string(evpn-esi-df-information/esi-backup-forwarder[contains(., '.')])
+      df_ip:           string(evpn-esi-df-information/esi-designated-forwarder[not(contains(., ' '))])   # an address has no space, "DF not elected yet" has
+      bdf_ip:          string(evpn-esi-df-information/esi-backup-forwarder[not(contains(., ' '))])
       remote_vtep_ips: evpn-esi-remote-pe-information/evpn-esi-remote-pe/evpn-esi-remote-pe-ipaddr
 
   # aliasing flag and remote MAC count per ESI from the forwarding table
