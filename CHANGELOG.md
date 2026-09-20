@@ -36,6 +36,18 @@ Polish from the F1 review (`docs/REVIEW-2026-09-f1.md`, plan item F1a):
   that references a device; `netconf:fabric --resolve` takes the resolver lock and sorts
   IPv6 members correctly; README storage table gains the `tables` row.
 
+Phase F2 — EVPN multihoming peers (plan §3.8):
+
+- Core `links` rows with `protocol = evpn-esi`, one per local ESI-LAG and remote PE, written
+  by the fabric resolver: peer device via the vtep table, peer LAG via the same ESI on the
+  peer's side, BGP description or VTEP address as the name of an unmonitored peer. Rows keep
+  their id across resolves; stale rows are deleted. New setting *ESI peers as neighbours*
+  (`evpn_links`, default on, acts only with the fabric view); off deletes the rows,
+  `netconf:uninstall` lists and purges them, device deletion removes them.
+- **EVPN multihoming** panel on the device overview (first ten ESI-LAGs) and table on the
+  plugin device page (all): local LAG, peer, peer LAG, mode, DF/BDF, LAG state, remote MACs;
+  ESIs without a remote PE and peers with a differing LAG state are flagged.
+
 ## 1.0.1 – 2026-09-18
 
 Fixes from the external review of 1.0.0 (`docs/REVIEW-2026-09-v1.0.0.md`).

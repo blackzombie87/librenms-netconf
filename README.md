@@ -58,7 +58,9 @@ Instead of enabling devices one by one, set *Enable for all devices* on the sett
   Secrets are encrypted before they are stored and never displayed.
 - **Device overview panel**: polling state, matched definitions, sensor summary with the
   critical ones linked, and the first rows of every custom metric mapping; the full tables
-  are at `/plugin/netconf/device/<id>/metrics`.
+  are at `/plugin/netconf/device/<id>/metrics`. With the EVPN fabric view enabled a second
+  panel **EVPN multihoming** lists the device's ESI-LAGs with peer device, peer LAG, mode,
+  DF/BDF and LAG state (all rows on the device page).
 - **Metric tables** (`/plugin/netconf/device/<id>/metrics`): every custom metric row with
   its values and labels, a graph per row, and per mapping a fold-out with one graph per
   field (one line per row); the same for port metrics. Period selector 6h/day/week/month/
@@ -306,7 +308,7 @@ those into NaN, while the plugin parses strings itself. Rows inside `multi-routi
 | `sensors` | native sensors with `poller_type = netconf`, `sensor_type = netconf-<definition>-<id>`; state sensors get state translations | `sensors` table, `rrd/<host>/sensor-<class>-netconf-…rrd`, any other configured datastore | standard sensor alert rules (`sensors.sensor_current > sensors.sensor_limit`, state generic value); eventlog on threshold crossing and state change |
 | `ports` | rows matched to the `ports` table by ifIndex (or ifName/ifDescr/ifAlias) | `netconf_port_metrics` (last values as JSON), `rrd/<host>/netconf-port-<port_id>-<definition>-<mapping>.rrd`, one data source per field | Advanced-SQL alert rules on `netconf_port_metrics.values` |
 | `metrics` | free-form rows | `netconf_metrics` (last values + labels as JSON), `rrd/<host>/netconf-<definition>-<mapping>-<index>.rrd` | Advanced-SQL alert rules on `netconf_metrics.values` |
-| `tables` | rows of the EVPN fabric tables, typed columns, merged on the key across mappings, pruned per device | `netconf_evpn_<table>` (neighbor, esi, vni, vni_vtep, tunnel, mac); no RRD. The fabric resolver derives `netconf_evpn_{vtep,fabric,fabric_member,underlay_link}` from them | Advanced-SQL alert rules on the `netconf_evpn_*` tables (only with the *EVPN fabric view* setting) |
+| `tables` | rows of the EVPN fabric tables, typed columns, merged on the key across mappings, pruned per device | `netconf_evpn_<table>` (neighbor, esi, vni, vni_vtep, tunnel, mac); no RRD. The fabric resolver derives `netconf_evpn_{vtep,fabric,fabric_member,underlay_link}` from them and, with *ESI peers as neighbours*, rows in the core `links` table (`protocol = evpn-esi`) | Advanced-SQL alert rules on the `netconf_evpn_*` tables (only with the *EVPN fabric view* setting) |
 
 Per device, `netconf_device_status` keeps the transport, matched definitions, poll count,
 last success, last error and the back-off: after a failed session the device is skipped
@@ -347,6 +349,28 @@ plus a `border` flag for L3 contexts. VTEPs that are not monitored devices are k
 
 The MAC database (`netconf_evpn_mac`, ~5 000 rows and 1.3 MB per busy leaf) is opt-in per
 device like the queue counters: set the device attribute `netconf_evpn_mac` to `1`.
+
+### EVPN multihoming peers as neighbours
+
+Every ESI-LAG of a leaf identifies its multihoming peer: the ESI is the same on both leaves
+and the remote PE addresses name the peer's VTEP. The fabric resolver turns that into
+
+- the **EVPN multihoming** table on the device overview and the plugin's device page: local
+  LAG (linked to the port), peer device (linked when it is a LibreNMS device, otherwise the
+  BGP description or the VTEP address), the peer's LAG for the same ESI (when the peer is
+  polled by the plugin too), mode, DF/BDF per side, LAG state and the remote MAC count;
+  ESIs without any remote PE are flagged;
+- rows in the core `links` table with `protocol = evpn-esi` (setting *ESI peers as
+  neighbours*, default on), so the peer appears in the device's **Neighbours** tab and on
+  the map like an LLDP neighbour. One row per local ESI-LAG and remote PE; the local LAG
+  must exist as a port (rows of a LAG core has not discovered yet are skipped). Switching
+  the setting off deletes the rows on the next resolve; `netconf:uninstall --purge` deletes
+  them too.
+
+Caveat: core's `discovery-protocols` module deletes every `links` row of a device that its
+own LLDP/CDP run did not produce. The plugin's discovery module runs after it (last in
+`discovery_modules`) and writes the rows again in the same run, so they are only ever
+missing for the seconds in between and their `id` changes on every discovery.
 
 The UI for this (fabric pages, topology map, consistency checks) follows in later phases,
 see `docs/PLAN.md` §7.
