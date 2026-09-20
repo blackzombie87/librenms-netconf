@@ -28,6 +28,7 @@ class NetconfUninstallCommand extends Command
             ['netconf_metrics rows', (string) $inventory['metrics']],
             ['netconf_port_metrics rows', (string) $inventory['port_metrics']],
             ['netconf_device_status rows', (string) $inventory['status']],
+            ['netconf_evpn_* rows', implode(', ', array_map(fn ($table, $rows) => substr($table, strlen('netconf_evpn_')) . ' ' . $rows, array_keys($evpn = array_filter($inventory['table_rows'], fn ($t) => str_starts_with($t, 'netconf_evpn_'), ARRAY_FILTER_USE_KEY)), $evpn)) ?: '(no tables)'],
             ['device attributes netconf_*', (string) $inventory['attribs']],
             ['RRD files (sensor-*-netconf-*, netconf-*)', (string) count($inventory['rrd_files'])],
             ['devices with plugin data', implode(', ', $inventory['devices']) ?: '(none)'],

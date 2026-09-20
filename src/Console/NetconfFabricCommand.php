@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 use SafferIt\LibrenmsNetconf\Fabric\FabricResolver;
 
 /**
@@ -27,8 +28,12 @@ class NetconfFabricCommand extends Command
         }
 
         if ($this->option('resolve')) {
-            $summary = (new FabricResolver)->resolve();
-            $this->line(sprintf('<info>Resolved:</info> %d nodes on %d devices (%d unknown), %d fabrics, %d underlay links', $summary['nodes'], $summary['devices'], $summary['unknown'], $summary['fabrics'], $summary['links']));
+            $summary = FabricResolver::make()->run();   // under the poller's lock
+            if ($summary === null) {
+                $this->warn('Not resolved: a poller holds the fabric resolver lock, its run covers this one.');
+            } else {
+                $this->line(sprintf('<info>Resolved:</info> %d nodes on %d devices (%d unknown), %d fabrics, %d underlay links', $summary['nodes'], $summary['devices'], $summary['unknown'], $summary['fabrics'], $summary['links']));
+            }
         }
 
         $hostnames = DB::table('devices')->pluck('hostname', 'device_id')->map(fn ($h) => (string) $h)->all();
@@ -61,7 +66,7 @@ class NetconfFabricCommand extends Command
             ];
         })->all());
 
-        $this->table(['Fabric', 'VTEP', 'Role', 'Device', 'Router-id', 'Border', 'Name hint', 'Pinned', 'Last seen'], $members->sortBy(fn ($m) => sprintf('%05d %s', $m->fabric_id, str_pad((string) ip2long((string) $m->vtep_ip), 12, '0', STR_PAD_LEFT)))->map(fn ($m) => [
+        $this->table(['Fabric', 'VTEP', 'Role', 'Device', 'Router-id', 'Border', 'Name hint', 'Pinned', 'Last seen'], $members->sort(fn ($a, $b) => [$a->fabric_id, 0] <=> [$b->fabric_id, 0] ?: FabricGraph::compare((string) $a->vtep_ip, (string) $b->vtep_ip))->map(fn ($m) => [
             $m->fabric_id,
             $m->vtep_ip,
             $m->role,

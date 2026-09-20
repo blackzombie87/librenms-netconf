@@ -306,6 +306,7 @@ those into NaN, while the plugin parses strings itself. Rows inside `multi-routi
 | `sensors` | native sensors with `poller_type = netconf`, `sensor_type = netconf-<definition>-<id>`; state sensors get state translations | `sensors` table, `rrd/<host>/sensor-<class>-netconf-…rrd`, any other configured datastore | standard sensor alert rules (`sensors.sensor_current > sensors.sensor_limit`, state generic value); eventlog on threshold crossing and state change |
 | `ports` | rows matched to the `ports` table by ifIndex (or ifName/ifDescr/ifAlias) | `netconf_port_metrics` (last values as JSON), `rrd/<host>/netconf-port-<port_id>-<definition>-<mapping>.rrd`, one data source per field | Advanced-SQL alert rules on `netconf_port_metrics.values` |
 | `metrics` | free-form rows | `netconf_metrics` (last values + labels as JSON), `rrd/<host>/netconf-<definition>-<mapping>-<index>.rrd` | Advanced-SQL alert rules on `netconf_metrics.values` |
+| `tables` | rows of the EVPN fabric tables, typed columns, merged on the key across mappings, pruned per device | `netconf_evpn_<table>` (neighbor, esi, vni, vni_vtep, tunnel, mac); no RRD. The fabric resolver derives `netconf_evpn_{vtep,fabric,fabric_member,underlay_link}` from them | Advanced-SQL alert rules on the `netconf_evpn_*` tables (only with the *EVPN fabric view* setting) |
 
 Per device, `netconf_device_status` keeps the transport, matched definitions, poll count,
 last success, last error and the back-off: after a failed session the device is skipped

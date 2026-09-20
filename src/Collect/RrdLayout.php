@@ -112,14 +112,6 @@ class RrdLayout
     }
 
     /**
-     * @return array<string, int>
-     */
-    public function stats(): array
-    {
-        return $this->stats;
-    }
-
-    /**
      * One line for the poller log, null when no file layout had to be verified this run.
      */
     public function summary(): ?string

@@ -27,10 +27,15 @@ class Uninstaller
         'netconf_port_metrics', 'netconf_metrics', 'netconf_device_status',
     ];
 
-    /** Tables with a device_id column (everything except the fabric-level ones). */
+    /**
+     * Tables that reference a device, with the column holding its id (everything except the
+     * fabric-level ones; vtep.device_id is nullable, underlay_link keys the A end).
+     */
     public const DEVICE_TABLES = [
-        'netconf_evpn_mac', 'netconf_evpn_tunnel', 'netconf_evpn_vni_vtep', 'netconf_evpn_vni', 'netconf_evpn_esi', 'netconf_evpn_neighbor',
-        'netconf_port_metrics', 'netconf_metrics', 'netconf_device_status',
+        'netconf_evpn_underlay_link' => 'a_device_id', 'netconf_evpn_vtep' => 'device_id',
+        'netconf_evpn_mac' => 'device_id', 'netconf_evpn_tunnel' => 'device_id', 'netconf_evpn_vni_vtep' => 'device_id', 'netconf_evpn_vni' => 'device_id',
+        'netconf_evpn_esi' => 'device_id', 'netconf_evpn_neighbor' => 'device_id',
+        'netconf_port_metrics' => 'device_id', 'netconf_metrics' => 'device_id', 'netconf_device_status' => 'device_id',
     ];
 
     public const CONFIG_KEYS = ['poller_modules.netconf', 'discovery_modules.netconf'];
@@ -87,7 +92,7 @@ class Uninstaller
      *
      * @return array{
      *     sensors: int, metrics: int, port_metrics: int, status: int, attribs: int,
-     *     config_keys: list<string>, tables: list<string>, migrations: int,
+     *     config_keys: list<string>, tables: list<string>, table_rows: array<string, int>, migrations: int,
      *     devices: array<int, string>, rrd_files: list<string>, alert_rules: list<string>
      * }
      */
@@ -114,6 +119,7 @@ class Uninstaller
             'attribs' => DB::table('devices_attribs')->where('attrib_type', 'like', self::ATTRIB_PATTERN)->count(),
             'config_keys' => array_values(array_filter(self::CONFIG_KEYS, fn (string $key) => LibrenmsConfig::has($key))),
             'tables' => $tables,
+            'table_rows' => array_intersect_key($counts, array_flip($tables)),
             'migrations' => DB::table('migrations')->whereIn('migration', self::migrationNames())->count(),
             'devices' => $devices,
             'rrd_files' => $rrd,
@@ -200,8 +206,9 @@ class Uninstaller
     {
         $ids = DB::table('sensors')->where('poller_type', SensorWriter::POLLER_TYPE)->distinct()->pluck('device_id')->all();
         foreach ($tables as $table) {
-            if (in_array($table, self::DEVICE_TABLES, true)) {
-                $ids = array_merge($ids, DB::table($table)->distinct()->pluck('device_id')->all());
+            $column = self::DEVICE_TABLES[$table] ?? null;
+            if ($column !== null) {
+                $ids = array_merge($ids, DB::table($table)->whereNotNull($column)->distinct()->pluck($column)->all());
             }
         }
         $ids = array_merge($ids, DB::table('devices_attribs')->where('attrib_type', 'like', self::ATTRIB_PATTERN)->distinct()->pluck('device_id')->all());
