@@ -138,5 +138,18 @@
             </div>
         </div>
     </div>
+
+    @if ($esi_rows !== [])
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-default">
+                    <div class="panel-heading"><i class="fa fa-link fa-fw" aria-hidden="true"></i> <strong>EVPN multihoming</strong>
+                        <small class="text-muted">{{ count($esi_rows) }} ESI-LAGs, peers resolved through the EVPN fabric tables; also listed as <code>EVPN-ESI</code> neighbours in the device's Neighbours tab</small>
+                    </div>
+                    @include('netconf::evpn-esi-table')
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
 @endsection

@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
+use SafferIt\LibrenmsNetconf\Fabric\EsiPeers;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
@@ -171,6 +172,8 @@ class DeviceController extends Controller
             'metric_rows' => NetconfMetric::query()->where('device_id', $device->device_id)->count(),
             'port_rows' => NetconfPortMetric::query()->where('device_id', $device->device_id)->count(),
             'can_admin' => Gate::allows('admin'),
+            'esi_rows' => NetconfService::fabricEnabled() ? EsiPeers::forDevice($device->device_id)['rows'] : [],
+            'esi_limit' => null,
         ];
     }
 }

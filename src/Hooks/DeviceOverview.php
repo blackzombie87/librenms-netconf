@@ -6,17 +6,21 @@ use App\Models\Device;
 use Illuminate\Support\Facades\Gate;
 use LibreNMS\Interfaces\Plugins\Hooks\DeviceOverviewHook;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
+use SafferIt\LibrenmsNetconf\Fabric\EsiPeers;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 
 /**
  * Panel on the device overview: NETCONF status, matched definitions, sensor summary and
- * the first rows of every custom metric mapping. Only shown for devices that are enabled
- * or have been polled before.
+ * the first rows of every custom metric mapping, plus an "EVPN multihoming" panel with the
+ * device's ESI-LAGs and their peers when the fabric view has data for it. Only shown for
+ * devices that are enabled or have been polled before.
  */
 class DeviceOverview implements DeviceOverviewHook
 {
     public const ROWS_PER_MAPPING = 8;
+
+    public const ESI_ROWS = 10;
 
     public function authorize(Device $device): bool
     {
@@ -64,6 +68,8 @@ class DeviceOverview implements DeviceOverviewHook
             'critical' => $critical->values(),
             'metrics' => $metrics,
             'rows_per_mapping' => self::ROWS_PER_MAPPING,
+            'esi_rows' => NetconfService::fabricEnabled() ? EsiPeers::forDevice($device->device_id)['rows'] : [],
+            'esi_limit' => self::ESI_ROWS,
         ]);
     }
 }

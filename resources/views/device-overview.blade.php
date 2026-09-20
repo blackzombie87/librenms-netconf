@@ -11,3 +11,17 @@
         @include('netconf::device-overview-body')
     </div>
 </div>
+@if ($esi_rows !== [])
+    <div class="panel panel-default tw:mb-5 tw:overflow-hidden tw:rounded-lg tw:border tw:border-gray-300 tw:shadow-sm tw:dark:border-dark-gray-200">
+        <div class="panel-heading tw:px-4 tw:py-2.5 tw:bg-neutral-100 tw:border-b tw:border-gray-300 tw:text-neutral-700 tw:dark:bg-dark-gray-200 tw:dark:border-zinc-800 tw:dark:text-dark-white-200">
+            <a href="{{ route('netconf.device', $device->device_id) }}">
+                <i class="fa fa-link fa-lg icon-theme" aria-hidden="true"></i>
+                <strong>EVPN multihoming</strong>
+            </a>
+            <small class="text-muted">{{ count($esi_rows) }} ESI-LAGs</small>
+        </div>
+        <div class="tw:p-0 tw:bg-white tw:dark:bg-dark-gray-400">
+            @include('netconf::evpn-esi-table')
+        </div>
+    </div>
+@endif
