@@ -32,7 +32,7 @@ class NetconfFabricCommand extends Command
             if ($summary === null) {
                 $this->warn('Not resolved: a poller holds the fabric resolver lock, its run covers this one.');
             } else {
-                $this->line(sprintf('<info>Resolved:</info> %d nodes on %d devices (%d unknown), %d fabrics, %d underlay links', $summary['nodes'], $summary['devices'], $summary['unknown'], $summary['fabrics'], $summary['links']));
+                $this->line(sprintf('<info>Resolved:</info> %d nodes on %d devices (%d unknown), %d fabrics, %d underlay links, %d ESI peer links', $summary['nodes'], $summary['devices'], $summary['unknown'], $summary['fabrics'], $summary['links'], $summary['esi_links']));
             }
         }
 

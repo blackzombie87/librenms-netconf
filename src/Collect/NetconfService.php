@@ -74,6 +74,12 @@ class NetconfService
         return (bool) (NetconfSettings::effective()['evpn_fabric'] ?? false);
     }
 
+    /** ESI peers as core `links` rows (Neighbours tab, map); only acted on while the fabric view is enabled. */
+    public static function esiLinksEnabled(): bool
+    {
+        return (bool) (NetconfSettings::effective()['evpn_links'] ?? false);
+    }
+
     /**
      * Null when the device should be processed, otherwise the reason to skip it (cheap, no SSH).
      */
@@ -283,7 +289,7 @@ class NetconfService
                 } else {
                     $counts['fabric_nodes'] = $fabric['nodes'];
                     $counts['fabrics'] = $fabric['fabrics'];
-                    Log::info(sprintf('  fabric: %d nodes on %d devices (%d unknown), %d fabric(s), %d underlay links', $fabric['nodes'], $fabric['devices'], $fabric['unknown'], $fabric['fabrics'], $fabric['links']));
+                    Log::info(sprintf('  fabric: %d nodes on %d devices (%d unknown), %d fabric(s), %d underlay links, %d ESI peer links', $fabric['nodes'], $fabric['devices'], $fabric['unknown'], $fabric['fabrics'], $fabric['links'], $fabric['esi_links']));
                 }
             }
         }

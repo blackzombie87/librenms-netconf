@@ -21,4 +21,5 @@ return [
     'enable_by_default' => false,
     'backoff_max' => 32,
     'evpn_fabric' => false,    // EVPN fabric view: run definitions with tables: mappings and the fabric resolver
+    'evpn_links' => true,      // with the fabric view: ESI-LAG peers as core `links` rows (protocol evpn-esi), Neighbours tab + map
 ];

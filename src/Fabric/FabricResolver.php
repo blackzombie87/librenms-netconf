@@ -5,6 +5,7 @@ namespace SafferIt\LibrenmsNetconf\Fabric;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 
 /**
@@ -19,8 +20,10 @@ class FabricResolver
 
     public const LOCK_SECONDS = 120;
 
-    public function __construct(private readonly UnderlayResolver $underlay = new UnderlayResolver)
-    {
+    public function __construct(
+        private readonly UnderlayResolver $underlay = new UnderlayResolver,
+        private readonly EsiLinkWriter $links = new EsiLinkWriter,
+    ) {
     }
 
     public static function make(): self
@@ -47,7 +50,7 @@ class FabricResolver
     }
 
     /**
-     * @return array<string, int> nodes, devices, unknown, fabrics, links
+     * @return array<string, int> nodes, devices, unknown, fabrics, links, esi_links
      */
     public function resolve(): array
     {
@@ -172,6 +175,14 @@ class FabricResolver
         $this->storeUnderlay($edges, $graph, $deviceNodes, $fabricIds, $now);
         $this->resolvePorts(array_keys($participants), $ipDevice);
         $this->cleanup($graph);
+        // ESI peers as core links (plan §3.8), after the vtep rows and local_port_ids are current;
+        // with the setting off the rows go, so toggling it cleans up on the next resolve
+        $esiLinks = 0;
+        if (NetconfService::esiLinksEnabled()) {
+            $esiLinks = $this->links->sync(array_keys($participants));
+        } else {
+            $this->links->deleteAll();
+        }
 
         return [
             'nodes' => count($graph->nodes()),
@@ -179,6 +190,7 @@ class FabricResolver
             'unknown' => $unknown,
             'fabrics' => count($components),
             'links' => count($edges),
+            'esi_links' => $esiLinks,
         ];
     }
 
@@ -192,6 +204,7 @@ class FabricResolver
         $changed = DB::table(TableSchema::tableName('vtep'))->where('device_id', $deviceId)->update(['device_id' => null, 'router_id' => null]);
         $changed += DB::table(TableSchema::tableName('underlay_link'))->where('a_device_id', $deviceId)->orWhere('b_device_id', $deviceId)->delete();
         $changed += DB::table(TableSchema::tableName('mac'))->where('source_device_id', $deviceId)->update(['source_device_id' => null]);
+        $changed += $this->links->forget($deviceId);
 
         return $changed;
     }

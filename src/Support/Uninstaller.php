@@ -8,6 +8,7 @@ use App\Models\Device;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use SafferIt\LibrenmsNetconf\Collect\SensorWriter;
+use SafferIt\LibrenmsNetconf\Fabric\EsiLinks;
 use SafferIt\LibrenmsNetconf\NetconfSettings;
 
 /**
@@ -91,7 +92,7 @@ class Uninstaller
      * What is currently stored, without changing anything.
      *
      * @return array{
-     *     sensors: int, metrics: int, port_metrics: int, status: int, attribs: int,
+     *     sensors: int, metrics: int, port_metrics: int, status: int, attribs: int, links: int,
      *     config_keys: list<string>, tables: list<string>, table_rows: array<string, int>, migrations: int,
      *     devices: array<int, string>, rrd_files: list<string>, alert_rules: list<string>
      * }
@@ -117,6 +118,7 @@ class Uninstaller
             'port_metrics' => $counts['netconf_port_metrics'],
             'status' => $counts['netconf_device_status'],
             'attribs' => DB::table('devices_attribs')->where('attrib_type', 'like', self::ATTRIB_PATTERN)->count(),
+            'links' => DB::table('links')->where('protocol', EsiLinks::PROTOCOL)->count(),
             'config_keys' => array_values(array_filter(self::CONFIG_KEYS, fn (string $key) => LibrenmsConfig::has($key))),
             'tables' => $tables,
             'table_rows' => array_intersect_key($counts, array_flip($tables)),
@@ -176,6 +178,8 @@ class Uninstaller
 
         $sensors = DB::table('sensors')->where('poller_type', SensorWriter::POLLER_TYPE)->delete();
         $log[] = "$sensors sensors deleted";
+        $links = DB::table('links')->where('protocol', EsiLinks::PROTOCOL)->delete();
+        $log[] = "$links evpn-esi rows deleted from links";
         foreach ($tables as $table) {
             $rows = DB::table($table)->delete();
             $log[] = "$rows rows deleted from $table";

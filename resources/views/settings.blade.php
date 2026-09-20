@@ -151,6 +151,18 @@
                 <td><code>{{ $effective['evpn_fabric'] ? 'yes' : 'no' }}</code></td>
             </tr>
             <tr>
+                <td><label for="evpn_links">ESI peers as neighbours</label></td>
+                <td>
+                    <input type="hidden" name="settings[evpn_links]" value="0">
+                    <label style="font-weight: normal;">
+                        <input type="checkbox" id="evpn_links" name="settings[evpn_links]" value="1"
+                               {{ filter_var($settings['evpn_links'] ?? $defaults['evpn_links'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+                        write the EVPN multihoming peer of every ESI-LAG to the core <code>links</code> table (protocol <code>evpn-esi</code>), so it appears in the device's Neighbours tab and on the map; needs the fabric view
+                    </label>
+                </td>
+                <td><code>{{ $effective['evpn_links'] ? 'yes' : 'no' }}</code></td>
+            </tr>
+            <tr>
                 <td><label for="definitions_dir">User definitions directory</label></td>
                 <td><input class="form-control" id="definitions_dir" type="text" name="settings[definitions_dir]"
                            value="{{ $settings['definitions_dir'] ?? '' }}" placeholder="storage/app/netconf-definitions"></td>
