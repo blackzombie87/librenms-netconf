@@ -16,6 +16,7 @@ use SafferIt\LibrenmsNetconf\Fabric\View\EsiMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricSummary;
 use SafferIt\LibrenmsNetconf\Fabric\View\MacSearch;
 use SafferIt\LibrenmsNetconf\Fabric\View\OverlaySessions;
+use SafferIt\LibrenmsNetconf\Fabric\View\Topology;
 use SafferIt\LibrenmsNetconf\Fabric\View\TunnelMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\VniMatrix;
 
@@ -104,6 +105,7 @@ class FabricController extends Controller
         $deviceIds = $nodes->deviceIds();
 
         return match ($tab) {
+            'overview' => ['topology' => Topology::forFabric($summary['id'], $nodes)],
             'members' => ['members' => FabricMembers::forFabric($summary['id'])],
             'bgp' => $this->bgp($nodes, $deviceIds),
             'vnis' => $this->vnis($nodes, $request),

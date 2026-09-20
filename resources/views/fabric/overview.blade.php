@@ -33,6 +33,6 @@
         @endif
     </div>
     <div class="col-md-8">
-        @include('netconf::fabric.topology-placeholder')
+        @include('netconf::fabric.topology')
     </div>
 </div>
