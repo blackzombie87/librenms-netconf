@@ -132,6 +132,30 @@ final class FabricGraph
     }
 
     /**
+     * Addresses of one device are aliases of the same node: pool their evidence so every
+     * address reports the same role (a router-id marked by a neighbour, a VTEP marked by
+     * its own source table, gateway IRBs marked on either).
+     *
+     * @param  list<string>  $ips
+     */
+    public function mergeEvidence(array $ips): void
+    {
+        $known = array_values(array_filter($ips, fn (string $ip) => isset($this->evidence[$ip])));
+        if (count($known) < 2) {
+            return;
+        }
+        $merged = ['vtep' => false, 'session' => false, 'gateway' => false, 'border' => false];
+        foreach ($known as $ip) {
+            foreach ($merged as $flag => $set) {
+                $merged[$flag] = $set || $this->evidence[$ip][$flag];
+            }
+        }
+        foreach ($known as $ip) {
+            $this->evidence[$ip] = $merged;
+        }
+    }
+
+    /**
      * Connected components: key (lowest IP) => member IPs sorted by address.
      *
      * @return array<string, list<string>>

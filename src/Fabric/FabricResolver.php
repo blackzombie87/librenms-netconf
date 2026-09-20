@@ -87,7 +87,7 @@ class FabricResolver
                 $graph->markVtep($ips[0]);
             }
             if (DB::table(TableSchema::tableName('vni'))->where('device_id', $deviceId)->whereNotNull('irb_ifname')->exists()) {
-                $graph->markGateway($ips[0]);
+                $graph->markGateway($ips[0]);   // spread over the device's other addresses in step 7
             }
         }
 
@@ -160,12 +160,18 @@ class FabricResolver
             }
         }
 
-        // 7. persist
+        // 7. one node per device: its addresses share the evidence, the first one is the member
+        foreach ($deviceNodes as $ips) {
+            $graph->mergeEvidence($ips);
+        }
+
+        // 8. persist
         $components = $graph->components();
         $fabricIds = $this->storeFabrics($components, $now);
-        $unknown = $this->storeVteps($graph, $components, $fabricIds, $ipDevice, $routerIds, $nameHints, $now);
+        $unknown = $this->storeVteps($graph, $components, $fabricIds, $ipDevice, $deviceNodes, $routerIds, $nameHints, $now);
         $this->storeUnderlay($edges, $graph, $deviceNodes, $fabricIds, $now);
         $this->resolvePorts(array_keys($participants), $ipDevice);
+        $this->cleanup($graph);
 
         return [
             'nodes' => count($graph->nodes()),
@@ -174,6 +180,34 @@ class FabricResolver
             'fabrics' => count($components),
             'links' => count($edges),
         ];
+    }
+
+    /**
+     * A device leaves LibreNMS (module cleanup): its addresses become unknown VTEPs, its
+     * underlay edges go, and the graph is recomputed so its membership follows the evidence
+     * the remaining leaves still have. Returns the number of rows changed.
+     */
+    public function forget(int $deviceId): int
+    {
+        $changed = DB::table(TableSchema::tableName('vtep'))->where('device_id', $deviceId)->update(['device_id' => null, 'router_id' => null]);
+        $changed += DB::table(TableSchema::tableName('underlay_link'))->where('a_device_id', $deviceId)->orWhere('b_device_id', $deviceId)->delete();
+        $changed += DB::table(TableSchema::tableName('mac'))->where('source_device_id', $deviceId)->update(['source_device_id' => null]);
+
+        return $changed;
+    }
+
+    /** Drop what the graph no longer contains: unpinned VTEP rows and automatic fabrics without members. */
+    private function cleanup(FabricGraph $graph): void
+    {
+        $members = TableSchema::tableName('fabric_member');
+        $pinned = DB::table($members)->where('pinned', 1)->pluck('vtep_ip')->map(fn ($v) => (string) $v)->all();
+        $keep = array_values(array_unique(array_merge($graph->nodes(), $pinned)));
+        DB::table(TableSchema::tableName('vtep'))->whereNotIn('vtep_ip', $keep ?: [''])->delete();
+
+        $fabrics = TableSchema::tableName('fabric');
+        DB::table($fabrics)->where('auto', 1)->whereNotExists(function ($q) use ($members, $fabrics) {
+            $q->select(DB::raw(1))->from($members)->whereColumn("$members.fabric_id", "$fabrics.id");
+        })->delete();
     }
 
     /**
@@ -338,15 +372,18 @@ class FabricResolver
     }
 
     /**
-     * Upsert vtep rows and fabric members; returns the number of nodes without a device.
+     * Upsert vtep rows (one per address, aliases of a device carry its device_id too) and
+     * fabric members (one per device, its first address; one per address for unknown
+     * VTEPs); returns the number of nodes without a device.
      *
      * @param  array<string, list<string>>  $components
      * @param  array<string, int>  $fabricIds
      * @param  array<string, int>  $ipDevice
+     * @param  array<int, list<string>>  $deviceNodes
      * @param  array<int, string|null>  $routerIds
      * @param  array<string, string>  $nameHints
      */
-    private function storeVteps(FabricGraph $graph, array $components, array $fabricIds, array $ipDevice, array $routerIds, array $nameHints, string $now): int
+    private function storeVteps(FabricGraph $graph, array $components, array $fabricIds, array $ipDevice, array $deviceNodes, array $routerIds, array $nameHints, string $now): int
     {
         $vteps = [];
         $members = [];
@@ -370,7 +407,8 @@ class FabricResolver
                     'first_seen' => $now,
                     'last_seen' => $now,
                 ];
-                if (! in_array($ip, $pinned, true)) {
+                $alias = $deviceId !== null && ($deviceNodes[$deviceId][0] ?? $ip) !== $ip;
+                if (! $alias && ! in_array($ip, $pinned, true)) {
                     $members[] = ['fabric_id' => $fabricIds[$key], 'vtep_ip' => $ip, 'role' => $graph->role($ip), 'pinned' => 0, 'since' => $now];
                 }
             }

@@ -66,3 +66,26 @@ it('tests CIDR membership for v4 and v6', function () {
         ->and($edge->toRow()['b_vtep_ip'])->toBe('192.0.2.62')
         ->and($edge->toRow()['wan'])->toBe(0);
 });
+
+it('pools the evidence of a device\'s alias addresses', function () {
+    $g = new FabricGraph;
+    // own VTEP from the source table, router-id from the neighbour table; a peer marks the router-id as VTEP
+    $g->markVtep('192.0.2.61');
+    $g->union('192.0.2.61', '192.0.2.11');
+    $g->markSession('192.0.2.11');
+    $g->markGateway('192.0.2.11');
+    $g->markBorder('192.0.2.61');
+    $g->add('192.0.2.99');
+
+    expect($g->role('192.0.2.61'))->toBe(FabricGraph::ROLE_LEAF)
+        ->and($g->role('192.0.2.11'))->toBe(FabricGraph::ROLE_GATEWAY);
+
+    $g->mergeEvidence(['192.0.2.61', '192.0.2.11', '198.51.100.1']);   // unknown address ignored
+
+    expect($g->role('192.0.2.61'))->toBe(FabricGraph::ROLE_GATEWAY)
+        ->and($g->role('192.0.2.11'))->toBe(FabricGraph::ROLE_GATEWAY)
+        ->and($g->isBorder('192.0.2.11'))->toBeTrue()
+        ->and($g->isVtep('192.0.2.11'))->toBeTrue()
+        ->and($g->has('198.51.100.1'))->toBeFalse()
+        ->and($g->role('192.0.2.99'))->toBe(FabricGraph::ROLE_UNKNOWN);
+});
