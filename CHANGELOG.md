@@ -48,6 +48,29 @@ Phase F2 — EVPN multihoming peers (plan §3.8):
   plugin device page (all): local LAG, peer, peer LAG, mode, DF/BDF, LAG state, remote MACs;
   ESIs without a remote PE and peers with a differing LAG state are flagged.
 
+Phase F3 — fabric pages (plan §7.4, §7.6), *Plugins → EVPN fabrics* while the fabric view is on:
+
+- Fabric list (`/plugin/netconf/fabrics`): members by role, instances, VNIs, ESIs, MACs and
+  health badges (EVPN sessions down, ESI-LAGs degraded, duplicate MACs, VNIs without flood
+  list, unknown VTEPs, members not polling). Admins can rename a fabric and add notes.
+- Fabric page (`/plugin/netconf/fabric/<id>/<tab>`): **Overview** with the figures and the
+  topology map; **Members**; **BGP overlay** (core bgpPeers with the evpn SAFI merged with the
+  plugin's `show bgp summary` rows and the EVPN route counts per neighbour, peers that other
+  members have flagged as missing); **VNIs** (VLAN tag per leaf, carriers, flood-list gaps and
+  stale entries between monitored carriers, orphans, anycast IRBs; filter, issues-only);
+  **ESI / multihoming** (one row per segment with every PE, DF/BDF, aliasing, LACP, flags for
+  single PE, DF disagreement, mode mismatch, LAG down, unresolved); **Tunnels** (vtep.N per
+  remote VTEP with the core port's traffic and errors, reverse-tunnel check); **MACs**.
+- Topology map (inline SVG): gateways and spines on top, leaves grouped by site (device
+  location, inherited by ESI partners) or ESI pair; underlay links coloured by BGP/OSPF state
+  (WAN dashed, LLDP-only grey, stubs for unresolved far ends), overlay neighbour arcs and ESI
+  pair brackets with toggles; nodes link to the device.
+- MAC search (`/plugin/netconf/evpn/mac?q=`): MAC in any notation or prefix, IP or VNI over
+  the opted-in leaves' EVPN database (local port, ESI with PEs, remote VTEP → device) plus
+  core FDB and ARP rows; also as a tab scoped to one fabric.
+- Device overview and plugin device page show the device's fabric, role, VTEP and counts
+  (VNIs, ESI-LAGs and DF count, EVPN neighbours, tunnels) with links into the tabs.
+
 ## 1.0.1 – 2026-09-18
 
 Fixes from the external review of 1.0.0 (`docs/REVIEW-2026-09-v1.0.0.md`).

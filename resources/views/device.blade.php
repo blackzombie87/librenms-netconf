@@ -29,6 +29,9 @@
                             @if ($enabled_attrib === null)<small class="text-muted">(global default)</small>@endif
                             @if ($skip_reason)<br><small class="text-warning">{{ $skip_reason }}</small>@endif
                         </td></tr>
+                        @if ($fabric_badge)
+                            <tr><th>EVPN fabric</th><td>@include('netconf::fabric.badge', ['badge' => $fabric_badge])</td></tr>
+                        @endif
                         <tr><th>Matching definitions</th><td>@foreach ($definitions as $d)<span class="label label-info" title="{{ $d['description'] }}">{{ $d['name'] }}</span> @endforeach</td></tr>
                         <tr><th>Stored</th><td>
                             @foreach ($sensor_summary as $class => $n){{ $n }} {{ $class }} sensors, @endforeach

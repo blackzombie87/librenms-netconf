@@ -10,6 +10,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Fabric\EsiPeers;
+use SafferIt\LibrenmsNetconf\Fabric\View\DeviceBadge;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
@@ -174,6 +175,7 @@ class DeviceController extends Controller
             'can_admin' => Gate::allows('admin'),
             'esi_rows' => NetconfService::fabricEnabled() ? EsiPeers::forDevice($device->device_id)['rows'] : [],
             'esi_limit' => null,
+            'fabric_badge' => NetconfService::fabricEnabled() ? DeviceBadge::forDevice($device->device_id) : null,
         ];
     }
 }

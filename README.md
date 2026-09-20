@@ -58,7 +58,8 @@ Instead of enabling devices one by one, set *Enable for all devices* on the sett
   Secrets are encrypted before they are stored and never displayed.
 - **Device overview panel**: polling state, matched definitions, sensor summary with the
   critical ones linked, and the first rows of every custom metric mapping; the full tables
-  are at `/plugin/netconf/device/<id>/metrics`. With the EVPN fabric view enabled a second
+  are at `/plugin/netconf/device/<id>/metrics`. With the EVPN fabric view enabled the panel
+  names the device's fabric, role and VTEP with links into the fabric tabs, and a second
   panel **EVPN multihoming** lists the device's ESI-LAGs with peer device, peer LAG, mode,
   DF/BDF and LAG state (all rows on the device page).
 - **Metric tables** (`/plugin/netconf/device/<id>/metrics`): every custom metric row with
@@ -372,8 +373,31 @@ own LLDP/CDP run did not produce. The plugin's discovery module runs after it (l
 `discovery_modules`) and writes the rows again in the same run, so they are only ever
 missing for the seconds in between and their `id` changes on every discovery.
 
-The UI for this (fabric pages, topology map, consistency checks) follows in later phases,
-see `docs/PLAN.md` §7.
+### Fabric pages
+
+With the fabric view on, the Plugins menu gains **EVPN fabrics** (`/plugin/netconf/fabrics`):
+one row per fabric with members by role, instances, VNIs, ESIs, MACs and health badges. Each
+fabric has tabs:
+
+| Tab | Content |
+|---|---|
+| Overview | counts, health, notes (admins can rename the fabric) and the **topology map**: gateways / spines on top, leaves grouped by site (device location, inherited by ESI partners) or ESI pair; underlay links coloured by BGP/OSPF state, dashed for WAN, grey for LLDP-only, a stub where the far end is not a member yet; EVPN neighbour arcs (red when only one monitored side lists the other) and ESI pair brackets, each with a toggle |
+| Members | device, VTEP / router-id, role, platform, location, instances, VNIs, ESI-LAGs (DF count), MACs, neighbours, tunnels, collector state; unknown VTEPs with their BGP description |
+| BGP overlay | per member and peer: state and uptime (core `bgpPeers` with the evpn SAFI, or the plugin's `show bgp summary` rows), flaps, `bgp.evpn.0` prefix counts, EVPN route counts by type from `show evpn instance extensive`; a peer that other members have and one lacks is listed as *missing* |
+| VNIs | per VNI: VLAN tag per leaf (mismatch flagged), carriers, flood list with gaps and stale entries between monitored carriers, orphans, anycast IRBs, remote MACs; filter and issues-only switch |
+| ESI / multihoming | per Ethernet segment: every PE (monitored sides with LAG and resolution state, remote-only PEs), mode, DF/BDF, aliasing, LACP members not distributing, remote MACs; flags for single PE, DF disagreement, mode mismatch, LAG down, unresolved, aliasing off |
+| Tunnels | per member: `vtep.N` per remote VTEP with mode, next-hop, and — once core has discovered the IFL as a port — traffic, errors and a graph; reverse-tunnel check where the far end is monitored |
+| MACs | the MAC search scoped to the fabric |
+
+**MAC search** (`/plugin/netconf/evpn/mac?q=`, also linked from the fabric list): a MAC in any
+notation (or a prefix), an IP or a VNI. Results are every opted-in leaf's view from the EVPN
+database — local port, ESI with its PEs and their LAGs, or remote VTEP resolved to the device
+— next to the core FDB and ARP rows for the same MAC or IP.
+
+Everything on these pages is read from the `netconf_evpn_*` tables and core tables; nothing
+talks to a device. Only sessions, flood lists and ESIs of *monitored* members are known, so
+gaps can only be judged between monitored leaves. The consistency checks with alerting
+(plan §7.5) follow in phase F4.
 
 ## Alerting
 

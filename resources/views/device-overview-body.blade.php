@@ -22,6 +22,9 @@
     @if ($status?->definitions)
         <tr><th>Definitions</th><td>@foreach ($status->definitions as $name)<span class="label label-info">{{ $name }}</span> @endforeach</td></tr>
     @endif
+    @if ($fabric_badge)
+        <tr><th>EVPN fabric</th><td>@include('netconf::fabric.badge', ['badge' => $fabric_badge])</td></tr>
+    @endif
     <tr>
         <th>Sensors</th>
         <td>
