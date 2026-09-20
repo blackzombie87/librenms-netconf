@@ -14,6 +14,7 @@ use SafferIt\LibrenmsNetconf\Fabric\View\FabricMembers;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricNodes;
 use SafferIt\LibrenmsNetconf\Fabric\View\EsiMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricSummary;
+use SafferIt\LibrenmsNetconf\Fabric\View\MacSearch;
 use SafferIt\LibrenmsNetconf\Fabric\View\OverlaySessions;
 use SafferIt\LibrenmsNetconf\Fabric\View\TunnelMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\VniMatrix;
@@ -33,6 +34,7 @@ class FabricController extends Controller
         'vnis' => 'VNIs',
         'esis' => 'ESI / multihoming',
         'tunnels' => 'Tunnels',
+        'macs' => 'MACs',
     ];
 
     public function index(): View
@@ -62,6 +64,19 @@ class FabricController extends Controller
         ];
 
         return view('netconf::fabric', $data + $this->tabData($tab, $summary, $nodes, $request));
+    }
+
+    /** Global MAC / IP / VNI search over every opted-in leaf and the core FDB / ARP tables. */
+    public function mac(Request $request): View
+    {
+        $q = (string) $request->query('q', '');
+
+        return view('netconf::evpn-mac', [
+            'q' => $q,
+            'search' => MacSearch::run($q),
+            'fabric_enabled' => NetconfService::fabricEnabled(),
+            'can_admin' => Gate::allows('admin'),
+        ]);
     }
 
     public function update(Request $request, int $fabric): RedirectResponse
@@ -94,6 +109,7 @@ class FabricController extends Controller
             'vnis' => $this->vnis($nodes, $request),
             'esis' => $this->esis($nodes, $request),
             'tunnels' => ['tunnels' => TunnelMatrix::forFabric($nodes)],
+            'macs' => ['search' => MacSearch::run((string) $request->query('q', ''), $deviceIds), 'q' => (string) $request->query('q', '')],
             default => [],
         };
     }

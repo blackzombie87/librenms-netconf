@@ -10,7 +10,8 @@
                 <div class="panel-heading">
                     <i class="fa fa-sitemap fa-fw" aria-hidden="true"></i> <strong>EVPN fabrics</strong>
                     <span class="pull-right">
-                        <a href="{{ route('netconf.status') }}">NETCONF devices</a>
+                        <a href="{{ route('netconf.evpn.mac') }}">MAC search</a>
+                        &middot; <a href="{{ route('netconf.status') }}">NETCONF devices</a>
                         @if ($can_admin)
                             &middot; <a href="{{ url('plugin/settings/netconf') }}">settings</a>
                         @endif

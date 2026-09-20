@@ -21,6 +21,7 @@ Route::middleware(['web', 'auth'])
             // EVPN fabric view (plan §7.4): fabrics span devices, so the pages need global read
             Route::get('fabrics', [FabricController::class, 'index'])->name('fabrics');
             Route::get('fabric/{fabric}/{tab?}', [FabricController::class, 'show'])->whereNumber('fabric')->whereAlpha('tab')->name('fabric');
+            Route::get('evpn/mac', [FabricController::class, 'mac'])->name('evpn.mac');
         });
 
         Route::get('device/{device}', [DeviceController::class, 'show'])->name('device');
