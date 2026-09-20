@@ -12,8 +12,11 @@ use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricMembers;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricNodes;
+use SafferIt\LibrenmsNetconf\Fabric\View\EsiMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricSummary;
 use SafferIt\LibrenmsNetconf\Fabric\View\OverlaySessions;
+use SafferIt\LibrenmsNetconf\Fabric\View\TunnelMatrix;
+use SafferIt\LibrenmsNetconf\Fabric\View\VniMatrix;
 
 /**
  * EVPN fabric pages (plan §7.4): the fabric list, one page per fabric with tabs, and the
@@ -27,6 +30,9 @@ class FabricController extends Controller
         'overview' => 'Overview',
         'members' => 'Members',
         'bgp' => 'BGP overlay',
+        'vnis' => 'VNIs',
+        'esis' => 'ESI / multihoming',
+        'tunnels' => 'Tunnels',
     ];
 
     public function index(): View
@@ -85,8 +91,47 @@ class FabricController extends Controller
         return match ($tab) {
             'members' => ['members' => FabricMembers::forFabric($summary['id'])],
             'bgp' => $this->bgp($nodes, $deviceIds),
+            'vnis' => $this->vnis($nodes, $request),
+            'esis' => $this->esis($nodes, $request),
+            'tunnels' => ['tunnels' => TunnelMatrix::forFabric($nodes)],
             default => [],
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function vnis(FabricNodes $nodes, Request $request): array
+    {
+        $rows = VniMatrix::forFabric($nodes);
+        $q = (string) $request->query('q', '');
+        $issues = (bool) $request->query('issues', '');
+
+        return [
+            'vnis' => VniMatrix::filter($rows, $q, $issues),
+            'vni_total' => count($rows),
+            'vni_issues' => count(array_filter($rows, fn ($r) => $r['flags'] !== [])),
+            'q' => $q,
+            'issues_only' => $issues,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function esis(FabricNodes $nodes, Request $request): array
+    {
+        $rows = EsiMatrix::forFabric($nodes);
+        $q = (string) $request->query('q', '');
+        $issues = (bool) $request->query('issues', '');
+
+        return [
+            'esis' => EsiMatrix::filter($rows, $q, $issues, $nodes),
+            'esi_total' => count($rows),
+            'esi_issues' => count(array_filter($rows, fn ($r) => $r['flags'] !== [])),
+            'q' => $q,
+            'issues_only' => $issues,
+        ];
     }
 
     /**
