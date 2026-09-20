@@ -16,6 +16,7 @@ namespace App\Models {
      * @property string|null $hardware
      * @property string|null $version
      * @property int $status
+     * @property int|null $location_id
      * @property int $disabled
      * @property int $snmp_disable
      * @property \Illuminate\Database\Eloquent\Collection<int, DeviceAttrib> $attribs

@@ -5,6 +5,9 @@
                 <i class="fa fa-terminal fa-fw" aria-hidden="true"></i> <strong>NETCONF devices</strong>
                 <span class="pull-right">
                     <a href="{{ route('netconf.definitions') }}">definitions</a>
+                    @if (\SafferIt\LibrenmsNetconf\Collect\NetconfService::fabricEnabled())
+                        &middot; <a href="{{ route('netconf.fabrics') }}">EVPN fabrics</a>
+                    @endif
                     @if ($can_admin)
                         &middot; <a href="{{ url('plugin/settings/netconf') }}">settings</a>
                     @endif

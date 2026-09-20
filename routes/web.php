@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use SafferIt\LibrenmsNetconf\Http\Controllers\DeviceController;
+use SafferIt\LibrenmsNetconf\Http\Controllers\FabricController;
 use SafferIt\LibrenmsNetconf\Http\Controllers\GraphController;
 use SafferIt\LibrenmsNetconf\Http\Controllers\StatusController;
 
@@ -17,6 +18,9 @@ Route::middleware(['web', 'auth'])
         Route::middleware('can:global-read')->group(function (): void {
             Route::get('status', [StatusController::class, 'index'])->name('status');
             Route::get('definitions', [StatusController::class, 'definitions'])->name('definitions');
+            // EVPN fabric view (plan §7.4): fabrics span devices, so the pages need global read
+            Route::get('fabrics', [FabricController::class, 'index'])->name('fabrics');
+            Route::get('fabric/{fabric}/{tab?}', [FabricController::class, 'show'])->whereNumber('fabric')->whereAlpha('tab')->name('fabric');
         });
 
         Route::get('device/{device}', [DeviceController::class, 'show'])->name('device');
@@ -34,5 +38,6 @@ Route::middleware(['web', 'auth'])
             Route::post('device/{device}/discover', [DeviceController::class, 'discover'])->name('device.discover');
             Route::post('device/{device}/poll', [DeviceController::class, 'poll'])->name('device.poll');
             Route::post('run', [StatusController::class, 'run'])->name('run');
+            Route::post('fabric/{fabric}', [FabricController::class, 'update'])->whereNumber('fabric')->name('fabric.update');
         });
     });
