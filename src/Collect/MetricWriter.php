@@ -122,17 +122,7 @@ class MetricWriter
      */
     public function deleteOrphans(array $knownMappings): int
     {
-        $deleted = 0;
-        $pairs = NetconfMetric::query()->where('device_id', $this->device->device_id)->distinct()->get(['definition', 'mapping']);
-        foreach ($pairs as $pair) {
-            if (! in_array($pair->definition . '/' . $pair->mapping, $knownMappings, true)) {
-                $deleted += NetconfMetric::query()->where('device_id', $this->device->device_id)
-                    ->where('definition', $pair->definition)->where('mapping', $pair->mapping)->delete();
-                Log::info(sprintf('  metric rows of %s/%s deleted, no matching definition fills them any more', $pair->definition, $pair->mapping));
-            }
-        }
-
-        return $deleted;
+        return $this->deleteOrphanRows(fn () => NetconfMetric::query()->where('device_id', $this->device->device_id), $knownMappings, 'metric');
     }
 
     public function deleteAll(): int

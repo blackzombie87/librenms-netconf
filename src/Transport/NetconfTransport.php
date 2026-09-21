@@ -109,7 +109,7 @@ class NetconfTransport implements TransportInterface
             'host' => $this->credentials->host,
             'port' => $this->credentials->port,
             'server' => $this->client->serverIdentification(),
-            'host_key' => $this->hostKeyInfo(),
+            'host_key' => KnownHosts::describe($this->client->serverHostKey(), $this->credentials),
             'auth_method' => $this->authMethod ?? '',
             'session_id' => $this->sessionId ?? '',
             'framing' => $this->framer instanceof ChunkedFramer ? 'chunked (1.1)' : 'end-of-message (1.0)',
@@ -117,13 +117,6 @@ class NetconfTransport implements TransportInterface
             'capabilities' => $this->serverCapabilities,
             'messages' => $this->messageId,
         ];
-    }
-
-    private function hostKeyInfo(): string
-    {
-        $key = $this->client->serverHostKey();
-
-        return $key === '' ? '' : sprintf('%s %s (%s)', KnownHosts::typeFromBlob(explode(' ', $key)[1] ?? '') ?? '?', KnownHosts::fingerprint($key), $this->credentials->verifiesHostKey() ? 'verified against ' . $this->credentials->knownHosts : 'not verified');
     }
 
     public function close(): void

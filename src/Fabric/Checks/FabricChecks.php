@@ -5,6 +5,7 @@ namespace SafferIt\LibrenmsNetconf\Fabric\Checks;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 use SafferIt\LibrenmsNetconf\Fabric\MacMobility;
+use SafferIt\LibrenmsNetconf\Fabric\View\DeviceStats;
 use SafferIt\LibrenmsNetconf\Fabric\View\EsiMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricNodes;
 use SafferIt\LibrenmsNetconf\Fabric\View\OverlaySessions;
@@ -114,15 +115,17 @@ final class FabricChecks
         )['by_device'];
 
         $instances = [];
-        foreach (DB::table('netconf_metrics')->whereIn('device_id', $deviceIds)->where('mapping', 'instance')->where('definition', 'like', '%-evpn')->get(['device_id', 'metric_index', 'values', 'labels']) as $row) {
-            $values = json_decode((string) $row->values, true) ?: [];
-            $labels = json_decode((string) $row->labels, true) ?: [];
-            $instances[(int) $row->device_id][(string) $row->metric_index] = [
-                'local_macs' => isset($values['local_macs']) ? (int) $values['local_macs'] : null,
-                'dup_threshold' => isset($labels['dup_threshold']) ? (string) $labels['dup_threshold'] : null,
-                'dup_window' => isset($labels['dup_window']) ? (string) $labels['dup_window'] : null,
-                'dup_recovery' => isset($labels['dup_recovery']) ? (string) $labels['dup_recovery'] : null,
-            ];
+        foreach (DeviceStats::instanceMetrics($deviceIds) as $deviceId => $rows) {
+            foreach ($rows as $index => $row) {
+                $values = $row['values'];
+                $labels = $row['labels'];
+                $instances[$deviceId][$index] = [
+                    'local_macs' => isset($values['local_macs']) ? (int) $values['local_macs'] : null,
+                    'dup_threshold' => isset($labels['dup_threshold']) ? (string) $labels['dup_threshold'] : null,
+                    'dup_window' => isset($labels['dup_window']) ? (string) $labels['dup_window'] : null,
+                    'dup_recovery' => isset($labels['dup_recovery']) ? (string) $labels['dup_recovery'] : null,
+                ];
+            }
         }
 
         $dupMacs = [];
@@ -159,7 +162,7 @@ final class FabricChecks
         }
 
         $versions = DB::table('devices')->whereIn('device_id', $deviceIds)->pluck('version', 'device_id')->map(fn ($v) => $v === null || $v === '' ? null : (string) $v)->all();
-        $failing = DB::table('netconf_device_status')->whereIn('device_id', $deviceIds)->where('consecutive_failures', '>', 0)->pluck('consecutive_failures', 'device_id')->map(fn ($v) => (int) $v)->all();
+        $failing = DeviceStats::failing($deviceIds);
 
         return new CheckInput(
             neighbors: $neighbors,

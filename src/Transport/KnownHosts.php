@@ -75,6 +75,23 @@ final class KnownHosts
     }
 
     /** OpenSSH-style fingerprint, e.g. "SHA256:8JbYw…" (unpadded base64). */
+    /**
+     * The "type fingerprint (verification)" line both transports show in sessionInfo().
+     */
+    public static function describe(string $hostKey, Credentials $credentials): string
+    {
+        if ($hostKey === '') {
+            return '';
+        }
+
+        return sprintf(
+            '%s %s (%s)',
+            self::typeFromBlob(explode(' ', $hostKey)[1] ?? '') ?? '?',
+            self::fingerprint($hostKey),
+            $credentials->verifiesHostKey() ? 'verified against ' . $credentials->knownHosts : 'not verified'
+        );
+    }
+
     public static function fingerprint(string $hostKey): string
     {
         $raw = base64_decode(self::blob($hostKey), true);

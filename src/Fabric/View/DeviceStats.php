@@ -84,19 +84,17 @@ final class DeviceStats
             }
         }
 
-        foreach (DB::table('netconf_metrics')->whereIn('device_id', $deviceIds)->where('mapping', 'instance')->where('definition', 'like', '%-evpn')->get(['device_id', 'values']) as $row) {
-            $values = json_decode((string) $row->values, true);
-            if (is_array($values)) {
-                $id = (int) $row->device_id;
-                $out[$id]['local_macs'] = ($out[$id]['local_macs'] ?? 0) + (int) ($values['local_macs'] ?? 0);
-                $out[$id]['remote_macs'] = ($out[$id]['remote_macs'] ?? 0) + (int) ($values['remote_macs'] ?? 0);
+        foreach (self::instanceMetrics($deviceIds) as $id => $instances) {
+            foreach ($instances as $instance) {
+                $out[$id]['local_macs'] = ($out[$id]['local_macs'] ?? 0) + (int) ($instance['values']['local_macs'] ?? 0);
+                $out[$id]['remote_macs'] = ($out[$id]['remote_macs'] ?? 0) + (int) ($instance['values']['remote_macs'] ?? 0);
             }
         }
         foreach (DB::table('sensors')->whereIn('device_id', $deviceIds)->where('sensor_type', 'like', 'netconf-%-dup-mac-total')->get(['device_id', 'sensor_current']) as $row) {
             $out[(int) $row->device_id]['dup_macs'] += (int) $row->sensor_current;
         }
-        foreach (DB::table('netconf_device_status')->whereIn('device_id', $deviceIds)->where('consecutive_failures', '>', 0)->pluck('device_id') as $id) {
-            $out[(int) $id]['collector_failing'] = true;
+        foreach (array_keys(self::failing($deviceIds)) as $id) {
+            $out[$id]['collector_failing'] = true;
         }
 
         foreach ($sets as $id => $set) {
@@ -107,6 +105,43 @@ final class DeviceStats
         }
 
         return $out;
+    }
+
+    /**
+     * The junos-evpn "instance" metric rows per device and instance, decoded once: the figures
+     * below and the checks engine read the same rows.
+     *
+     * @param  list<int>  $deviceIds
+     * @return array<int, array<string, array{values: array<string, mixed>, labels: array<string, mixed>}>>
+     */
+    public static function instanceMetrics(array $deviceIds): array
+    {
+        $out = [];
+        foreach (DB::table('netconf_metrics')->whereIn('device_id', $deviceIds)->where('mapping', 'instance')->where('definition', 'like', '%-evpn')->get(['device_id', 'metric_index', 'values', 'labels']) as $row) {
+            $values = json_decode((string) $row->values, true);
+            $labels = json_decode((string) $row->labels, true);
+            $out[(int) $row->device_id][(string) $row->metric_index] = [
+                'values' => is_array($values) ? $values : [],
+                'labels' => is_array($labels) ? $labels : [],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Devices whose collector is failing => the number of consecutive failures.
+     *
+     * @param  list<int>  $deviceIds
+     * @return array<int, int>
+     */
+    public static function failing(array $deviceIds): array
+    {
+        /** @var array<int, int> $failing */
+        $failing = DB::table('netconf_device_status')->whereIn('device_id', $deviceIds)->where('consecutive_failures', '>', 0)
+            ->pluck('consecutive_failures', 'device_id')->map(fn ($v) => (int) $v)->all();
+
+        return $failing;
     }
 
     /**

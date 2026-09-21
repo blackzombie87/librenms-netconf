@@ -51,6 +51,10 @@ Gaps closed on the way to 1.1 (internal plan §6.2):
   including the fabric issues sensor, instead of the YAML sensors only.
 - Custom metrics (F4a): an index longer than the column width is truncated once, so the row
   and its RRD file keep the same name.
+- Internal (F4a): the duplicated host-key description, metric orphan prune, BGP peer metric
+  queries and EVPN instance / collector-failure lookups each live in one place now. The BGP
+  overlay tab reuses the rows the session discovery already read instead of querying them
+  again.
 
 EVPN fabric checks, phase F4 (internal plan §7.5):
 
