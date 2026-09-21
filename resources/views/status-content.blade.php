@@ -97,7 +97,8 @@
             <div class="panel panel-default">
                 <div class="panel-heading"><i class="fa fa-toggle-on fa-fw" aria-hidden="true"></i> <strong>Enable per device group or os</strong> <small class="text-muted">— sets <code>netconf_enabled</code> on every device of the selection, like <code>lnms netconf:device --group/--os</code>; discovery creates the sensors afterwards</small></div>
                 <div class="panel-body">
-                    <form method="post" action="{{ route('netconf.bulk') }}" class="form-inline">
+                    {{-- nothing is pre-selected: an untouched Apply must not write an attribute on every device --}}
+                    <form method="post" action="{{ route('netconf.bulk') }}" class="form-inline" onsubmit="return this.group.value !== '' || this.os.value !== '' || confirm('No device group and no os selected: this applies to every device. Continue?');">
                         @csrf
                         <select name="group" class="form-control">
                             <option value="">any device group</option>
@@ -108,13 +109,14 @@
                         <select name="os" class="form-control">
                             <option value="">any os</option>
                             @foreach ($bulk_os as $os)
-                                <option value="{{ $os }}" {{ old('os', $bulk_os === ['junos'] ? 'junos' : '') === $os ? 'selected' : '' }}>{{ $os }}</option>
+                                <option value="{{ $os }}" {{ (string) old('os') === $os ? 'selected' : '' }}>{{ $os }}</option>
                             @endforeach
                         </select>
-                        <select name="enabled" class="form-control">
-                            <option value="1">enable</option>
-                            <option value="0">disable</option>
-                            <option value="inherit">global default</option>
+                        <select name="enabled" class="form-control" required>
+                            <option value="">&mdash; choose &mdash;</option>
+                            <option value="1" {{ old('enabled') === '1' ? 'selected' : '' }}>enable</option>
+                            <option value="0" {{ old('enabled') === '0' ? 'selected' : '' }}>disable</option>
+                            <option value="inherit" {{ old('enabled') === 'inherit' ? 'selected' : '' }}>global default</option>
                         </select>
                         <button type="submit" class="btn btn-primary">Apply</button>
                     </form>

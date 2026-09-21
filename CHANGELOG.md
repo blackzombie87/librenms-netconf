@@ -40,6 +40,9 @@ Gaps closed on the way to 1.1 (internal plan §6.2):
   the subsystem request failed. `netconf:run` retries once after two seconds when the
   device's SSH connection rate limit closes the socket ("Error reading SSH identification
   string").
+- Bulk enable form (F4a): nothing is pre-selected any more. *Apply* without choosing an
+  action is rejected instead of enabling every device of the only os in the install, and a
+  selection without device group and os asks for confirmation first.
 
 EVPN fabric checks, phase F4 (internal plan §7.5):
 

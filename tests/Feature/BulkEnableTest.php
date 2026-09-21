@@ -69,6 +69,26 @@ final class BulkEnableTest extends LibrenmsTestCase
         $this->post('/plugin/netconf/bulk', ['os' => 'netconf-test-os'])->assertSessionHasErrors('enabled');
     }
 
+    public function testApplyWithNothingChosenIsRejectedAndTheFormPreselectsNothing(): void
+    {
+        [$a, $b] = $this->devices();
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+
+        // nothing is pre-selected on the fresh form: no os even when the install has one,
+        // and a blank first choice in the enabled select
+        $this->get('/plugin/netconf/status')->assertOk()
+            ->assertSee('<option value="">&mdash; choose &mdash;</option>', false)
+            ->assertDontSee('selected>netconf-test-os</option>', false);
+
+        // Apply without a choice is rejected and changes nothing (the previous input is kept)
+        foreach ([[], ['enabled' => ''], ['os' => 'netconf-test-os', 'enabled' => '']] as $payload) {
+            $this->post('/plugin/netconf/bulk', $payload)->assertSessionHasErrors('enabled');
+        }
+        $this->assertNull($a->fresh()->getAttrib(NetconfService::ATTRIB_ENABLED));
+        $this->assertNull($b->fresh()->getAttrib(NetconfService::ATTRIB_ENABLED));
+        $this->get('/plugin/netconf/status')->assertOk()->assertSee('<option value="netconf-test-os" selected>', false);
+    }
+
     /**
      * @return array{Device, Device, Device} two devices with the test os, one with another
      */
