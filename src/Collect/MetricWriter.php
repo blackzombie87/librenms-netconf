@@ -6,7 +6,7 @@ use App\Facades\Rrd;
 use App\Models\Device;
 use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
-use LibreNMS\RRD\RrdDefinition;
+use SafferIt\LibrenmsNetconf\Collect\Concerns\WritesRrd;
 use SafferIt\LibrenmsNetconf\Extract\MetricRow;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 
@@ -17,6 +17,8 @@ use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
  */
 class MetricWriter
 {
+    use WritesRrd;
+
     private RrdLayout $layout;
 
     public function __construct(private readonly Device $device, ?RrdLayout $layout = null)
@@ -67,19 +69,13 @@ class MetricWriter
 
         $written = 0;
         foreach ($rows as $i => $row) {
-            if (isset($orders[$i])) {
-                // every data source of the file, in file order, whether this reply had a value or not
-                $def = RrdDefinition::make();
-                foreach ($orders[$i] as $field => $type) {
-                    $def->addDataset($field, $type, $type === 'GAUGE' ? null : 0);
-                }
-                $datastore?->put($this->device, 'netconf', [
+            if ($datastore !== null && isset($orders[$i])) {
+                $this->putRrd($datastore, 'netconf', [
                     'definition' => $row->definition,
                     'mapping' => $row->mapping->id,
                     'index' => $row->index,
                     'rrd_name' => NetconfMetric::rrdName($row->definition, $row->mapping->id, $row->index),
-                    'rrd_def' => $def,
-                ], $row->rrdValues($orders[$i]));
+                ], $orders[$i], $row->rrdValues($orders[$i]));
                 $written++;
             }
 

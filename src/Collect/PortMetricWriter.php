@@ -7,7 +7,7 @@ use App\Models\Device;
 use App\Models\Port;
 use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
-use LibreNMS\RRD\RrdDefinition;
+use SafferIt\LibrenmsNetconf\Collect\Concerns\WritesRrd;
 use SafferIt\LibrenmsNetconf\Extract\PortMetricRow;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
 
@@ -18,6 +18,8 @@ use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
  */
 class PortMetricWriter
 {
+    use WritesRrd;
+
     /** @var array<string, int|null> */
     private array $portCache = [];
 
@@ -81,18 +83,12 @@ class PortMetricWriter
 
         foreach ($resolved as [$row, $portId, $order]) {
             if ($datastore !== null) {
-                // every data source of the file, in file order, whether this reply had a value or not
-                $def = RrdDefinition::make();
-                foreach ($order as $field => $type) {
-                    $def->addDataset($field, $type, $type === 'GAUGE' ? null : 0);
-                }
-                $datastore->put($this->device, 'netconf-port', [
+                $this->putRrd($datastore, 'netconf-port', [
                     'definition' => $row->definition,
                     'mapping' => $row->mapping->id,
                     'port_id' => $portId,
                     'rrd_name' => NetconfPortMetric::rrdName($portId, $row->definition, $row->mapping->id),
-                    'rrd_def' => $def,
-                ], $row->rrdValues($order));
+                ], $order, $row->rrdValues($order));
             }
 
             Log::debug(sprintf('  port %s=%s (port_id %d) %s', $row->matchField, $row->matchValue, $portId, json_encode($row->values)));

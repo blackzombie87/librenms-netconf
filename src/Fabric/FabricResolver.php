@@ -110,7 +110,7 @@ class FabricResolver
         }
 
         // 3. EVPN BGP sessions: core bgpPeers_cbgp (safi evpn) and the plugin's per-RIB metrics
-        foreach ($this->evpnSessions() as $session) {
+        foreach (EvpnSessions::discover() as $session) {
             $deviceId = $session['device_id'];
             if (! isset($deviceNodes[$deviceId])) {
                 if ($session['local'] === null) {
@@ -266,51 +266,6 @@ class FabricResolver
             ->where('ports.device_id', $deviceId)->where('ipv4_prefixlen', 32)->where('ports.ifName', 'like', 'lo%')
             ->where('ipv4_address', 'not like', '127.%')
             ->orderBy('ports.ifName')->pluck('ipv4_address')->map(fn ($v) => (string) $v)->all();
-    }
-
-    /**
-     * EVPN sessions of monitored devices: bgpPeers_cbgp with safi evpn, plus the routing.yaml
-     * per-RIB metric rows (index "peer/bgp.evpn.0") for devices whose SNMP lacks the table.
-     *
-     * @return list<array{device_id: int, peer: string, local: string|null, description: string|null}>
-     */
-    private function evpnSessions(): array
-    {
-        $sessions = [];
-        $descriptions = [];
-        foreach (DB::table('bgpPeers')->get(['device_id', 'bgpPeerIdentifier', 'bgpLocalAddr', 'bgpPeerDescr']) as $peer) {
-            $descriptions[(int) $peer->device_id][(string) $peer->bgpPeerIdentifier] = [
-                'local' => $peer->bgpLocalAddr !== null && $peer->bgpLocalAddr !== '' && $peer->bgpLocalAddr !== '0.0.0.0' ? (string) $peer->bgpLocalAddr : null,
-                'description' => $peer->bgpPeerDescr !== null && $peer->bgpPeerDescr !== '' ? (string) $peer->bgpPeerDescr : null,
-            ];
-        }
-
-        $rows = DB::table('bgpPeers_cbgp')->where('safi', 'evpn')->get(['device_id', 'bgpPeerIdentifier']);
-        foreach ($rows as $row) {
-            $info = $descriptions[(int) $row->device_id][(string) $row->bgpPeerIdentifier] ?? ['local' => null, 'description' => null];
-            $sessions[$row->device_id . '/' . $row->bgpPeerIdentifier] = ['device_id' => (int) $row->device_id, 'peer' => (string) $row->bgpPeerIdentifier] + $info;
-        }
-
-        $metrics = DB::table('netconf_metrics')->where('mapping', 'bgp-peer-rib')->where('metric_index', 'like', '%/bgp.evpn.0')->get(['device_id', 'metric_index']);
-        foreach ($metrics as $metric) {
-            $peer = explode('/', (string) $metric->metric_index, 2)[0];
-            if (filter_var($peer, FILTER_VALIDATE_IP) === false) {
-                continue;
-            }
-            $info = $descriptions[(int) $metric->device_id][$peer] ?? ['local' => null, 'description' => null];
-            $sessions[$metric->device_id . '/' . $peer] ??= ['device_id' => (int) $metric->device_id, 'peer' => $peer] + $info;
-        }
-        // BGP descriptions from the routing.yaml peer metric where the core row has none
-        $labels = DB::table('netconf_metrics')->where('mapping', 'bgp-peer')->get(['device_id', 'metric_index', 'labels']);
-        foreach ($labels as $label) {
-            $decoded = json_decode((string) $label->labels, true);
-            $key = $label->device_id . '/' . $label->metric_index;
-            if (isset($sessions[$key]) && $sessions[$key]['description'] === null && is_array($decoded) && ! empty($decoded['description'])) {
-                $sessions[$key]['description'] = (string) $decoded['description'];
-            }
-        }
-
-        return array_values($sessions);
     }
 
     /**

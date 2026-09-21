@@ -143,11 +143,8 @@ final class MacSearch
         if ($rows === []) {
             return [];
         }
-        $deviceIds = array_values(array_unique(array_map(fn ($r) => (int) $r['device_id'], $rows)));
-        $sourceDeviceIds = array_values(array_unique(array_filter(array_map(fn ($r) => $r['source_device_id'] === null ? null : (int) $r['source_device_id'], $rows))));
-        /** @var \Illuminate\Support\Collection<int, Device> $devices */
-        $devices = Device::query()->whereIn('device_id', array_merge($deviceIds, $sourceDeviceIds) ?: [0])->get()->keyBy('device_id');
-
+        // ESI rows of the segments in the result, then every VTEP address and device the rows
+        // can point at (leaf, remote source, ESI PEs and their remote VTEPs) in one query each
         $esis = [];
         $esiValues = array_values(array_unique(array_map(fn ($r) => (string) $r['source'], array_filter($rows, fn ($r) => $r['source_type'] === 'esi'))));
         if ($esiValues !== []) {
@@ -155,8 +152,36 @@ final class MacSearch
                 $esis[(string) $e->esi][] = $e;
             }
         }
-        $vteps = DB::table(TableSchema::tableName('vtep'))->pluck('device_id', 'vtep_ip')->all();
-        $names = DB::table(TableSchema::tableName('vtep'))->pluck('name_hint', 'vtep_ip')->all();
+        $ips = [];
+        $deviceIds = [];
+        foreach ($rows as $r) {
+            $deviceIds[(int) $r['device_id']] = true;
+            if ($r['source_device_id'] !== null) {
+                $deviceIds[(int) $r['source_device_id']] = true;
+            }
+            if ($r['source_type'] === 'remote' && ! empty($r['source'])) {
+                $ips[(string) $r['source']] = true;
+            }
+        }
+        foreach ($esis as $list) {
+            foreach ($list as $e) {
+                $deviceIds[(int) $e->device_id] = true;
+                foreach ((array) json_decode((string) ($e->remote_vtep_ips ?? '[]'), true) as $ip) {
+                    $ips[(string) $ip] = true;
+                }
+            }
+        }
+        $vteps = [];
+        $names = [];
+        foreach (DB::table(TableSchema::tableName('vtep'))->whereIn('vtep_ip', array_keys($ips) ?: [''])->get(['vtep_ip', 'device_id', 'name_hint']) as $v) {
+            $vteps[(string) $v->vtep_ip] = $v->device_id === null ? null : (int) $v->device_id;
+            $names[(string) $v->vtep_ip] = $v->name_hint;
+            if ($v->device_id !== null) {
+                $deviceIds[(int) $v->device_id] = true;
+            }
+        }
+        /** @var \Illuminate\Support\Collection<int, Device> $devices */
+        $devices = Device::query()->whereIn('device_id', array_keys($deviceIds) ?: [0])->get()->keyBy('device_id');
 
         // local IFLs -> ports by name (ge-0/0/1.0 or ge-0/0/1)
         $portNames = [];
@@ -208,7 +233,7 @@ final class MacSearch
                             continue;
                         }
                         $resolved['peers'][(int) $e->device_id] = [
-                            'device' => $devices->get((int) $e->device_id) ?? Device::query()->find((int) $e->device_id),
+                            'device' => $devices->get((int) $e->device_id),
                             'ifname' => (string) $e->local_ifname,
                             'port' => $e->local_port_id === null ? null : $portsById->get((int) $e->local_port_id),
                         ];

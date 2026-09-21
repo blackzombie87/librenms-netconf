@@ -4,14 +4,15 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\EvpnSessions;
 use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
- * EVPN overlay sessions of the monitored fabric members (plan §7.4 "BGP overlay"): core
- * bgpPeers (state, uptime, AS, description) filtered to peers with the evpn SAFI in
- * bgpPeers_cbgp, merged with the plugin's routing.yaml peer metrics (flaps, state where the
- * core row is missing) and per-RIB counts (bgp.evpn.0), and with the EVPN neighbour route
- * counts from `show evpn instance extensive`. One row per device and peer address.
+ * EVPN overlay sessions of the monitored fabric members (plan §7.4 "BGP overlay"): the
+ * sessions EvpnSessions discovers (evpn SAFI in bgpPeers_cbgp, or a bgp.evpn.0 RIB metric),
+ * with the core bgpPeers row (state, uptime, AS), the plugin's routing.yaml peer metrics
+ * (flaps, state where the core row is missing) and per-RIB counts, and the EVPN neighbour
+ * route counts from `show evpn instance extensive`. One row per device and peer address.
  */
 final class OverlaySessions
 {
@@ -51,41 +52,36 @@ final class OverlaySessions
             $rows["$deviceId/$peer"] = array_replace($rows["$deviceId/$peer"], $values);
         };
 
-        // core BGP tables: only peers with the evpn SAFI
-        $evpnPeers = [];
-        foreach (DB::table('bgpPeers_cbgp')->whereIn('device_id', $deviceIds)->where('safi', 'evpn')->get(['device_id', 'bgpPeerIdentifier']) as $r) {
-            $evpnPeers[$r->device_id . '/' . $r->bgpPeerIdentifier] = true;
+        // the sessions that carry EVPN (shared with the resolver), then the core BGP row of each
+        foreach (EvpnSessions::discover($deviceIds) as $s) {
+            $set($s['device_id'], $s['peer'], ['description' => $s['description'], 'local_ip' => $s['local'], 'source' => $s['source']]);
         }
-        if ($evpnPeers !== []) {
-            foreach (DB::table('bgpPeers')->whereIn('device_id', $deviceIds)->get(['device_id', 'bgpPeerIdentifier', 'bgpPeerRemoteAs', 'bgpPeerState', 'bgpPeerFsmEstablishedTime', 'bgpPeerDescr', 'bgpLocalAddr', 'bgpPeer_id']) as $r) {
-                if (! isset($evpnPeers[$r->device_id . '/' . $r->bgpPeerIdentifier])) {
-                    continue;
-                }
-                $state = (string) $r->bgpPeerState;
-                $set((int) $r->device_id, (string) $r->bgpPeerIdentifier, [
-                    'state' => $state,
-                    'up' => strtolower($state) === 'established',
-                    'uptime' => $r->bgpPeerFsmEstablishedTime === null ? null : (int) $r->bgpPeerFsmEstablishedTime,
-                    'remote_as' => $r->bgpPeerRemoteAs === null ? null : (int) $r->bgpPeerRemoteAs,
-                    'description' => $r->bgpPeerDescr !== null && $r->bgpPeerDescr !== '' ? (string) $r->bgpPeerDescr : null,
-                    'local_ip' => $r->bgpLocalAddr !== null && $r->bgpLocalAddr !== '' && $r->bgpLocalAddr !== '0.0.0.0' ? (string) $r->bgpLocalAddr : null,
-                    'bgp_peer_id' => (int) $r->bgpPeer_id,
-                    'source' => ['bgp'],
-                ]);
+        if ($rows === []) {
+            return [];
+        }
+        foreach (DB::table('bgpPeers')->whereIn('device_id', $deviceIds)->get(['device_id', 'bgpPeerIdentifier', 'bgpPeerRemoteAs', 'bgpPeerState', 'bgpPeerFsmEstablishedTime', 'bgpPeer_id']) as $r) {
+            if (! isset($rows[$r->device_id . '/' . $r->bgpPeerIdentifier])) {
+                continue;
             }
+            $state = (string) $r->bgpPeerState;
+            $set((int) $r->device_id, (string) $r->bgpPeerIdentifier, [
+                'state' => $state,
+                'up' => strtolower($state) === 'established',
+                'uptime' => $r->bgpPeerFsmEstablishedTime === null ? null : (int) $r->bgpPeerFsmEstablishedTime,
+                'remote_as' => $r->bgpPeerRemoteAs === null ? null : (int) $r->bgpPeerRemoteAs,
+                'bgp_peer_id' => (int) $r->bgpPeer_id,
+            ]);
         }
 
-        // plugin per-RIB counts identify EVPN peers when SNMP lacks the cbgp table
+        // per-RIB counts of the plugin's routing.yaml metric
         foreach (DB::table('netconf_metrics')->whereIn('device_id', $deviceIds)->where('mapping', 'bgp-peer-rib')->where('metric_index', 'like', '%/bgp.evpn.0')->get(['device_id', 'metric_index', 'values']) as $r) {
             $peer = explode('/', (string) $r->metric_index, 2)[0];
-            if (filter_var($peer, FILTER_VALIDATE_IP) === false) {
+            if (! isset($rows[$r->device_id . '/' . $peer])) {
                 continue;
             }
             $values = json_decode((string) $r->values, true) ?: [];
-            $current = $row((int) $r->device_id, $peer);
             $set((int) $r->device_id, $peer, [
                 'rib' => ['active' => $values['active'] ?? null, 'received' => $values['received'] ?? null, 'accepted' => $values['accepted'] ?? null, 'suppressed' => $values['suppressed'] ?? null],
-                'source' => array_values(array_unique(array_merge($current['source'], ['rib']))),
             ]);
         }
         // peer metric: flaps always, state / description / AS where core has no row

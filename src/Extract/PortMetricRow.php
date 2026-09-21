@@ -3,6 +3,7 @@
 namespace SafferIt\LibrenmsNetconf\Extract;
 
 use SafferIt\LibrenmsNetconf\Definitions\PortMapping;
+use SafferIt\LibrenmsNetconf\Extract\Concerns\HasRrdValues;
 
 /**
  * Extracted per-port metrics for one interface row; the port itself is resolved later
@@ -10,6 +11,8 @@ use SafferIt\LibrenmsNetconf\Definitions\PortMapping;
  */
 final class PortMetricRow
 {
+    use HasRrdValues;
+
     /**
      * @param  array<string, float>  $values  field name => value (fields without a value are omitted)
      * @param  array<string, string>  $types  every RRD field of the mapping in YAML order => GAUGE|COUNTER|DERIVE
@@ -23,23 +26,5 @@ final class PortMetricRow
         public readonly array $types,
         public readonly ?string $re = null,
     ) {
-    }
-
-    /**
-     * Values for the RRD update: one entry per data source in $order (default: the mapping's
-     * fields in definition order), `U` (unknown) where this row has no value, so the update
-     * never drifts from the data sources of the file.
-     *
-     * @param  array<string, string>|null  $order  data sources of the file (name => type)
-     * @return array<string, float|string>
-     */
-    public function rrdValues(?array $order = null): array
-    {
-        $out = [];
-        foreach ($order ?? $this->types as $field => $type) {
-            $out[$field] = $this->values[$field] ?? 'U';
-        }
-
-        return $out;
     }
 }
