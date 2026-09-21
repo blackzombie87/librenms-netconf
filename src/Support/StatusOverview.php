@@ -52,6 +52,8 @@ class StatusOverview
             'settings' => $settings,
             'run_devices' => array_values($devicesForRun),
             'can_admin' => Gate::allows('admin'),
+            'bulk_groups' => Gate::allows('admin') ? DeviceSelection::groups() : [],
+            'bulk_os' => Gate::allows('admin') ? DeviceSelection::osNames() : [],
             'module_ready' => class_exists(\LibreNMS\Modules\Netconf::class),
         ];
     }

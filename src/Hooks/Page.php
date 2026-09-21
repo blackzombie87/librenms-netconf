@@ -22,6 +22,6 @@ class Page implements SinglePageHook
      */
     public function handle(string $pluginName, array $settings): array
     {
-        return ['content_view' => "$pluginName::status-content", 'run' => session('netconf_run')] + StatusOverview::data();
+        return ['content_view' => "$pluginName::status-content", 'run' => session('netconf_run'), 'bulk' => session('netconf_bulk')] + StatusOverview::data();
     }
 }

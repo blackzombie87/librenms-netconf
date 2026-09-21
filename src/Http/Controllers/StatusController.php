@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use SafferIt\LibrenmsNetconf\Definitions\DefinitionLoader;
 use SafferIt\LibrenmsNetconf\Support\CommandGuard;
+use SafferIt\LibrenmsNetconf\Support\DeviceSelection;
+use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 use SafferIt\LibrenmsNetconf\Support\StatusOverview;
 use SafferIt\LibrenmsNetconf\Transport\DeviceCredentials;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\TransportException;
@@ -22,7 +24,33 @@ class StatusController extends Controller
     {
         return view('netconf::status', StatusOverview::data() + [
             'run' => $request->session()->get('netconf_run'),
+            'bulk' => $request->session()->get('netconf_bulk'),
         ]);
+    }
+
+    /**
+     * Enable, disable or reset NETCONF polling for every device of a device group and/or os
+     * (plan G7); the same change `lnms netconf:device --group/--os` makes.
+     */
+    public function bulk(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $data = $request->validate([
+            'group' => 'nullable|string|max:255',
+            'os' => 'nullable|string|max:64',
+            'enabled' => 'required|in:1,0,inherit',
+        ]);
+
+        $result = ['selection' => DeviceSelection::describe($data['group'] ?? null, $data['os'] ?? null), 'action' => $data['enabled'], 'devices' => 0, 'changed' => 0, 'error' => null];
+        try {
+            $devices = DeviceSelection::resolve($data['group'] ?? null, $data['os'] ?? null);
+            $log = DeviceSettings::applyMany($devices, ['enabled' => $data['enabled']]);
+            $result['devices'] = $devices->count();
+            $result['changed'] = count(array_filter($log));
+        } catch (\InvalidArgumentException $e) {
+            $result['error'] = $e->getMessage();
+        }
+
+        return redirect()->route('netconf.status')->with('netconf_bulk', $result);
     }
 
     public function definitions(DefinitionLoader $loader): View

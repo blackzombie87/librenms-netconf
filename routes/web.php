@@ -39,6 +39,7 @@ Route::middleware(['web', 'auth'])
             Route::post('device/{device}/discover', [DeviceController::class, 'discover'])->name('device.discover');
             Route::post('device/{device}/poll', [DeviceController::class, 'poll'])->name('device.poll');
             Route::post('run', [StatusController::class, 'run'])->name('run');
+            Route::post('bulk', [StatusController::class, 'bulk'])->name('bulk');
             Route::post('fabric/{fabric}', [FabricController::class, 'update'])->whereNumber('fabric')->name('fabric.update');
         });
     });

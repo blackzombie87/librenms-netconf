@@ -6,6 +6,7 @@ use App\Models\Device;
 use Illuminate\Console\Command;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Console\Concerns\ResolvesTarget;
+use SafferIt\LibrenmsNetconf\Support\DeviceSelection;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
 
@@ -18,7 +19,9 @@ class NetconfDeviceCommand extends Command
     use ResolvesTarget;
 
     protected $signature = 'netconf:device
-        {device : Hostname, IP, sysName or device_id}
+        {device? : Hostname, IP, sysName or device_id; or select many with --group / --os}
+        {--group= : Every device of this LibreNMS device group (name or id)}
+        {--os= : Every device with this os, e.g. junos (combines with --group)}
         {--enable : Enable NETCONF polling for this device}
         {--disable : Disable NETCONF polling for this device}
         {--set-username= : Store a per-device login user}
@@ -35,6 +38,15 @@ class NetconfDeviceCommand extends Command
 
     public function handle(NetconfService $service): int
     {
+        if ($this->option('group') !== null || $this->option('os') !== null) {
+            return $this->handleMany($service);
+        }
+        if ($this->argument('device') === null) {
+            $this->error('name a device, or select many with --group / --os');
+
+            return self::FAILURE;
+        }
+
         $device = $this->findDevice((string) $this->argument('device'));
         if (! $device) {
             $this->error($this->argument('device') . ' is not a LibreNMS device');
@@ -59,7 +71,64 @@ class NetconfDeviceCommand extends Command
         return self::SUCCESS;
     }
 
-    private function applyChanges(Device $device): bool
+    /**
+     * --group / --os: the same change on every selected device, one line each (plan G7).
+     */
+    private function handleMany(NetconfService $service): int
+    {
+        if ($this->argument('device') !== null) {
+            $this->error('either name one device or select many with --group / --os, not both');
+
+            return self::FAILURE;
+        }
+
+        try {
+            $devices = DeviceSelection::resolve($this->option('group'), $this->option('os'));
+            $input = $this->input();
+            if ($input === null) {
+                return self::FAILURE;
+            }
+            $log = DeviceSettings::applyMany($devices, $input);
+        } catch (\InvalidArgumentException $e) {
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $selection = DeviceSelection::describe($this->option('group'), $this->option('os'));
+        if ($devices->isEmpty()) {
+            $this->warn("No devices match $selection.");
+
+            return self::SUCCESS;
+        }
+
+        $rows = [];
+        foreach ($devices as $device) {
+            $rows[] = [
+                $device->hostname,
+                (string) $device->os,
+                $device->getAttrib(NetconfService::ATTRIB_ENABLED) ?? '(default ' . ($service->isEnabled($device) ? 'on' : 'off') . ')',
+                count($service->matchingDefinitions($device)),
+                implode(', ', $log[$device->hostname] ?? []),
+            ];
+        }
+        $this->table(['Device', 'os', 'netconf_enabled', 'Definitions', 'Changes'], $rows);
+
+        $changed = count(array_filter($log));
+        $this->info(sprintf('%d device(s) match %s, %d changed.', $devices->count(), $selection, $changed));
+        if ($this->option('enable') && $changed > 0) {
+            $this->line('Run <comment>lnms device:discover all -m netconf</comment> to create the sensors (devices without NETCONF are skipped), then let the poller pick them up.');
+        }
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * The change request from the options, or null after an error message.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function input(): ?array
     {
         $input = [
             'enabled' => $this->option('enable') ? '1' : ($this->option('disable') ? '0' : null),
@@ -78,8 +147,18 @@ class NetconfDeviceCommand extends Command
             if ($suffix !== 'all' && ! in_array($suffix, DeviceSettings::FIELDS, true)) {
                 $this->error("unknown override \"$suffix\" (known: " . implode(', ', DeviceSettings::FIELDS) . ')');
 
-                return false;
+                return null;
             }
+        }
+
+        return $input;
+    }
+
+    private function applyChanges(Device $device): bool
+    {
+        $input = $this->input();
+        if ($input === null) {
+            return false;
         }
 
         try {

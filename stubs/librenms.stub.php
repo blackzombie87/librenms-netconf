@@ -214,6 +214,20 @@ namespace App\Models {
         }
     }
 
+    /**
+     * @property int $id
+     * @property string $name
+     * @property string $type
+     */
+    class DeviceGroup extends \Illuminate\Database\Eloquent\Model
+    {
+        /** @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<Device, $this> */
+        public function devices(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+        {
+            return $this->belongsToMany(Device::class);
+        }
+    }
+
     class Eventlog extends \Illuminate\Database\Eloquent\Model
     {
         public static function log(string $text, Device|int|null $device = null, ?string $type = null, \LibreNMS\Enum\Severity $severity = \LibreNMS\Enum\Severity::Info, int|string|null $reference = null): void

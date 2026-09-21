@@ -44,6 +44,23 @@ class DeviceSettings
     }
 
     /**
+     * The same change on many devices (bulk enable by device group or os, plan G7).
+     *
+     * @param  iterable<Device>  $devices
+     * @param  array<string, mixed>  $input  as for apply()
+     * @return array<string, list<string>> hostname => change log, devices without a change included as []
+     */
+    public static function applyMany(iterable $devices, array $input): array
+    {
+        $log = [];
+        foreach ($devices as $device) {
+            $log[$device->hostname] = self::apply($device, $input);
+        }
+
+        return $log;
+    }
+
+    /**
      * Apply changes. $input keys: enabled ('1' | '0' | 'inherit' | null = unchanged),
      * username, password, keyfile, key_passphrase, port, transport (empty string = unchanged),
      * clear (list of suffixes or 'all').

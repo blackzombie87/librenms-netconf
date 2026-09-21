@@ -95,6 +95,46 @@
 
         @if ($can_admin)
             <div class="panel panel-default">
+                <div class="panel-heading"><i class="fa fa-toggle-on fa-fw" aria-hidden="true"></i> <strong>Enable per device group or os</strong> <small class="text-muted">— sets <code>netconf_enabled</code> on every device of the selection, like <code>lnms netconf:device --group/--os</code>; discovery creates the sensors afterwards</small></div>
+                <div class="panel-body">
+                    <form method="post" action="{{ route('netconf.bulk') }}" class="form-inline">
+                        @csrf
+                        <select name="group" class="form-control">
+                            <option value="">any device group</option>
+                            @foreach ($bulk_groups as $id => $name)
+                                <option value="{{ $id }}" {{ (string) old('group') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
+                            @endforeach
+                        </select>
+                        <select name="os" class="form-control">
+                            <option value="">any os</option>
+                            @foreach ($bulk_os as $os)
+                                <option value="{{ $os }}" {{ old('os', $bulk_os === ['junos'] ? 'junos' : '') === $os ? 'selected' : '' }}>{{ $os }}</option>
+                            @endforeach
+                        </select>
+                        <select name="enabled" class="form-control">
+                            <option value="1">enable</option>
+                            <option value="0">disable</option>
+                            <option value="inherit">global default</option>
+                        </select>
+                        <button type="submit" class="btn btn-primary">Apply</button>
+                    </form>
+                    @if ($bulk)
+                        @if ($bulk['error'])
+                            <div class="alert alert-danger" style="margin-top: 10px;">{{ $bulk['error'] }}</div>
+                        @else
+                            <div class="alert alert-success" style="margin-top: 10px;">
+                                {{ $bulk['devices'] }} device(s) match {{ $bulk['selection'] }}, {{ $bulk['changed'] }} changed
+                                ({{ ['1' => 'enabled', '0' => 'disabled', 'inherit' => 'global default'][$bulk['action']] ?? $bulk['action'] }}).
+                                @if ($bulk['action'] === '1' && $bulk['changed'] > 0)
+                                    Run <code>lnms device:discover all -m netconf</code> or wait for the next discovery to create the sensors.
+                                @endif
+                            </div>
+                        @endif
+                    @endif
+                </div>
+            </div>
+
+            <div class="panel panel-default">
                 <div class="panel-heading"><i class="fa fa-code fa-fw" aria-hidden="true"></i> <strong>Run a show command</strong> <small class="text-muted">— the reply as the plugin sees it, handy while writing definitions; a single <code>show …</code> without pipes, <code>show configuration</code> excluded</small></div>
                 <div class="panel-body">
                     <form method="post" action="{{ route('netconf.run') }}" class="form-inline">

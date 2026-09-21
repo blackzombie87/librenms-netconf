@@ -7,6 +7,9 @@ Gaps closed on the way to 1.1 (`docs/PLAN.md` §6.2):
 - `filter:` on cli commands (G1): a pattern spliced in at `{filter}` or appended, e.g.
   `filter: 'et-*'` on a copy of `junos-interfaces` turns the 1 MB reply of a 48-port leaf
   into the uplinks only. Part of the command identity and of the replay fixture name.
+- Bulk enable (G7): `lnms netconf:device --group=<name|id> [--os=<os>]` applies `--enable`,
+  `--disable` and the credential overrides to every device of a device group and/or os and
+  lists them; the status page gets an *Enable per device group or os* form for admins.
 
 EVPN fabric checks, phase F4 (`docs/PLAN.md` §7.5):
 

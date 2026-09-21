@@ -50,8 +50,9 @@ Instead of enabling devices one by one, set *Enable for all devices* on the sett
 
 - **NETCONF** in the Plugins menu (`/plugin/netconf/status`): every enabled or previously
   polled device with transport, matched definitions, last success, poll count, failures and
-  back-off; admins get a *Run a show command* form that prints the XML reply as the plugin
-  sees it. `/plugin/netconf/definitions` lists the loaded definitions and any YAML errors.
+  back-off; admins get an *Enable per device group or os* form (the bulk enable of
+  `lnms netconf:device --group/--os`) and a *Run a show command* form that prints the XML
+  reply as the plugin sees it. `/plugin/netconf/definitions` lists the loaded definitions and any YAML errors.
 - **Device page** (`/plugin/netconf/device/<id>`, linked from the overview panel): status,
   effective credentials, per-device overrides (polling on/off, transport, port, user,
   password, key file, passphrase), *Test connection*, *Discover now* and *Poll now*.
@@ -165,6 +166,15 @@ configuration rights.
 
 `device` accepts a hostname, IP, sysName or `device_id`; unknown hosts are tried with the
 global settings.
+
+```bash
+# polling on/off and credential overrides per device (stored as device attributes)
+./lnms netconf:device leaf1 --enable --set-transport=netconf --set-port=830
+# the same change for every device of a device group and/or os (G7)
+./lnms netconf:device --group="Leaf switches" --enable
+./lnms netconf:device --os=junos --group=12 --set-username=librenms --set-ask-password
+./lnms netconf:device --os=junos                     # list only: enabled state and matching definitions
+```
 
 ## Definitions
 
