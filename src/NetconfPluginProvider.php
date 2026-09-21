@@ -3,6 +3,7 @@
 namespace SafferIt\LibrenmsNetconf;
 
 use App\Facades\LibrenmsConfig;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use LibreNMS\Interfaces\Plugins\Hooks\DeviceOverviewHook;
 use LibreNMS\Interfaces\Plugins\Hooks\MenuEntryHook;
@@ -118,16 +119,34 @@ class NetconfPluginProvider extends ServiceProvider
             return;
         }
 
-        foreach (['poller_modules.netconf', 'discovery_modules.netconf'] as $key) {
-            if (LibrenmsConfig::has($key)) {
-                continue;
-            }
-            // persist to the config table: commands that reload the config (device:poll -v)
-            // would otherwise lose an in-memory set() made at boot
+        // persisted in the config table: commands that reload the config (device:poll -v)
+        // would otherwise lose an in-memory set() made at boot. Checked against the table,
+        // not the loaded config: the config cache can still carry a key whose row is gone
+        // (seen after a cache-backed boot), and has() would then never persist it again
+        $keys = ['poller_modules.netconf', 'discovery_modules.netconf'];
+        try {
+            $stored = DB::table('config')->whereIn('config_name', $keys)->pluck('config_name')->all();
+        } catch (\Throwable) {
+            $stored = array_filter($keys, fn ($key) => LibrenmsConfig::has($key));   // no database yet (install)
+        }
+        foreach (array_diff($keys, $stored) as $key) {
+            // persist() answers false without throwing when it could not write (seen at boot);
+            // the row is then written directly, in the model's JSON format
+            $persisted = false;
             try {
-                LibrenmsConfig::persist($key, true);
+                $persisted = LibrenmsConfig::persist($key, true);
             } catch (\Throwable) {
-                LibrenmsConfig::set($key, true);
+            }
+            if (! $persisted) {
+                try {
+                    DB::table('config')->updateOrInsert(['config_name' => $key], ['config_value' => json_encode(true)]);
+                } catch (\Throwable) {
+                }
+            }
+        }
+        foreach ($keys as $key) {
+            if (! LibrenmsConfig::has($key)) {
+                LibrenmsConfig::set($key, true);   // this process; later boots load the row
             }
         }
     }
