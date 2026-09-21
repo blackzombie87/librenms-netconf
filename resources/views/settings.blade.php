@@ -24,7 +24,8 @@
                 <td><label for="transport">Transport</label></td>
                 <td>
                     <select class="form-control" id="transport" name="settings[transport]">
-                        <option value="" {{ ($settings['transport'] ?? '') === '' ? 'selected' : '' }}>(default: cli)</option>
+                        <option value="" {{ ($settings['transport'] ?? '') === '' ? 'selected' : '' }}>(default: auto)</option>
+                        <option value="auto" {{ ($settings['transport'] ?? '') === 'auto' ? 'selected' : '' }}>auto &mdash; NETCONF subsystem on the SSH port when offered, else exec</option>
                         <option value="cli" {{ ($settings['transport'] ?? '') === 'cli' ? 'selected' : '' }}>cli &mdash; SSH exec "show … | display xml"</option>
                         <option value="netconf" {{ ($settings['transport'] ?? '') === 'netconf' ? 'selected' : '' }}>netconf &mdash; NETCONF subsystem (RFC 6242)</option>
                     </select>
@@ -34,7 +35,7 @@
             <tr>
                 <td><label for="port">SSH port</label></td>
                 <td><input class="form-control" id="port" type="number" min="1" max="65535" name="settings[port]"
-                           value="{{ $settings['port'] ?? '' }}" placeholder="22 (cli) / 830 (netconf)"></td>
+                           value="{{ $settings['port'] ?? '' }}" placeholder="22 (auto, cli) / 830 (netconf)"></td>
                 <td><code>{{ $effective['port'] }}</code></td>
             </tr>
             <tr>

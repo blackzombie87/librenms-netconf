@@ -30,7 +30,7 @@ class NetconfDeviceCommand extends Command
         {--set-key= : Store a per-device private key file path}
         {--set-passphrase= : Store the key passphrase (encrypted)}
         {--set-port= : Store a per-device SSH port}
-        {--set-transport= : Store a per-device transport (cli|netconf)}
+        {--set-transport= : Store a per-device transport (auto|cli|netconf)}
         {--clear=* : Remove overrides: username, password, keyfile, key_passphrase, port, transport, all}
         {--status : Show status and matched definitions only}';
 

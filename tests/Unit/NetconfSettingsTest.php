@@ -5,7 +5,7 @@ use SafferIt\LibrenmsNetconf\NetconfSettings;
 it('ships sane defaults', function () {
     $defaults = NetconfSettings::defaults();
 
-    expect($defaults['transport'])->toBe('cli')
+    expect($defaults['transport'])->toBe('auto')
         ->and($defaults['port'])->toBe(22)
         ->and($defaults['auth_order'])->toBe('key,password')
         ->and($defaults['enable_by_default'])->toBeFalse();

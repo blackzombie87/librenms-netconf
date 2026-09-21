@@ -22,6 +22,14 @@ class FakeSshClient implements SshClientInterface
 
     public bool $connected = false;
 
+    public int $connects = 0;
+
+    /** Thrown by startSubsystem() to simulate a server without the subsystem. */
+    public ?\Throwable $subsystemError = null;
+
+    /** @var list<string> */
+    public array $subsystems = [];
+
     public bool $disconnected = false;
 
     public string $acceptMethod = Credentials::AUTH_PASSWORD;
@@ -38,6 +46,7 @@ class FakeSshClient implements SshClientInterface
             throw new AuthenticationException('fake: authentication failed');
         }
         $this->connected = true;
+        $this->connects++;
         $this->connectedWith = $credentials;
 
         return $this->acceptMethod;
@@ -60,6 +69,11 @@ class FakeSshClient implements SshClientInterface
 
     public function startSubsystem(string $name, int $timeout): ChannelInterface
     {
+        $this->subsystems[] = $name;
+        if ($this->subsystemError !== null) {
+            throw $this->subsystemError;
+        }
+
         return $this->channel ?? new FakeChannel;
     }
 

@@ -14,6 +14,10 @@ class TransportFactory
     {
         $client ??= new PhpseclibSshClient;
 
+        if ($credentials->isAuto()) {
+            return new AutoTransport($credentials, $client);
+        }
+
         return $credentials->isNetconf()
             ? new NetconfTransport($credentials, $client)
             : new SshCliTransport($credentials, $client);

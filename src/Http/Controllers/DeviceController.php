@@ -68,7 +68,7 @@ class DeviceController extends Controller
             'keyfile' => 'nullable|string|max:255',
             'key_passphrase' => 'nullable|string|max:255',
             'port' => 'nullable|integer|min:1|max:65535',
-            'transport' => 'nullable|in:,cli,netconf',
+            'transport' => 'nullable|in:,auto,cli,netconf',
             'clear' => 'nullable|array',
             'clear.*' => 'in:' . implode(',', DeviceSettings::FIELDS),
         ]);

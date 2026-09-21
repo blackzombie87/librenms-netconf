@@ -11,7 +11,7 @@ use SafferIt\LibrenmsNetconf\Transport\Reply;
  */
 interface TransportInterface
 {
-    /** Short identifier used in status output and logs: "cli" or "netconf". */
+    /** Short identifier used in status output and logs: "cli" or "netconf" ("auto" until AutoTransport has decided). */
     public function name(): string;
 
     /**

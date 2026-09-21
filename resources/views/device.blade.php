@@ -94,6 +94,7 @@
                                 <div class="col-sm-8">
                                     <select name="transport" class="form-control">
                                         <option value="">(keep: {{ $overrides['transport'] ?? 'global' }})</option>
+                                        <option value="auto">auto — NETCONF subsystem when offered, else exec</option>
                                         <option value="cli">cli — SSH exec "| display xml"</option>
                                         <option value="netconf">netconf — NETCONF subsystem</option>
                                     </select>

@@ -67,9 +67,9 @@ class CredentialResolver
             $values[$key] = $this->reveal($values[$key]);
         }
 
-        $transport = strtolower((string) ($values['transport'] ?? Credentials::TRANSPORT_CLI));
-        if (! in_array($transport, [Credentials::TRANSPORT_CLI, Credentials::TRANSPORT_NETCONF], true)) {
-            throw new InvalidArgumentException("Unknown transport '$transport' (expected cli or netconf)");
+        $transport = strtolower((string) ($values['transport'] ?? Credentials::TRANSPORT_AUTO));
+        if (! in_array($transport, Credentials::TRANSPORTS, true)) {
+            throw new InvalidArgumentException("Unknown transport '$transport' (expected auto, cli or netconf)");
         }
 
         $port = (int) ($values['port'] ?? 0);

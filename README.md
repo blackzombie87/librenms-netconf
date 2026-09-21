@@ -107,13 +107,14 @@ Notes from the verification:
   storage system trace`; it changes nothing for the plugin and grants operational commands
   the plugin never issues.
 
-For the optional `netconf` transport enable the subsystem:
+For the NETCONF subsystem (taken by the default `auto` transport when present, required by
+`netconf`) enable the service; it also speeds polling up considerably, see *Transports*:
 
 ```
 set system services netconf ssh
 ```
 
-The subsystem on port 830 is authorised with the same permission flags as the CLI; no
+The subsystem (on port 830 and on the SSH port) is authorised with the same permission flags as the CLI; no
 `allow-commands` entry for `xml-mode` or `netconf` is needed (verified on 23.4R2, the class
 above logs in and answers `show version` and `<command>` RPCs). `set system services netconf
 rfc-compliant` changes reply formatting but the server still advertises only `base:1.0`
@@ -124,10 +125,18 @@ unit-tested, but has not been seen live.
 
 | Mode | How | Default port |
 |---|---|---|
-| `cli` (default) | one SSH connection, each command runs as `show … \| display xml` on its own exec channel — the approach of [junos_exporter](https://github.com/czerwonk/junos_exporter) | 22 |
+| `auto` (default) | one SSH login, then the `netconf` subsystem is requested on that connection; when the server refuses it (no `set system services netconf ssh`) the same connection continues with exec channels as `cli`. No second login or timeout; the status page shows which mode was negotiated | 22 |
+| `cli` | one SSH connection, each command runs as `show … \| display xml` on its own exec channel — the approach of [junos_exporter](https://github.com/czerwonk/junos_exporter) | 22 |
 | `netconf` | NETCONF subsystem, hello/capability exchange, RFC 6242 end-of-message or chunked framing, `<command format="xml">` for CLI strings and raw `<rpc>` bodies | 830 |
 
-Both return the same XML body.
+All three return the same XML body. Junos offers the NETCONF subsystem on the SSH port as
+soon as `netconf ssh` is configured, so `auto` needs nothing but port 22. Prefer the
+subsystem where you can: a full preview of the shipped definitions on an EX4650 took 13 s
+over NETCONF and 45 s over exec with the recommended `deny-commands` class (19 s without it),
+because every exec channel starts a fresh CLI and pays the login-class evaluation again.
+`netconf:test` prints `transport: netconf (auto)` or `cli (auto)` plus the refusal reason.
+Pick `cli` explicitly for a device whose NETCONF service must stay off, `netconf` to use
+port 830 (a separate `netconf` service ACL, for example).
 
 ### Host keys
 
@@ -250,7 +259,7 @@ commands:                        # each runs once per poll, shared by all mappin
     every: 3                     # only every 3rd poll
     filter: 'xe-0/0/*'           # narrows the command: appended, or placed at {filter} in cli
   other: show something else     # shorthand
-  raw: { rpc: '<get-something/>' }   # netconf transport only
+  raw: { rpc: '<get-something/>' }   # needs the NETCONF subsystem (netconf, or auto that negotiated it)
 
 sensors:
   - id: my-count                 # optional, default sensorN; part of sensor_type

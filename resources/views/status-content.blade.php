@@ -147,6 +147,7 @@
                         <input type="text" name="command" class="form-control" style="width: 40%;" placeholder="show evpn instance extensive" value="{{ old('command', $run['command'] ?? '') }}" required>
                         <select name="transport" class="form-control">
                             <option value="">device transport</option>
+                            <option value="auto">auto</option>
                             <option value="cli">cli</option>
                             <option value="netconf">netconf</option>
                         </select>

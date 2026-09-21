@@ -74,7 +74,10 @@ it('falls back to the transport default port when none is usable', function () {
 
     expect($resolver->resolve('h', ['transport' => 'netconf', 'port' => ''])->port)->toBe(830)
         ->and($resolver->resolve('h', ['transport' => 'cli', 'port' => '0'])->port)->toBe(22)
-        ->and($resolver->resolve('h', ['port' => 70000])->port)->toBe(22);
+        ->and($resolver->resolve('h', ['port' => 70000])->port)->toBe(22)
+        ->and($resolver->resolve('h', ['transport' => 'AUTO'])->port)->toBe(22)
+        ->and($resolver->resolve('h', [])->transport)->toBe('auto')
+        ->and($resolver->resolve('h', [])->isAuto())->toBeTrue();
 });
 
 it('passes the known_hosts file through and lets "-" disable it', function () use ($settings) {

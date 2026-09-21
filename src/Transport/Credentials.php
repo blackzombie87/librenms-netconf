@@ -13,6 +13,11 @@ final class Credentials
 
     public const TRANSPORT_NETCONF = 'netconf';
 
+    /** NETCONF subsystem when the server offers it on the SSH port, exec channels otherwise. */
+    public const TRANSPORT_AUTO = 'auto';
+
+    public const TRANSPORTS = [self::TRANSPORT_AUTO, self::TRANSPORT_CLI, self::TRANSPORT_NETCONF];
+
     public const AUTH_KEY = 'key';
 
     public const AUTH_PASSWORD = 'password';
@@ -23,7 +28,7 @@ final class Credentials
     public function __construct(
         public readonly string $host,
         public readonly int $port = 22,
-        public readonly string $transport = self::TRANSPORT_CLI,
+        public readonly string $transport = self::TRANSPORT_AUTO,
         public readonly string $username = '',
         public readonly ?string $password = null,
         public readonly ?string $keyFile = null,
@@ -73,6 +78,11 @@ final class Credentials
     public function isNetconf(): bool
     {
         return $this->transport === self::TRANSPORT_NETCONF;
+    }
+
+    public function isAuto(): bool
+    {
+        return $this->transport === self::TRANSPORT_AUTO;
     }
 
     /**

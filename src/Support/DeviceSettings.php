@@ -5,6 +5,7 @@ namespace SafferIt\LibrenmsNetconf\Support;
 use App\Models\Device;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
+use SafferIt\LibrenmsNetconf\Transport\Credentials;
 
 /**
  * Per-device NETCONF settings stored as device attributes (netconf_enabled and the
@@ -107,8 +108,8 @@ class DeviceSettings
             }
             $value = trim((string) $value);
 
-            if ($suffix === 'transport' && ! in_array($value, ['cli', 'netconf'], true)) {
-                throw new \InvalidArgumentException('transport must be cli or netconf');
+            if ($suffix === 'transport' && ! in_array($value, Credentials::TRANSPORTS, true)) {
+                throw new \InvalidArgumentException('transport must be auto, cli or netconf');
             }
             if ($suffix === 'port' && ((int) $value < 1 || (int) $value > 65535)) {
                 throw new \InvalidArgumentException('port must be between 1 and 65535');

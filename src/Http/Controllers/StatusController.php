@@ -72,7 +72,7 @@ class StatusController extends Controller
                     $fail("Command $reason.");
                 }
             }],
-            'transport' => 'nullable|in:,cli,netconf',
+            'transport' => 'nullable|in:,auto,cli,netconf',
         ]);
 
         /** @var Device $device */

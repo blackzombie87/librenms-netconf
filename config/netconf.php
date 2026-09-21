@@ -12,7 +12,7 @@ return [
     'key_passphrase' => '',
     'auth_order' => 'key,password',
     'port' => 22,
-    'transport' => 'cli',
+    'transport' => 'auto',    // auto = NETCONF subsystem when the server offers it on the SSH port, exec channels otherwise
     'connect_timeout' => 10,
     'command_timeout' => 30,
     'known_hosts' => '',       // OpenSSH known_hosts file; empty = server host keys are not verified
