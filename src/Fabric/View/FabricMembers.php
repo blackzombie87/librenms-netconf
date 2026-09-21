@@ -9,8 +9,8 @@ use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
  * Members tab (plan §7.4): one row per fabric member with the device (when monitored), role,
- * router-id, software version, instances, VNIs, MACs, ESIs, tunnels, last poll and the
- * collector status. Unknown VTEPs keep their BGP description as the name.
+ * router-id, software version, instances, VNIs, MACs, ESIs, tunnels (DeviceStats), last poll
+ * and the collector status. Unknown VTEPs keep their BGP description as the name.
  */
 final class FabricMembers
 {
@@ -34,37 +34,7 @@ final class FabricMembers
         $aliases = DB::table(TableSchema::tableName('vtep'))->whereIn('device_id', $deviceIds ?: [0])->get(['vtep_ip', 'device_id'])->groupBy('device_id');
         $status = DB::table('netconf_device_status')->whereIn('device_id', $deviceIds ?: [0])->get()->keyBy('device_id');
 
-        $stats = [];
-        foreach ($deviceIds as $id) {
-            $stats[$id] = ['instances' => [], 'vnis' => 0, 'esis' => 0, 'esis_df' => 0, 'tunnels' => 0, 'neighbors' => 0, 'local_macs' => null, 'remote_macs' => null, 'irbs' => 0];
-        }
-        foreach (DB::table(TableSchema::tableName('vni'))->whereIn('device_id', $deviceIds ?: [0])->selectRaw('device_id, count(*) as n, sum(irb_ifname is not null) as irbs')->groupBy('device_id')->get() as $r) {
-            $stats[(int) $r->device_id]['vnis'] = (int) $r->n;
-            $stats[(int) $r->device_id]['irbs'] = (int) $r->irbs;
-        }
-        foreach (DB::table(TableSchema::tableName('vni'))->whereIn('device_id', $deviceIds ?: [0])->whereNotNull('instance')->distinct()->get(['device_id', 'instance']) as $r) {
-            $stats[(int) $r->device_id]['instances'][] = (string) $r->instance;
-        }
-        foreach (DB::table(TableSchema::tableName('neighbor'))->whereIn('device_id', $deviceIds ?: [0])->distinct()->get(['device_id', 'instance']) as $r) {
-            $stats[(int) $r->device_id]['instances'][] = (string) $r->instance;
-        }
-        foreach (DB::table(TableSchema::tableName('neighbor'))->whereIn('device_id', $deviceIds ?: [0])->selectRaw('device_id, count(distinct neighbor_ip) as n')->groupBy('device_id')->get() as $r) {
-            $stats[(int) $r->device_id]['neighbors'] = (int) $r->n;
-        }
-        foreach (DB::table(TableSchema::tableName('esi'))->whereIn('device_id', $deviceIds ?: [0])->whereNotNull('local_ifname')->selectRaw('device_id, count(*) as n, sum(is_df = 1) as df')->groupBy('device_id')->get() as $r) {
-            $stats[(int) $r->device_id]['esis'] = (int) $r->n;
-            $stats[(int) $r->device_id]['esis_df'] = (int) $r->df;
-        }
-        foreach (DB::table(TableSchema::tableName('tunnel'))->whereIn('device_id', $deviceIds ?: [0])->selectRaw('device_id, count(*) as n')->groupBy('device_id')->get() as $r) {
-            $stats[(int) $r->device_id]['tunnels'] = (int) $r->n;
-        }
-        foreach (DB::table('netconf_metrics')->whereIn('device_id', $deviceIds ?: [0])->where('mapping', 'instance')->where('definition', 'like', '%-evpn')->get(['device_id', 'values']) as $r) {
-            $values = json_decode((string) $r->values, true);
-            if (is_array($values)) {
-                $stats[(int) $r->device_id]['local_macs'] = ($stats[(int) $r->device_id]['local_macs'] ?? 0) + (int) ($values['local_macs'] ?? 0);
-                $stats[(int) $r->device_id]['remote_macs'] = ($stats[(int) $r->device_id]['remote_macs'] ?? 0) + (int) ($values['remote_macs'] ?? 0);
-            }
-        }
+        $stats = DeviceStats::forDevices($deviceIds);
 
         /** @var list<array<string, mixed>> $rows */
         $rows = [];
@@ -86,8 +56,17 @@ final class FabricMembers
                 'version' => $device?->version,
                 'hardware' => $device?->hardware,
                 'location' => $device === null || $device->location_id === null ? null : ($locations[(int) $device->location_id] ?? null),
-                'stats' => $deviceId === null ? null : ($stats[$deviceId] ?? null),
-                'instances' => $deviceId === null ? [] : array_values(array_unique($stats[$deviceId]['instances'] ?? [])),
+                'stats' => $deviceId === null || ! isset($stats[$deviceId]) ? null : [
+                    'vnis' => count($stats[$deviceId]['vnis']),
+                    'irbs' => $stats[$deviceId]['irbs'],
+                    'esis' => $stats[$deviceId]['esis_local'],
+                    'esis_df' => $stats[$deviceId]['esis_df'],
+                    'tunnels' => $stats[$deviceId]['tunnels'],
+                    'neighbors' => $stats[$deviceId]['neighbors'],
+                    'local_macs' => $stats[$deviceId]['local_macs'],
+                    'remote_macs' => $stats[$deviceId]['remote_macs'],
+                ],
+                'instances' => $deviceId === null ? [] : ($stats[$deviceId]['instances'] ?? []),
                 'last_ok' => $st?->last_ok,
                 'failures' => $st === null ? 0 : (int) $st->consecutive_failures,
                 'last_error' => $st?->last_error,

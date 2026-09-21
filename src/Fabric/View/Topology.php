@@ -81,13 +81,9 @@ final class Topology
             ];
         }
 
-        $overlay = [];
-        foreach (DB::table(TableSchema::tableName('neighbor'))->whereIn('device_id', $deviceIds ?: [0])->distinct()->get(['device_id', 'neighbor_ip']) as $r) {
-            $a = $nodes->addressOf((int) $r->device_id);
-            if ($a !== null) {
-                $overlay[] = [$a, (string) $r->neighbor_ip];
-            }
-        }
+        $neighbours = DB::table(TableSchema::tableName('neighbor'))->whereIn('device_id', $deviceIds ?: [0])->distinct()->get(['device_id', 'neighbor_ip'])
+            ->map(fn ($r) => [(int) $r->device_id, (string) $r->neighbor_ip])->all();
+        $overlay = self::overlayPairs($nodes, $neighbours);
 
         $esiPairs = [];
         /** @var array<string, array<string, true>> $byEsi esi => PE addresses */
@@ -102,8 +98,7 @@ final class Topology
                 }
             }
             foreach ((array) json_decode((string) ($r->remote_vtep_ips ?? '[]'), true) as $ip) {
-                $target = $nodes->deviceId((string) $ip);
-                $byEsi[$esi][$target === null ? (string) $ip : ($nodes->addressOf($target) ?? (string) $ip)] = true;
+                $byEsi[$esi][$nodes->canonical((string) $ip)] = true;
             }
         }
         foreach ($byEsi as $pes) {
@@ -118,6 +113,27 @@ final class Topology
         }
 
         return self::layout($input, $underlay, $overlay, array_values($esiPairs));
+    }
+
+    /**
+     * Directed overlay pairs (member address, neighbour address) from the EVPN neighbour rows.
+     * The far end is canonicalised: a neighbour listed by its router-id is drawn at the
+     * member address of that device, otherwise layout() would drop the arc (F3 review Issue 2).
+     *
+     * @param  iterable<array{0: int, 1: string}>  $neighbours  (device_id, neighbor_ip) rows
+     * @return list<array{0: string, 1: string}>
+     */
+    public static function overlayPairs(FabricNodes $nodes, iterable $neighbours): array
+    {
+        $overlay = [];
+        foreach ($neighbours as [$deviceId, $neighbourIp]) {
+            $a = $nodes->addressOf($deviceId);
+            if ($a !== null) {
+                $overlay[] = [$a, $nodes->canonical($neighbourIp)];
+            }
+        }
+
+        return $overlay;
     }
 
     /** Height of an arc between two nodes of the same row: grows with the distance, flattening out. */

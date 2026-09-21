@@ -5,6 +5,7 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 use App\Models\Device;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
  * Address book of a fabric: every VTEP / router-id address of its members resolved to the
@@ -18,6 +19,34 @@ final class FabricNodes
 
     /** @var array<int, list<string>> device_id => addresses (member address first) */
     private array $deviceNodes = [];
+
+    /**
+     * Build from arrays (tests, replays): member rows first, aliases after their device's member.
+     *
+     * @param  list<array{vtep_ip: string, device_id?: int|null, name?: string, role?: string, border?: bool, member?: bool}>  $nodes
+     */
+    public static function fromArray(array $nodes): self
+    {
+        $self = new self;
+        foreach ($nodes as $n) {
+            $ip = $n['vtep_ip'];
+            $deviceId = $n['device_id'] ?? null;
+            $self->nodes[$ip] = [
+                'vtep_ip' => $ip,
+                'device_id' => $deviceId,
+                'device' => null,
+                'name' => $n['name'] ?? $ip,
+                'role' => $n['role'] ?? FabricGraph::ROLE_UNKNOWN,
+                'border' => $n['border'] ?? false,
+                'member' => $n['member'] ?? true,
+            ];
+            if ($deviceId !== null) {
+                $self->deviceNodes[$deviceId][] = $ip;
+            }
+        }
+
+        return $self;
+    }
 
     public static function forFabric(int $fabricId): self
     {
@@ -73,7 +102,7 @@ final class FabricNodes
      */
     public function get(string $ip): array
     {
-        return $this->nodes[$ip] ?? ['vtep_ip' => $ip, 'device_id' => null, 'device' => null, 'name' => $ip, 'role' => 'unknown', 'border' => false, 'member' => false];
+        return $this->nodes[$ip] ?? ['vtep_ip' => $ip, 'device_id' => null, 'device' => null, 'name' => $ip, 'role' => FabricGraph::ROLE_UNKNOWN, 'border' => false, 'member' => false];
     }
 
     public function has(string $ip): bool
@@ -119,11 +148,14 @@ final class FabricNodes
     }
 
     /**
-     * @return list<string>
+     * The address a peer is drawn and counted under: the member address of its device when the
+     * address is a monitored device's alias (router-id), otherwise the address itself.
      */
-    public function memberIps(): array
+    public function canonical(string $ip): string
     {
-        return array_keys(array_filter($this->nodes, fn ($n) => $n['member']));
+        $deviceId = $this->deviceId($ip);
+
+        return $deviceId === null ? $ip : ($this->addressOf($deviceId) ?? $ip);
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use SafferIt\LibrenmsNetconf\Fabric\View\FabricNodes;
 use SafferIt\LibrenmsNetconf\Fabric\View\Topology;
 
 function topoNode(string $ip, string $role = 'leaf', array $extra = []): array
@@ -64,4 +65,28 @@ it('classifies session states', function () {
         ->and(Topology::sessionUp('bgp', 'idle'))->toBeFalse()
         ->and(Topology::sessionUp('lldp-only', null))->toBeNull()
         ->and(Topology::sessionUp('ip', 'x'))->toBeNull();
+});
+
+it('draws overlay arcs to a neighbour listed by its router-id alias', function () {
+    // device 11: VTEP 192.0.2.61 is the member, router-id 192.0.2.11 an alias (F1a); device 12 lists 11 by router-id
+    $nodes = FabricNodes::fromArray([
+        ['vtep_ip' => '192.0.2.61', 'device_id' => 11, 'role' => 'leaf'],
+        ['vtep_ip' => '192.0.2.62', 'device_id' => 12, 'role' => 'leaf'],
+        ['vtep_ip' => '192.0.2.1', 'role' => 'spine'],
+        ['vtep_ip' => '192.0.2.11', 'device_id' => 11, 'role' => 'leaf', 'member' => false],
+    ]);
+    $pairs = Topology::overlayPairs($nodes, [[11, '192.0.2.62'], [12, '192.0.2.11'], [11, '192.0.2.1'], [12, '192.0.2.99']]);
+
+    expect($pairs)->toBe([['192.0.2.61', '192.0.2.62'], ['192.0.2.62', '192.0.2.61'], ['192.0.2.61', '192.0.2.1'], ['192.0.2.62', '192.0.2.99']])
+        ->and($nodes->canonical('192.0.2.11'))->toBe('192.0.2.61')
+        ->and($nodes->canonical('192.0.2.99'))->toBe('192.0.2.99');
+
+    $layout = Topology::layout(
+        [topoNode('192.0.2.1', 'spine'), topoNode('192.0.2.61', 'leaf', ['device_id' => 11]), topoNode('192.0.2.62', 'leaf', ['device_id' => 12])],
+        [],
+        $pairs,
+        [],
+    );
+    expect($layout['overlay'])->toHaveCount(2)
+        ->and(array_column($layout['overlay'], 'symmetric', 'b'))->toBe(['192.0.2.62' => true, '192.0.2.61' => false]);
 });

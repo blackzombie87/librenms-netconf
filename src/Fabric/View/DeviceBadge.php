@@ -7,8 +7,8 @@ use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 
 /**
  * The "EVPN fabric" line of a device (plan §7.4 badge): its fabric, role, VTEP address and a
- * few counts — VNIs, ESI-LAGs with the DF count, EVPN neighbours, tunnels — or null when the
- * device is not a fabric member.
+ * few counts from DeviceStats — VNIs, ESI-LAGs with the DF count, EVPN neighbours, tunnels —
+ * or null when the device is not a fabric member.
  */
 final class DeviceBadge
 {
@@ -26,12 +26,7 @@ final class DeviceBadge
             return null;
         }
 
-        $esi = DB::table(TableSchema::tableName('esi'))->where('device_id', $deviceId)->whereNotNull('local_ifname')
-            ->selectRaw('count(*) as n, coalesce(sum(is_df = 1), 0) as df')->first();
-        $vnis = DB::table(TableSchema::tableName('vni'))->where('device_id', $deviceId)->count();
-        $irbs = DB::table(TableSchema::tableName('vni'))->where('device_id', $deviceId)->whereNotNull('irb_ifname')->count();
-        $neighbors = DB::table(TableSchema::tableName('neighbor'))->where('device_id', $deviceId)->distinct()->count('neighbor_ip');
-        $tunnels = DB::table(TableSchema::tableName('tunnel'))->where('device_id', $deviceId)->count();
+        $stats = DeviceStats::forDevice($deviceId);
         $members = DB::table(TableSchema::tableName('fabric_member'))->where('fabric_id', $vtep->fabric_id)->count();
 
         return [
@@ -43,12 +38,12 @@ final class DeviceBadge
             'role' => (string) $vtep->role,
             'border' => (bool) $vtep->border,
             'pinned' => (bool) $vtep->pinned,
-            'esis' => (int) ($esi->n ?? 0),
-            'esis_df' => (int) ($esi->df ?? 0),
-            'vnis' => $vnis,
-            'irbs' => $irbs,
-            'neighbors' => $neighbors,
-            'tunnels' => $tunnels,
+            'esis' => $stats['esis_local'],
+            'esis_df' => $stats['esis_df'],
+            'vnis' => count($stats['vnis']),
+            'irbs' => $stats['irbs'],
+            'neighbors' => $stats['neighbors'],
+            'tunnels' => $stats['tunnels'],
         ];
     }
 }
