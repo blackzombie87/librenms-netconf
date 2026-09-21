@@ -36,15 +36,12 @@ class Collector
         $result = new CollectionResult;
         $this->extractor->resetWarnings();
 
-        // 1. unique commands across definitions
+        // 1. unique commands across definitions: required if any use is required, every = min
         /** @var array<string, CommandSpec> $specs */
         $specs = [];
         foreach ($definitions as $definition) {
             foreach ($definition->commands as $spec) {
-                $specs[$spec->identity()] ??= $spec;
-                if (! $spec->optional && $specs[$spec->identity()]->optional) {
-                    $specs[$spec->identity()] = $spec; // a required use wins over an optional one
-                }
+                $specs[$spec->identity()] = isset($specs[$spec->identity()]) ? $specs[$spec->identity()]->merge($spec) : $spec;
             }
         }
 
@@ -89,17 +86,13 @@ class Collector
             // <xnm:warning> instead of data; treat that like a failed command
             $unavailable = self::unavailableMessage($document);
             if ($unavailable !== null) {
-                $status = $spec->optional ? CommandRun::SKIPPED : CommandRun::ERROR;
-
-                return new CommandRun($identity, $spec->label(), $status, microtime(true) - $t, strlen($reply->raw), message: $unavailable);
+                return $this->failed($spec, $identity, $result, $unavailable, microtime(true) - $t, strlen($reply->raw));
             }
 
             return new CommandRun($identity, $spec->label(), CommandRun::OK, microtime(true) - $t, strlen($reply->raw), $document);
         } catch (RpcErrorException|ProtocolException $e) {
             // the device answered, but not usefully: only this command is affected
-            $status = $spec->optional ? CommandRun::SKIPPED : CommandRun::ERROR;
-
-            return new CommandRun($identity, $spec->label(), $status, microtime(true) - $t, message: $e->getMessage());
+            return $this->failed($spec, $identity, $result, $e->getMessage(), microtime(true) - $t);
         } catch (TransportException $e) {
             // connection level problem: nothing else will work in this session
             $result->errors[] = $e->getMessage();
@@ -107,6 +100,21 @@ class Collector
 
             return new CommandRun($identity, $spec->label(), CommandRun::ERROR, microtime(true) - $t, message: $e->getMessage());
         }
+    }
+
+    /**
+     * An optional command that fails is skipped with its mappings; a required one is an error
+     * of the run (the definition says the device must answer it), so the device status records
+     * the failure and backs off instead of reporting success with stale rows (F3 review Issue 5).
+     */
+    private function failed(CommandSpec $spec, string $identity, CollectionResult $result, string $message, float $duration, int $bytes = 0): CommandRun
+    {
+        if ($spec->optional) {
+            return new CommandRun($identity, $spec->label(), CommandRun::SKIPPED, $duration, $bytes, message: $message);
+        }
+        $result->errors[] = $spec->label() . ': ' . $message;
+
+        return new CommandRun($identity, $spec->label(), CommandRun::ERROR, $duration, $bytes, message: $message);
     }
 
     /**

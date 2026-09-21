@@ -58,7 +58,7 @@ it('marks optional commands that fail as skipped and drops only their mappings',
         ->and($result->definitions['junos-srx-cluster']->isEmpty())->toBeTrue();
 });
 
-it('records required command failures as errors without aborting', function () {
+it('records required command failures as run errors without aborting the session', function () {
     $def = (new DefinitionParser)->parse([
         'name' => 'two', 'commands' => ['a' => 'show a', 'b' => 'show b'],
         'sensors' => [
@@ -70,8 +70,13 @@ it('records required command failures as errors without aborting', function () {
 
     $result = (new Collector($transport))->collect([$def]);
 
-    expect($result->ok())->toBeTrue()
+    // the run is a failure (status row, back-off, eventlog), the other command's data is kept
+    expect($result->ok())->toBeFalse()
+        ->and($result->aborted)->toBeFalse()
+        ->and($result->errors)->toHaveCount(1)
+        ->and($result->errors[0])->toStartWith('show a: ')
         ->and($result->commands['cli:show a']->status)->toBe(CommandRun::ERROR)
+        ->and($result->commands['cli:show b']->status)->toBe(CommandRun::OK)
         ->and($result->sensors())->toHaveCount(1)
         ->and($result->sensors()[0]->value)->toBe(2.0);
 });
@@ -146,5 +151,48 @@ it('treats text-only and warning replies as unavailable commands', function () {
         ->and($result->commands['cli:show ldp session']->message)->toBe('LDP instance is not running')
         ->and($result->commands['cli:show vrrp summary']->status)->toBe(CommandRun::ERROR)
         ->and($result->commands['cli:show vrrp summary']->message)->toBe('vrrp subsystem not running - not needed by configuration.')
+        ->and($result->errors)->toBe(['show vrrp summary: vrrp subsystem not running - not needed by configuration.'])   // required: the run failed
         ->and($result->definitions['na']->skippedMappings)->toBe(['sensor1', 'sensor2']);
+});
+
+it('skips the EVPN definitions on a box that answers "not configured" without failing the run', function () {
+    // G13: show evpn instance extensive is optional in both shipped EVPN definitions, so a non-EVPN
+    // Junos box loses only the EVPN mappings; the other definitions and the status row stay healthy
+    $defs = shipped('junos-evpn', 'junos-evpn-fabric', 'junos-system');
+    $transport = replayTransport($defs)->on('show evpn instance extensive', '<rpc-reply><output>EVPN is not configured</output></rpc-reply>');
+
+    $result = (new Collector($transport))->collect($defs);
+
+    expect($result->ok())->toBeTrue()
+        ->and($result->commands['cli:show evpn instance extensive']->status)->toBe(CommandRun::SKIPPED)
+        ->and($result->commands['cli:show evpn instance extensive']->message)->toBe('EVPN is not configured')
+        ->and(array_filter($result->definitions['junos-evpn']->sensors, fn ($s) => $s->mapping->command === 'evpn_inst'))->toBe([])
+        ->and($result->definitions['junos-evpn']->skippedMappings)->toContain('esi-resolution', 'gateway-irbs')
+        ->and(array_filter($result->definitions['junos-evpn-fabric']->tables, fn ($t) => $t->mapping->command === 'evpn_inst'))->toBe([])
+        ->and($result->definitions['junos-evpn-fabric']->skippedMappings)->toContain('neighbor', 'esi')
+        ->and($result->definitions['junos-system']->sensors)->not->toBe([]);
+});
+
+it('merges optional and every when definitions share a command', function () {
+    $mk = fn (string $name, array $spec) => (new DefinitionParser)->parse([
+        'name' => $name, 'commands' => ['a' => ['cli' => 'show a'] + $spec],
+        'sensors' => [['class' => 'count', 'command' => 'a', 'index' => "'a'", 'descr' => 'A', 'value' => 'count(//x)']],
+    ], "$name.yaml");
+    $transport = new FakeTransport(['show a' => '<r><x/></r>']);
+
+    // every: the most frequent use wins, whichever definition comes first
+    $result = (new Collector($transport))->collect([$mk('slow', ['every' => 3]), $mk('fast', [])], pollNumber: 2);
+    expect($result->commands['cli:show a']->status)->toBe(CommandRun::OK)
+        ->and($result->sensors())->toHaveCount(2);
+    $result = (new Collector($transport))->collect([$mk('fast', []), $mk('slow', ['every' => 3])], pollNumber: 2);
+    expect($result->commands['cli:show a']->status)->toBe(CommandRun::OK);
+
+    // optional: a required use anywhere makes the failure count
+    $failing = new FakeTransport;
+    $result = (new Collector($failing))->collect([$mk('opt', ['optional' => true]), $mk('req', [])]);
+    expect($result->commands['cli:show a']->status)->toBe(CommandRun::ERROR)
+        ->and($result->ok())->toBeFalse();
+    $result = (new Collector($failing))->collect([$mk('opt', ['optional' => true]), $mk('opt2', ['optional' => true])]);
+    expect($result->commands['cli:show a']->status)->toBe(CommandRun::SKIPPED)
+        ->and($result->ok())->toBeTrue();
 });

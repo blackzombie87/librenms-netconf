@@ -10,7 +10,7 @@ final class CollectionResult
     /**
      * @param  array<string, DefinitionResult>  $definitions  keyed by definition name
      * @param  array<string, CommandRun>  $commands  keyed by command identity
-     * @param  list<string>  $errors  fatal problems (connection lost, budget exceeded)
+     * @param  list<string>  $errors  failures of the run: connection lost, budget exceeded, a required command not answered
      */
     public function __construct(
         public array $definitions = [],

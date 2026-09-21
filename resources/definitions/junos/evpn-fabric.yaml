@@ -15,6 +15,7 @@ match:
 commands:
   evpn_inst:
     cli: show evpn instance extensive          # shared with junos-evpn, runs once per poll
+    optional: true                             # non-EVPN boxes must not fail the run (a required use elsewhere wins)
   vtep_source:
     cli: show mac-vrf forwarding vxlan-tunnel-end-point source
     optional: true                             # VXLAN leaves only

@@ -79,7 +79,7 @@ class NetconfValidateCommand extends Command
         foreach ($errors as $error) {
             $this->error($error);
         }
-        foreach ($hints as $hint) {
+        foreach (array_merge($hints, self::sharedCommandHints(array_values($definitions))) as $hint) {
             $this->comment('hint: ' . $hint);
         }
 
@@ -91,6 +91,46 @@ class NetconfValidateCommand extends Command
         $this->line($errors === [] ? '<info>All definitions valid.</info>' : '<error>' . count($errors) . ' invalid definition(s).</error>');
 
         return $errors === [] ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Definitions that use the same command with a different `every:` or `optional:`: the
+     * collector merges them (most frequent, required if any), which is easy to miss when a
+     * user definition slows down a command a shipped one needs every poll.
+     *
+     * @param  list<\SafferIt\LibrenmsNetconf\Definitions\Definition>  $definitions
+     * @return list<string>
+     */
+    public static function sharedCommandHints(array $definitions): array
+    {
+        /** @var array<string, list<array{string, \SafferIt\LibrenmsNetconf\Definitions\CommandSpec}>> $uses */
+        $uses = [];
+        foreach ($definitions as $definition) {
+            foreach ($definition->commands as $spec) {
+                $uses[$spec->identity()][] = [$definition->name, $spec];
+            }
+        }
+
+        $hints = [];
+        foreach ($uses as $list) {
+            if (count($list) < 2) {
+                continue;
+            }
+            $everies = array_unique(array_map(fn ($u) => $u[1]->every, $list));
+            $optionals = array_unique(array_map(fn ($u) => $u[1]->optional, $list));
+            if (count($everies) < 2 && count($optionals) < 2) {
+                continue;
+            }
+            $hints[] = sprintf(
+                '"%s" is shared with different settings (%s): it runs every %d poll(s) and is %s for all of them',
+                $list[0][1]->label(),
+                implode(', ', array_map(fn ($u) => sprintf('%s every=%d%s', $u[0], $u[1]->every, $u[1]->optional ? ' optional' : ''), $list)),
+                min($everies),
+                in_array(false, $optionals, true) ? 'required' : 'optional'
+            );
+        }
+
+        return $hints;
     }
 
     /**

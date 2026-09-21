@@ -11,6 +11,7 @@ match:
 commands:
   evpn_inst:
     cli: show evpn instance extensive
+    optional: true            # every Junos device matches: a box without EVPN answers with an error or a warning
   dup_mac:
     cli: show evpn database state duplicate
     optional: true            # older releases do not know the command

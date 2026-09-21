@@ -39,6 +39,19 @@ final class CommandSpec
         return (string) $this->cli;
     }
 
+    /**
+     * The spec that stands for two definitions using the same command: required when either
+     * use is required, run as often as the most frequent use needs it (F3 review Issue 10).
+     */
+    public function merge(self $other): self
+    {
+        if ($this->optional === ($this->optional && $other->optional) && $this->every === min($this->every, $other->every)) {
+            return $this;
+        }
+
+        return new self($this->key, $this->cli, $this->rpc, $this->optional && $other->optional, min($this->every, $other->every), $this->description);
+    }
+
     public function dueAt(int $pollNumber): bool
     {
         return $this->every <= 1 || $pollNumber % $this->every === 0;

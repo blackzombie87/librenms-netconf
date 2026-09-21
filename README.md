@@ -196,7 +196,13 @@ Shipped (Junos):
 
 Commands whose subsystem is not running ("LDP instance is not running", "vrrp subsystem
 not running") are recognised and skipped without creating sensors, so every definition can
-be shipped enabled. The LDP, RPKI and VRRP definitions were verified against recorded
+be shipped enabled. Only commands every Junos device answers are required in the shipped
+definitions (`show system uptime`, `show system alarms`, `show chassis alarms`, `show route
+summary`, `show interfaces extensive`); a required command the device does not answer fails
+the run like a lost connection: the status row records it, the device backs off and the
+first failure lands in the eventlog. The same command in several definitions runs once with
+the merged settings — required if any use is required, as often as the most frequent use —
+and `lnms netconf:validate` prints a hint when definitions disagree. The LDP, RPKI and VRRP definitions were verified against recorded
 replies of a Junos 22.2 MPLS router (anonymised copies in `tests/fixtures/junos/`); the
 other definitions live on an EX4650.
 
@@ -219,7 +225,8 @@ match:                           # all rules must match; literal, "/regex/" or a
 commands:                        # each runs once per poll, shared by all mappings
   key:
     cli: show something          # only "show ..." is allowed
-    optional: true               # device error -> mappings skipped silently
+    optional: true               # device error -> mappings skipped silently; without it the
+                                 # error fails the run (status, back-off, eventlog)
     every: 3                     # only every 3rd poll
   other: show something else     # shorthand
   raw: { rpc: '<get-something/>' }   # netconf transport only
