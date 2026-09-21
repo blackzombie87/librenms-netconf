@@ -2,7 +2,7 @@
 
 ## Unreleased (1.1)
 
-Gaps closed on the way to 1.1 (`docs/PLAN.md` §6.2):
+Gaps closed on the way to 1.1 (internal plan §6.2):
 
 - Transport `auto`, now the default: one SSH login on port 22, the `netconf` subsystem is
   requested on that connection and exec channels are used when the server refuses it. The
@@ -28,7 +28,7 @@ Gaps closed on the way to 1.1 (`docs/PLAN.md` §6.2):
   a 48-port leaf before; the HTML shrank from 397 kB to 248 kB, of which 73 kB is the
   layout). Expand/collapse all links.
 
-EVPN fabric checks, phase F4 (`docs/PLAN.md` §7.5):
+EVPN fabric checks, phase F4 (internal plan §7.5):
 
 - Consistency checks over every fabric at the end of each resolve: asymmetric neighbours,
   overlay sessions down or missing, flood-list gaps / stale entries / orphans, VLAN tag
@@ -50,7 +50,7 @@ EVPN fabric checks, phase F4 (`docs/PLAN.md` §7.5):
   labels of the instance metric.
 - Alert-rule examples for the sensor and the issue tables in the README.
 
-Polish from the F3 review (`docs/REVIEW-2026-09-f3.md`, plan item F3a):
+Polish from the internal F3 review (plan item F3a):
 
 - Fabric list and overview count VNIs, ESIs and instances distinct over the monitored
   members (array union on 0-based lists dropped the second member's entries); the per-device
@@ -82,7 +82,7 @@ Polish from the F3 review (`docs/REVIEW-2026-09-f3.md`, plan item F3a):
   pages 302 / 200 / 403, `TableWriter` merge and prune, `EsiLinkWriter` sync, `FabricResolver`
   forget/run round trip. Skipped without a LibreNMS installation.
 
-EVPN fabric view, phase F1 (`docs/PLAN.md` §7), feature-flagged by the new *EVPN fabric view*
+EVPN fabric view, phase F1 (internal plan §7), feature-flagged by the new *EVPN fabric view*
 setting (`evpn_fabric`, default off).
 
 - New YAML mapping kind `tables:`: rows of a reply are written to the plugin's
@@ -98,7 +98,7 @@ setting (`evpn_fabric`, default off).
   core ipv4/BGP/OSPF/LLDP tables. Runs after every leaf poll under a cache lock.
 - `lnms netconf:fabric [--resolve] [--links]` prints the resolved fabrics.
 
-Polish from the F1 review (`docs/REVIEW-2026-09-f1.md`, plan item F1a):
+Polish from the internal F1 review (plan item F1a):
 
 - One fabric member per device: a device's addresses (source VTEP, router-id) pool their
   role evidence and only the first becomes the member; `vtep` rows no longer in the graph
@@ -153,7 +153,7 @@ Phase F3 — fabric pages (plan §7.4, §7.6), *Plugins → EVPN fabrics* while 
 
 ## 1.0.1 – 2026-09-18
 
-Fixes from the external review of 1.0.0 (`docs/REVIEW-2026-09-v1.0.0.md`).
+Fixes from the external review of 1.0.0 (internal review notes).
 
 - One poller log line per run summarises the RRD layout work (files verified, data sources
   added, rrdtool failures) instead of only logging appended data sources per file.
@@ -183,8 +183,8 @@ custom metrics through YAML definitions. See `README.md` for what is shipped.
   MAC table, `show interfaces vtep`, `show evpn database`, `show bgp neighbor`, `show vlans`,
   neighbour-info) and from an MX204 L3 gateway (`-mx` variants) were added; the license
   "none installed" and the empty ip-prefix / mac-ip replies cover the negative cases.
-- Docs: the implementation plan (`docs/PLAN.md`, with the §6 work list and the §7 EVPN fabric
-  view design) and the September review (`docs/REVIEW-2026-09.md`) now live in this repo.
+- Docs: the implementation plan (§6 work list, §7 EVPN fabric view design) and the review
+  notes are maintained outside the public repository.
 
 ### Fixed before release (review of 2026-09-18)
 

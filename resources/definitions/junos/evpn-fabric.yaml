@@ -1,7 +1,7 @@
 # EVPN fabric view (plan §7): per-leaf rows for the netconf_evpn_* tables, aggregated across
 # devices by the FabricResolver. The tables are defined by column, this file fills them from
 # Junos. Only runs when the "EVPN fabric view" setting is enabled. Paths confirmed on an EX4650
-# (23.4R2-S7.4) and an MX204 L3 gateway (23.4R2-S3.9), see docs/PLAN.md §7.2.
+# (23.4R2-S7.4) and an MX204 L3 gateway (23.4R2-S3.9).
 name: junos-evpn-fabric
 description: EVPN fabric tables - neighbours, ESIs, VNIs, flood lists and VXLAN tunnels per leaf
 
