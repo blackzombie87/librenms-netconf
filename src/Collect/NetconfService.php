@@ -239,32 +239,6 @@ class NetconfService
         }
 
         $counts = [];
-        $values = $result->sensors();
-        if (self::fabricEnabled()) {
-            // the fabric checks' per-leaf count sensor rides along with the YAML sensors: it is
-            // discovered, recorded and deleted (no membership) the same way. Its value is the
-            // state after the previous resolve; this run's resolver comes later in store()
-            $issues = IssueSensor::value($device);
-            if ($issues !== null) {
-                $values[] = $issues;
-            }
-        }
-
-        if ($discovery || $definitions === []) {
-            $sync = $sensors->sync($values, $skipped, array_keys($classes));
-            $counts['sensors_synced'] = $sync['synced'];
-            $counts['sensors_kept'] = $sync['kept'];
-        } else {
-            $recorded = $sensors->record($values, $datastore ?? app('Datastore'));
-            $counts['sensors_recorded'] = $recorded['recorded'];
-            $counts['sensor_events'] = $recorded['events'];
-            if ($recorded['unknown'] !== []) {
-                // new rows appeared since discovery: discover them now and record on the next poll
-                Log::info(sprintf('  %d new sensor(s), running sensor discovery', count($recorded['unknown'])));
-                $counts['sensors_synced'] = $sensors->sync($values, $skipped, array_keys($classes))['synced'];
-            }
-        }
-
         $m = $metrics->write($result->metrics(), $discovery ? null : ($datastore ?? app('Datastore')));
         $counts['metrics_rows'] = $m['rows'];
         $counts['metrics_pruned'] = $metrics->prune($result->metrics(), $mappingsWithData) + $metrics->deleteOrphans($knownMappings);
@@ -317,6 +291,31 @@ class NetconfService
                     $counts['fabrics'] = $fabric['fabrics'];
                     Log::info(sprintf('  fabric: %d nodes on %d devices (%d unknown), %d fabric(s), %d underlay links, %d ESI peer links', $fabric['nodes'], $fabric['devices'], $fabric['unknown'], $fabric['fabrics'], $fabric['links'], $fabric['esi_links']));
                 }
+            }
+        }
+
+        // sensors last: the fabric checks' per-leaf count sensor rides along with the YAML
+        // sensors (discovered, recorded and deleted the same way) and reads the state after
+        // this run's resolve. On poll it reads 0 rather than vanishing while the fabric view
+        // is off or the device has left the fabric (IssueSensor::reading())
+        $values = $result->sensors();
+        $issues = IssueSensor::reading($device, self::fabricEnabled(), $discovery);
+        if ($issues !== null) {
+            $values[] = $issues;
+        }
+
+        if ($discovery || $definitions === []) {
+            $sync = $sensors->sync($values, $skipped, array_keys($classes));
+            $counts['sensors_synced'] = $sync['synced'];
+            $counts['sensors_kept'] = $sync['kept'];
+        } else {
+            $recorded = $sensors->record($values, $datastore ?? app('Datastore'));
+            $counts['sensors_recorded'] = $recorded['recorded'];
+            $counts['sensor_events'] = $recorded['events'];
+            if ($recorded['unknown'] !== []) {
+                // new rows appeared since discovery: discover them now and record on the next poll
+                Log::info(sprintf('  %d new sensor(s), running sensor discovery', count($recorded['unknown'])));
+                $counts['sensors_synced'] = $sensors->sync($values, $skipped, array_keys($classes))['synced'];
             }
         }
 

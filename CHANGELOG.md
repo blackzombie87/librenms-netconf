@@ -27,6 +27,10 @@ Gaps closed on the way to 1.1 (internal plan §6.2):
   are created on open instead of shipped as `<img>` tags (99 graph renders per page view on
   a 48-port leaf before; the HTML shrank from 397 kB to 248 kB, of which 73 kB is the
   layout). Expand/collapse all links.
+- Fabric issues sensor (F4a): recorded after the run's own fabric resolve instead of one poll
+  behind it, and a poll writes 0 while the fabric view is switched off or after the device
+  left the fabric, so `limit 0` alert rules clear instead of keeping the last count until
+  the next discovery. Discovery still drops the sensor of a device without membership.
 
 EVPN fabric checks, phase F4 (internal plan §7.5):
 

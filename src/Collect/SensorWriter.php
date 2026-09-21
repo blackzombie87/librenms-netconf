@@ -47,6 +47,10 @@ class SensorWriter
      */
     public function sync(array $values, array $skipped, array $classes): array
     {
+        // core's sync reads the device's loaded `sensors` relation and does not refresh it, so
+        // a relation loaded earlier in this process (a previous sync, core's own discovery)
+        // would hide rows from the delete step
+        $this->device->unsetRelation('sensors');
         $discovery = new \App\Discovery\Sensor($this->device);
         $existing = $this->existing();
         // classes of the sensors the device has are synced too, so sensors of a class no
