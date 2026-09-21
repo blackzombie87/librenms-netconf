@@ -127,9 +127,9 @@ class NetconfService
             // writers still run with an empty result so what earlier definitions stored (an OS
             // change, every definition disabled) is pruned instead of lingering as live data
             $result = new CollectionResult;
-            $summary = $result->summary() + $this->store($device, [], $result, $datastore, $discovery);
+            $summary = array_merge($result->summary(), $this->store($device, [], $result, $datastore, $discovery));
             $duration = microtime(true) - $start;
-            $this->saveStatus($status, $status->transport ?? '', $names, $result, 'no definitions match this device', $duration, $discovery, failure: false);
+            $this->saveStatus($status, $status->transport ?? '', $names, $summary, 'no definitions match this device', $duration, $discovery, failure: false);
             Log::info(sprintf('netconf: nothing to collect; %d sensor(s) synced, %d metric, %d port and %d table row(s) pruned in %.2fs', $summary['sensors_synced'] ?? 0, $summary['metrics_pruned'] ?? 0, $summary['ports_pruned'] ?? 0, $summary['tables_pruned'] ?? 0, $duration));
 
             return new RunReport($discovery, $status->transport ?? '', [], $summary, [], [], $duration, $result);
@@ -160,11 +160,11 @@ class NetconfService
             Log::info(sprintf('  %-55s %s%s', $run->label, $run->status, $run->message ? ' (' . $run->message . ')' : ''));
         }
 
-        $summary = $result->summary() + $this->store($device, $definitions, $result, $datastore, $discovery);
+        $summary = array_merge($result->summary(), $this->store($device, $definitions, $result, $datastore, $discovery));
         $duration = microtime(true) - $start;
         $error = $result->errors !== [] ? implode('; ', $result->errors) : null;
 
-        $this->saveStatus($status, $transport->name(), $names, $result, $error, $duration, $discovery);
+        $this->saveStatus($status, $transport->name(), $names, $summary, $error, $duration, $discovery);
         if ($error !== null) {
             $this->logFailure($device, $status, $error);
         } elseif ($status->consecutive_failures === 0 && $status->wasChanged('consecutive_failures')) {
@@ -303,6 +303,8 @@ class NetconfService
         if ($issues !== null) {
             $values[] = $issues;
         }
+        // the status page counts what was stored, not what the YAML produced
+        $counts['sensors'] = count($values);
 
         if ($discovery || $definitions === []) {
             $sync = $sensors->sync($values, $skipped, array_keys($classes));
@@ -324,16 +326,17 @@ class NetconfService
 
     /**
      * @param  list<string>  $definitions
+     * @param  array<string, int>|null  $summary  what the run collected and stored, null on a failed connect
      * @param  bool  $failure  whether a non-null $error counts towards the back-off
      */
-    private function saveStatus(NetconfDeviceStatus $status, string $transport, array $definitions, ?CollectionResult $result, ?string $error, float $duration, bool $discovery, bool $failure = true): void
+    private function saveStatus(NetconfDeviceStatus $status, string $transport, array $definitions, ?array $summary, ?string $error, float $duration, bool $discovery, bool $failure = true): void
     {
         $settings = NetconfSettings::effective();
         $status->transport = $transport;
         $status->definitions = $definitions;
         $status->last_attempt = now();
         $status->last_duration = $duration;
-        $status->last_summary = $result?->summary();
+        $status->last_summary = $summary;
         if (! $discovery) {
             $status->poll_count = $status->poll_count + 1;
         }

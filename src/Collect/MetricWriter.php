@@ -41,12 +41,16 @@ class MetricWriter
         $now = now();
         $records = [];
         $orders = [];
+        /** @var array<int, string> $indexes row => the stored (truncated) index */
+        $indexes = [];
         foreach ($rows as $i => $row) {
-            $index = mb_substr($row->index, 0, 191);
+            // the column holds 191 characters; the RRD must be named from the same string or
+            // the row and its file drift apart for a long index
+            $index = $indexes[$i] = self::index($row->index);
             $key = "$row->definition/{$row->mapping->id}/$index";
             $order = $stored[$key] ?? null;
             if ($datastore !== null && $row->values !== []) {
-                $file = Rrd::name($this->device->hostname, NetconfMetric::rrdName($row->definition, $row->mapping->id, $row->index));
+                $file = Rrd::name($this->device->hostname, NetconfMetric::rrdName($row->definition, $row->mapping->id, $index));
                 $order = $orders[$i] = $this->layout->reconcile($file, $row->types, $order);
             }
             $records[] = [
@@ -73,8 +77,8 @@ class MetricWriter
                 $this->putRrd($datastore, 'netconf', [
                     'definition' => $row->definition,
                     'mapping' => $row->mapping->id,
-                    'index' => $row->index,
-                    'rrd_name' => NetconfMetric::rrdName($row->definition, $row->mapping->id, $row->index),
+                    'index' => $indexes[$i],
+                    'rrd_name' => NetconfMetric::rrdName($row->definition, $row->mapping->id, $indexes[$i]),
                 ], $orders[$i], $row->rrdValues($orders[$i]));
                 $written++;
             }
@@ -96,7 +100,7 @@ class MetricWriter
         $deleted = 0;
         $seen = [];
         foreach ($rows as $row) {
-            $seen[$row->definition . '/' . $row->mapping->id][] = mb_substr($row->index, 0, 191);
+            $seen[$row->definition . '/' . $row->mapping->id][] = self::index($row->index);
         }
         foreach ($mappingsWithData as $pair) {
             [$definition, $mapping] = explode('/', $pair, 2);
@@ -134,5 +138,11 @@ class MetricWriter
     public function deleteAll(): int
     {
         return NetconfMetric::query()->where('device_id', $this->device->device_id)->delete();
+    }
+
+    /** The index as stored in metric_index and used to name the RRD (column width 191). */
+    public static function index(string $index): string
+    {
+        return mb_substr($index, 0, 191);
     }
 }

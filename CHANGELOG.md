@@ -47,6 +47,10 @@ Gaps closed on the way to 1.1 (internal plan §6.2):
   page links), opens on the rows with issues when the fabric has any, and its device links
   no longer carry core's 2 kB hover tooltip per row. One page of a 285-VNI leaf went from
   871 kB to about 160 kB.
+- Status page (F4a): the stored run summary counts the sensors that were actually recorded,
+  including the fabric issues sensor, instead of the YAML sensors only.
+- Custom metrics (F4a): an index longer than the column width is truncated once, so the row
+  and its RRD file keep the same name.
 
 EVPN fabric checks, phase F4 (internal plan §7.5):
 
