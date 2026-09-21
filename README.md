@@ -63,10 +63,12 @@ Instead of enabling devices one by one, set *Enable for all devices* on the sett
   names the device's fabric, role and VTEP with links into the fabric tabs, and a second
   panel **EVPN multihoming** lists the device's ESI-LAGs with peer device, peer LAG, mode,
   DF/BDF and LAG state (all rows on the device page).
-- **Metric tables** (`/plugin/netconf/device/<id>/metrics`): every custom metric row with
-  its values and labels, a graph per row, and per mapping a fold-out with one graph per
-  field (one line per row); the same for port metrics. Period selector 6h/day/week/month/
-  year.
+- **Metric tables** (`/plugin/netconf/device/<id>/metrics`): one fold-out per mapping
+  (collapsed, with row and field counts) holding every custom metric row with its values and
+  labels and a graph link per row, plus a nested fold-out with one graph per field (one line
+  per row); the same for port metrics. Graph images are created only when their fold-out is
+  opened, so the page itself costs no rrdtool runs. Period selector 6h/day/week/month/year,
+  expand/collapse all.
 - **Port tab** (*Plugins* tab of a port): the per-port counters with a combined rate graph
   of all counters, gauges individually, and a fold-out with one graph per counter.
 

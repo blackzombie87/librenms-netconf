@@ -10,6 +10,10 @@ Gaps closed on the way to 1.1 (`docs/PLAN.md` §6.2):
 - Bulk enable (G7): `lnms netconf:device --group=<name|id> [--os=<os>]` applies `--enable`,
   `--disable` and the credential overrides to every device of a device group and/or os and
   lists them; the status page gets an *Enable per device group or os* form for admins.
+- Metrics page (G12): every mapping and the port table are collapsed fold-outs, graph images
+  are created on open instead of shipped as `<img>` tags (99 graph renders per page view on
+  a 48-port leaf before; the HTML shrank from 397 kB to 248 kB, of which 73 kB is the
+  layout). Expand/collapse all links.
 
 EVPN fabric checks, phase F4 (`docs/PLAN.md` §7.5):
 
