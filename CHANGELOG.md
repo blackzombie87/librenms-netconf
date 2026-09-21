@@ -31,6 +31,9 @@ Gaps closed on the way to 1.1 (internal plan §6.2):
   behind it, and a poll writes 0 while the fabric view is switched off or after the device
   left the fabric, so `limit 0` alert rules clear instead of keeping the last count until
   the next discovery. Discovery still drops the sensor of a device without membership.
+- Missing-session check and BGP tab (F4a): a peer is counted under the member address of its
+  device, so members that reach the same node on its VTEP and on its router-id no longer
+  split the count or flag each other as missing.
 
 EVPN fabric checks, phase F4 (internal plan §7.5):
 

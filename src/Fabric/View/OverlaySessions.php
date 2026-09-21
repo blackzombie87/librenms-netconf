@@ -131,20 +131,32 @@ final class OverlaySessions
      * Peers that other monitored members of the fabric have a session to but this one lacks
      * (plan §7.5 check 2, the "everyone else peers with this spine" heuristic): a peer counts
      * when at least two monitored members have it, or all others when there are only two.
+     * A peer address is counted under the member address of its device when it is a monitored
+     * device's alias (router-id vs. VTEP, as Topology::overlayPairs() draws it), so two members
+     * that session to the same node on different addresses are one peer, not two half-peers.
      *
      * @param  list<array<string, mixed>>  $sessions  rows of forDevices()
-     * @param  array<int, list<string>>  $deviceNodes  device_id => its own addresses (never "missing" towards itself)
-     * @return list<array{device_id: int, peer_ip: string, have: list<int>}>
+     * @param  array<int, list<string>>  $deviceNodes  device_id => its own addresses, member address first (never "missing" towards itself)
+     * @return list<array{device_id: int, peer_ip: string, have: list<int>}> peer_ip is the canonical (member) address
      */
     public static function missing(array $sessions, array $deviceNodes): array
     {
-        $have = [];
-        foreach ($sessions as $s) {
-            $have[$s['peer_ip']][$s['device_id']] = true;
-        }
         $devices = array_keys($deviceNodes);
         if (count($devices) < 2) {
             return [];
+        }
+        /** @var array<string, string> $canonical alias address => member address */
+        $canonical = [];
+        foreach ($deviceNodes as $ips) {
+            foreach ($ips as $ip) {
+                $canonical[$ip] = $ips[0];
+            }
+        }
+
+        $have = [];
+        foreach ($sessions as $s) {
+            $peer = $canonical[$s['peer_ip']] ?? $s['peer_ip'];
+            $have[$peer][$s['device_id']] = true;
         }
         $threshold = count($devices) === 2 ? 1 : 2;
 
@@ -154,7 +166,7 @@ final class OverlaySessions
                 continue;
             }
             foreach ($devices as $deviceId) {
-                if (isset($byDevice[$deviceId]) || in_array($peer, $deviceNodes[$deviceId], true)) {
+                if (isset($byDevice[$deviceId]) || $peer === $deviceNodes[$deviceId][0]) {
                     continue;
                 }
                 $missing[] = ['device_id' => $deviceId, 'peer_ip' => (string) $peer, 'have' => array_map('intval', array_keys($byDevice))];

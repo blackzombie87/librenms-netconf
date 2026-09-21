@@ -45,3 +45,26 @@ it('needs at least two monitored members and lowers the threshold for exactly tw
             ['device_id' => 2, 'peer_ip' => '192.0.2.1', 'have' => [1]],
         ]);
 });
+
+it('counts a peer under its member address whichever alias a member sessions to', function () {
+    // A has VTEP .11 and router-id .21; B peers with the router-id, C with the VTEP, A with both
+    $sessions = [
+        overlaySession(1, '192.0.2.12'), overlaySession(1, '192.0.2.13'),
+        overlaySession(2, '192.0.2.21'), overlaySession(2, '192.0.2.13'),
+        overlaySession(3, '192.0.2.11'), overlaySession(3, '192.0.2.12'),
+    ];
+    $nodes = [1 => ['192.0.2.11', '192.0.2.21'], 2 => ['192.0.2.12'], 3 => ['192.0.2.13']];
+
+    expect(OverlaySessions::missing($sessions, $nodes))->toBe([]);
+
+    // a spine reached on two addresses by different members still reaches the threshold once,
+    // and the member without it is reported under the spine's member address
+    $spine = [10 => ['192.0.2.1', '192.0.2.101']];
+    $sessions = [
+        overlaySession(1, '192.0.2.1'), overlaySession(2, '192.0.2.101'), overlaySession(10, '192.0.2.11'), overlaySession(10, '192.0.2.12'), overlaySession(10, '192.0.2.13'),
+    ];
+
+    expect(OverlaySessions::missing($sessions, $nodes + $spine))->toBe([
+        ['device_id' => 3, 'peer_ip' => '192.0.2.1', 'have' => [1, 2]],
+    ]);
+});
