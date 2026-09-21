@@ -2,6 +2,7 @@
 
 namespace SafferIt\LibrenmsNetconf\Tests\Feature;
 
+use App\Models\Device;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
@@ -10,7 +11,8 @@ require_once __DIR__ . '/LibrenmsTestCase.php';
 
 /**
  * HTTP authorisation of the fabric pages (G6 first slice): global read for the pages, admin
- * for anything that changes a fabric or talks to a device, login for everything.
+ * for anything that changes a fabric or talks to a device, login for everything. Plus the
+ * paging and the issues-only default of the VNIs tab (F4a 3).
  */
 final class FabricPagesTest extends LibrenmsTestCase
 {
@@ -58,6 +60,66 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->post("/plugin/netconf/fabric/$fabric", ['name' => 'Hacked'])->assertForbidden();
         $this->post('/plugin/netconf/run', ['device' => '1', 'command' => 'show version'])->assertForbidden();
         $this->assertSame('Fabric test', DB::table(TableSchema::tableName('fabric'))->where('id', $fabric)->value('name'));
+    }
+
+    public function testTheVnisTabPagesAndOpensOnTheRowsWithIssues(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric, $device] = $this->fabricWithVnis(250);
+        $page = fn (string $query = '') => $this->get("/plugin/netconf/fabric/$fabric/vnis$query")->assertOk()->getContent();
+
+        // no issue anywhere: the tab shows everything, 100 rows per page
+        $first = $page();
+        $this->assertSame(100, substr_count($first, '<tr class='));
+        $this->assertStringContainsString('250 of 250 shown', $first);
+        $this->assertStringContainsString('rows 1&ndash;100 of 250', $first);
+        $this->assertStringContainsString('>10010<', $first);
+        $this->assertStringNotContainsString('>10150<', $first);
+
+        $second = $page('?page=2');
+        $this->assertStringContainsString('>10150<', $second);
+        $this->assertStringContainsString('rows 101&ndash;200 of 250', $second);
+        $this->assertSame(50, substr_count($page('?page=3'), '<tr class='));
+        // out of range is clamped, not a 404
+        $this->assertStringContainsString('rows 201&ndash;250 of 250', $page('?page=99'));
+
+        // the filter survives the paging, and narrows the pager
+        $filtered = $page('?q=10010');
+        $this->assertSame(1, substr_count($filtered, '<tr class='));
+        $this->assertStringContainsString('1 of 250 shown', $filtered);
+        $this->assertStringNotContainsString('rows 1&ndash;', $filtered);   // one page, no pager
+
+        // one VNI without a flood list: the tab opens on it, ?issues=0 shows everything again
+        DB::table(TableSchema::tableName('vni_vtep'))->where('device_id', $device)->where('vni', 10010)->delete();
+        $default = $page();
+        $this->assertSame(1, substr_count($default, '<tr class='));
+        $this->assertStringContainsString('1 of 250 shown', $default);
+        $this->assertStringContainsString('this tab opens on the rows with issues', $default);
+        $this->assertSame(100, substr_count($page('?issues=0'), '<tr class='));
+    }
+
+    /**
+     * @return array{int, int} fabric id and the member device
+     */
+    private function fabricWithVnis(int $count): array
+    {
+        $fabric = $this->fabric();
+        $device = Device::factory()->create(['os' => 'junos']);
+        $now = now();
+        DB::table(TableSchema::tableName('vtep'))->insert(['vtep_ip' => '192.0.2.1', 'device_id' => $device->device_id, 'role' => 'leaf', 'last_seen' => $now]);
+        DB::table(TableSchema::tableName('fabric_member'))->insert(['fabric_id' => $fabric, 'vtep_ip' => '192.0.2.1', 'role' => 'leaf', 'since' => $now]);
+        $rows = [];
+        $flood = [];
+        for ($i = 0; $i < $count; $i++) {
+            $rows[] = ['device_id' => $device->device_id, 'vni' => 10010 + $i, 'instance' => 'MACVRF-A', 'source_vtep' => '192.0.2.1', 'last_seen' => $now];
+            // a flood entry towards an unmonitored VTEP: collected, counted, not judged, so
+            // no VNI carries an issue until one of these rows is removed
+            $flood[] = ['device_id' => $device->device_id, 'vni' => 10010 + $i, 'remote_vtep_ip' => '192.0.2.99', 'last_seen' => $now];
+        }
+        DB::table(TableSchema::tableName('vni'))->insert($rows);
+        DB::table(TableSchema::tableName('vni_vtep'))->insert($flood);
+
+        return [$fabric, $device->device_id];
     }
 
     private function fabric(): int

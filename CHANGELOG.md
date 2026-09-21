@@ -43,6 +43,10 @@ Gaps closed on the way to 1.1 (internal plan §6.2):
 - Bulk enable form (F4a): nothing is pre-selected any more. *Apply* without choosing an
   action is rejected instead of enabling every device of the only os in the install, and a
   selection without device group and os asks for confirmation first.
+- VNIs tab (F4a): the table is paged (100 rows, the filter and the search are kept in the
+  page links), opens on the rows with issues when the fabric has any, and its device links
+  no longer carry core's 2 kB hover tooltip per row. One page of a 285-VNI leaf went from
+  871 kB to about 160 kB.
 
 EVPN fabric checks, phase F4 (internal plan §7.5):
 

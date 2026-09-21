@@ -18,6 +18,7 @@ use SafferIt\LibrenmsNetconf\Fabric\View\FabricSummary;
 use SafferIt\LibrenmsNetconf\Fabric\View\MacSearch;
 use SafferIt\LibrenmsNetconf\Fabric\View\OverlaySessions;
 use SafferIt\LibrenmsNetconf\Fabric\View\Topology;
+use SafferIt\LibrenmsNetconf\Support\Pager;
 use SafferIt\LibrenmsNetconf\Fabric\View\TunnelMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\VniMatrix;
 
@@ -128,14 +129,22 @@ class FabricController extends Controller
     {
         $rows = VniMatrix::forFabric($nodes);
         $q = (string) $request->query('q', '');
-        $issues = (bool) $request->query('issues', '');
+        $issueCount = count(array_filter($rows, fn ($r) => $r['flags'] !== []));
+        // the full list grows with every member (285 rows on one leaf here), so the tab opens
+        // on the rows that need attention whenever there are any; "show all" is ?issues=0
+        $issues = $request->query('issues') === null ? $issueCount > 0 : (bool) $request->query('issues');
+        $filtered = VniMatrix::filter($rows, $q, $issues);
+        $pager = Pager::slice($filtered, $request->query('page'));
 
         return [
-            'vnis' => VniMatrix::filter($rows, $q, $issues),
+            'vnis' => $pager['rows'],
+            'vni_pager' => $pager,
             'vni_total' => count($rows),
-            'vni_issues' => count(array_filter($rows, fn ($r) => $r['flags'] !== [])),
+            'vni_shown' => count($filtered),
+            'vni_issues' => $issueCount,
             'q' => $q,
             'issues_only' => $issues,
+            'issues_default' => $issueCount > 0,
         ];
     }
 

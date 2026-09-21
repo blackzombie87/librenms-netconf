@@ -1,4 +1,4 @@
-@include('netconf::fabric.filter', ['placeholder' => 'VNI, VLAN tag, VLAN name, instance', 'total' => $vni_total, 'shown' => count($vnis), 'issues' => $vni_issues])
+@include('netconf::fabric.filter', ['placeholder' => 'VNI, VLAN tag, VLAN name, instance', 'total' => $vni_total, 'shown' => $vni_shown, 'issues' => $vni_issues])
 <p class="text-muted">
     One row per VNI over the monitored members. Flood lists come from <code>show mac-vrf forwarding vxlan-tunnel-end-point remote</code> (every poll), the VLAN tag from the remote MAC table (every third poll).
     Gaps can only be detected between monitored carriers; unknown VTEPs in a flood list are counted but not judged.
@@ -31,7 +31,7 @@
                 <td><small>{{ implode(', ', $v['instances']) }}</small></td>
                 <td>
                     @foreach ($v['carriers'] as $c)
-                        @include('netconf::fabric.node', ['node' => $nodes->get($nodes->addressOf($c['device_id']) ?? ''), 'show_ip' => false])@if (! $loop->last), @endif
+                        @include('netconf::fabric.node', ['node' => $nodes->get($nodes->addressOf($c['device_id']) ?? ''), 'show_ip' => false, 'plain' => true])@if (! $loop->last), @endif
                     @endforeach
                     @if ($v['multicast_groups'] !== [])<br><small class="text-muted">mcast {{ implode(', ', $v['multicast_groups']) }}</small>@endif
                 </td>
@@ -58,5 +58,9 @@
                 <td>@foreach ($v['flags'] as $flag)@include('netconf::fabric.flag', ['flag' => $flag]) @endforeach</td>
             </tr>
         @endforeach
+        @if ($vnis === [])
+            <tr><td colspan="8" class="text-muted">No VNI matches the filter.</td></tr>
+        @endif
     </tbody>
 </table>
+@include('netconf::fabric.pager', ['pager' => $vni_pager])
