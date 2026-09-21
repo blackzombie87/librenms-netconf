@@ -7,7 +7,7 @@ Gaps closed on the way to 1.1 (`docs/PLAN.md` §6.2):
 - Transport `auto`, now the default: one SSH login on port 22, the `netconf` subsystem is
   requested on that connection and exec channels are used when the server refuses it. The
   status row records the negotiated mode, `netconf:test` prints `netconf (auto)` / `cli
-  (auto)` and the refusal reason. Motivation (measured on the EX4650 with the recommended
+  (auto)` and the refusal reason (both verified on the EX4650 by toggling `netconf ssh`). Motivation (measured on the EX4650 with the recommended
   `deny-commands` class): every exec channel starts a new CLI and pays the class evaluation,
   22 commands took 45 s over exec and 13 s over the subsystem; 19 s vs. 14 s without
   `deny-commands`. Existing installs with a saved `cli`/`netconf` setting are unaffected;
