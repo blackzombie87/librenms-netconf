@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\Checks\FabricChecks;
+use SafferIt\LibrenmsNetconf\Fabric\Checks\IssueStore;
 
 /**
  * Cross-device aggregation for the EVPN fabric view (plan §7.3 / §7.6): builds the graph of
@@ -23,6 +25,8 @@ class FabricResolver
     public function __construct(
         private readonly UnderlayResolver $underlay = new UnderlayResolver,
         private readonly EsiLinkWriter $links = new EsiLinkWriter,
+        private readonly FabricChecks $checks = new FabricChecks,
+        private readonly IssueStore $issues = new IssueStore,
     ) {
     }
 
@@ -50,7 +54,7 @@ class FabricResolver
     }
 
     /**
-     * @return array<string, int> nodes, devices, unknown, fabrics, links, esi_links
+     * @return array<string, int> nodes, devices, unknown, fabrics, links, esi_links, issues, issues_new, issues_cleared
      */
     public function resolve(): array
     {
@@ -183,6 +187,8 @@ class FabricResolver
         } else {
             $this->links->deleteAll();
         }
+        // the consistency checks (plan §7.5) over the fabrics as they are now
+        $checks = $this->checks->run($now);
 
         return [
             'nodes' => count($graph->nodes()),
@@ -191,6 +197,9 @@ class FabricResolver
             'fabrics' => count($components),
             'links' => count($edges),
             'esi_links' => $esiLinks,
+            'issues' => $checks['issues'],
+            'issues_new' => $checks['new'],
+            'issues_cleared' => $checks['cleared'],
         ];
     }
 
@@ -208,6 +217,7 @@ class FabricResolver
         $changed += DB::table(TableSchema::tableName('underlay_link'))->where('a_device_id', $deviceId)->orWhere('b_device_id', $deviceId)->delete();
         $changed += DB::table(TableSchema::tableName('mac'))->where('source_device_id', $deviceId)->update(['source_device_id' => null]);
         $changed += $this->links->forget($deviceId);
+        $changed += $this->issues->forget($deviceId);
 
         return $changed;
     }

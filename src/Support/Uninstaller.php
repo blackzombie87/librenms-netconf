@@ -23,7 +23,7 @@ use SafferIt\LibrenmsNetconf\NetconfSettings;
 class Uninstaller
 {
     public const TABLES = [
-        'netconf_evpn_underlay_link', 'netconf_evpn_fabric_member', 'netconf_evpn_fabric', 'netconf_evpn_vtep', 'netconf_evpn_mac',
+        'netconf_evpn_issue_device', 'netconf_evpn_issue', 'netconf_evpn_underlay_link', 'netconf_evpn_fabric_member', 'netconf_evpn_fabric', 'netconf_evpn_vtep', 'netconf_evpn_mac',
         'netconf_evpn_tunnel', 'netconf_evpn_vni_vtep', 'netconf_evpn_vni', 'netconf_evpn_esi', 'netconf_evpn_neighbor',
         'netconf_port_metrics', 'netconf_metrics', 'netconf_device_status',
     ];
@@ -33,7 +33,7 @@ class Uninstaller
      * fabric-level ones; vtep.device_id is nullable, underlay_link keys the A end).
      */
     public const DEVICE_TABLES = [
-        'netconf_evpn_underlay_link' => 'a_device_id', 'netconf_evpn_vtep' => 'device_id',
+        'netconf_evpn_issue_device' => 'device_id', 'netconf_evpn_underlay_link' => 'a_device_id', 'netconf_evpn_vtep' => 'device_id',
         'netconf_evpn_mac' => 'device_id', 'netconf_evpn_tunnel' => 'device_id', 'netconf_evpn_vni_vtep' => 'device_id', 'netconf_evpn_vni' => 'device_id',
         'netconf_evpn_esi' => 'device_id', 'netconf_evpn_neighbor' => 'device_id',
         'netconf_port_metrics' => 'device_id', 'netconf_metrics' => 'device_id', 'netconf_device_status' => 'device_id',

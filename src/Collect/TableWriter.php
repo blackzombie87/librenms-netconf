@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 use SafferIt\LibrenmsNetconf\Extract\TableRow;
+use SafferIt\LibrenmsNetconf\Fabric\MacMobility;
 
 /**
  * Writes `tables:` rows to the netconf_evpn_* tables: one upsert per mapping and chunk
@@ -54,14 +55,51 @@ class TableWriter
                 $records[] = $record;
             }
 
+            $update = array_merge($columns, ['last_seen']);
+            if ($mapping->table === 'mac' && in_array('source', $columns, true)) {
+                $records = $this->mobility($records, $now);
+                $update = array_merge($update, ['moves', 'moves_recent', 'moves_since']);
+            }
+
             $unique = array_merge(['device_id'], $mapping->keyColumns());
             foreach (array_chunk($records, 200) as $chunk) {
-                DB::table($table)->upsert($chunk, $unique, array_merge($columns, ['last_seen']));
+                DB::table($table)->upsert($chunk, $unique, $update);
             }
             Log::debug(sprintf('  table %s: %d rows from %s/%s', $mapping->table, count($group), $group[0]->definition, $mapping->id));
         }
 
         return ['rows' => count($rows), 'tables' => count($tables)];
+    }
+
+    /**
+     * MAC mobility (plan §7.5 check 7): compare the active source of every MAC row with the
+     * stored one and carry the move counters along, so the upsert keeps them current.
+     *
+     * @param  list<array<string, mixed>>  $records
+     * @return list<array<string, mixed>>
+     */
+    private function mobility(array $records, string $now): array
+    {
+        $previous = [];
+        foreach (DB::table(TableSchema::tableName('mac'))->where('device_id', $this->device->device_id)->get(['vni', 'mac_address', 'source', 'moves', 'moves_recent', 'moves_since']) as $row) {
+            $previous[$row->vni . '|' . $row->mac_address] = (array) $row;
+        }
+        $at = new \DateTimeImmutable($now);
+        $moved = 0;
+        foreach ($records as &$record) {
+            $before = $previous[($record['vni'] ?? '') . '|' . ($record['mac_address'] ?? '')] ?? null;
+            $next = MacMobility::next($before, isset($record['source']) ? (string) $record['source'] : null, $at);
+            if ($before !== null && $next['moves'] > (int) $before['moves']) {
+                $moved++;
+            }
+            $record += $next;
+        }
+        unset($record);
+        if ($moved > 0) {
+            Log::debug("  table mac: $moved MAC(s) changed their active source");
+        }
+
+        return $records;
     }
 
     /**

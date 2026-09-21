@@ -138,6 +138,10 @@ metrics:
       local_mac_ips:  number(mac-database-status-table/local-mac-ips)
       remote_mac_ips: number(mac-database-status-table/remote-mac-ips)
       neighbors:      number(evpn-num-neighbors)
+      # duplicate-MAC detection parameters, labels only (fabric check "dup-mac-params")
+      dup_threshold:  { xpath: string(duplicate-mac-detection-threshold), type: string }
+      dup_window:     { xpath: string(duplicate-mac-detection-window), type: string }
+      dup_recovery:   { xpath: string(duplicate-mac-auto-recovery-time), type: string }
       esis:           number(evpn-num-esi)
       bridge_domains: number(num-bridge-domains)
       local_ifs:      number(local-interfaces)
