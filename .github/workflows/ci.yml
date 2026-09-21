@@ -65,3 +65,70 @@ jobs:
           coverage: none
       - run: composer install --no-interaction --no-progress
       - run: vendor/bin/pest
+
+  # Feature suite (tests/Feature, phpunit.feature.xml): needs a LibreNMS installation and its
+  # testing database. Pinned to a LibreNMS tag on purpose - bump it deliberately, a plugin
+  # that breaks against a newer core should fail here and not on someone's poller.
+  # Never executed yet: the repository has no remote (plan R5), so the first push is its
+  # first run. Until then dev/README.md makes the Docker run a pre-tag step.
+  feature:
+    name: Feature tests (LibreNMS ${{ env.LIBRENMS_REF }})
+    runs-on: ubuntu-latest
+    env:
+      LIBRENMS_REF: '26.7.0'
+      LIBRENMS_PATH: ${{ github.workspace }}/librenms
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: librenms_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Check out the plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+      - name: Check out LibreNMS
+        uses: actions/checkout@v4
+        with:
+          repository: librenms/librenms
+          ref: ${{ env.LIBRENMS_REF }}
+          path: librenms
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, libxml, openssl, mysqlnd, pdo_mysql, gd, bcmath, intl, zip, snmp
+          coverage: none
+      - name: Install the plugin's dependencies
+        working-directory: plugin
+        run: composer install --no-interaction --no-progress
+      - name: Install LibreNMS and add the plugin as a path repository
+        working-directory: librenms
+        run: |
+          cp .env.example .env
+          composer config repositories.netconf path ../plugin
+          composer install --no-interaction --no-progress
+          composer require saffer-it/librenms-netconf:@dev --no-interaction --no-progress
+          php artisan key:generate --force
+      - name: Migrate the testing database
+        working-directory: librenms
+        env:
+          DB_TEST_HOST: 127.0.0.1
+          DB_TEST_PORT: '3306'
+          DB_TEST_DATABASE: librenms_test
+          DB_TEST_USERNAME: root
+          DB_TEST_PASSWORD: root
+        run: |
+          printf 'DB_TEST_HOST=%s\nDB_TEST_PORT=%s\nDB_TEST_DATABASE=%s\nDB_TEST_USERNAME=%s\nDB_TEST_PASSWORD=%s\n' \
+            "$DB_TEST_HOST" "$DB_TEST_PORT" "$DB_TEST_DATABASE" "$DB_TEST_USERNAME" "$DB_TEST_PASSWORD" >> .env
+          DB_CONNECTION=testing php artisan migrate --force
+      - name: Run the feature suite
+        working-directory: plugin
+        run: vendor/bin/phpunit -c phpunit.feature.xml

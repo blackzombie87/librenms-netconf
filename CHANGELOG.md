@@ -55,6 +55,11 @@ Gaps closed on the way to 1.1 (internal plan §6.2):
   queries and EVPN instance / collector-failure lookups each live in one place now. The BGP
   overlay tab reuses the rows the session discovery already read instead of querying them
   again.
+- Tests (F4a): the Feature suite grew to 28 tests — the poller module end to end against
+  recorded replies (discover, poll, dump, cleanup, and a failed connect), the metric writers
+  against the database and a datastore, `RrdLayout` against a real rrdtool, and
+  `netconf:uninstall --purge` on a seeded device. A CI job runs the suite against a pinned
+  LibreNMS tag with a MariaDB service.
 
 EVPN fabric checks, phase F4 (internal plan §7.5):
 
