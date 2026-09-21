@@ -79,13 +79,13 @@ class Netconf implements Module
             + NetconfDeviceStatus::query()->where('device_id', $device->device_id)->delete()
             + (new TableWriter($device))->deleteAll();
 
-        // the device's VTEP addresses become unknown VTEPs, its underlay edges go, and the
-        // fabrics are recomputed from what the remaining leaves still see
+        // the device's memberships and VTEP addresses go, its underlay edges go, and the
+        // fabrics are recomputed from what the remaining leaves still see; also while the
+        // fabric setting is off (cheap then: the tables are static or empty), so a deleted
+        // device never lingers as a member
         $resolver = FabricResolver::make();
         $deleted += $resolver->forget($device->device_id);
-        if (NetconfService::fabricEnabled()) {
-            $resolver->run();
-        }
+        $resolver->run();
 
         return $deleted;
     }

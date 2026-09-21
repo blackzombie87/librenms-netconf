@@ -195,13 +195,16 @@ class FabricResolver
     }
 
     /**
-     * A device leaves LibreNMS (module cleanup): its addresses become unknown VTEPs, its
-     * underlay edges go, and the graph is recomputed so its membership follows the evidence
-     * the remaining leaves still have. Returns the number of rows changed.
+     * A device leaves LibreNMS (module cleanup): its unpinned memberships go, its addresses
+     * become unknown VTEPs, its underlay edges go, and the caller recomputes the graph so what
+     * the remaining leaves still see (an address as their neighbour or ESI peer) becomes an
+     * unknown VTEP member again. Returns the number of rows changed.
      */
     public function forget(int $deviceId): int
     {
-        $changed = DB::table(TableSchema::tableName('vtep'))->where('device_id', $deviceId)->update(['device_id' => null, 'router_id' => null]);
+        $addresses = DB::table(TableSchema::tableName('vtep'))->where('device_id', $deviceId)->pluck('vtep_ip')->map(fn ($v) => (string) $v)->all();
+        $changed = DB::table(TableSchema::tableName('fabric_member'))->whereIn('vtep_ip', $addresses ?: [''])->where('pinned', 0)->delete();
+        $changed += DB::table(TableSchema::tableName('vtep'))->where('device_id', $deviceId)->update(['device_id' => null, 'router_id' => null]);
         $changed += DB::table(TableSchema::tableName('underlay_link'))->where('a_device_id', $deviceId)->orWhere('b_device_id', $deviceId)->delete();
         $changed += DB::table(TableSchema::tableName('mac'))->where('source_device_id', $deviceId)->update(['source_device_id' => null]);
         $changed += $this->links->forget($deviceId);

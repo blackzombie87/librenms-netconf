@@ -86,12 +86,14 @@ class FabricController extends Controller
             'name' => 'required|string|max:64',
             'notes' => 'nullable|string|max:2000',
         ]);
-        $updated = DB::table(TableSchema::tableName('fabric'))->where('id', $fabric)->update([
+        // exists() first: MySQL reports 0 changed rows for a no-op save within the same
+        // second, which is not a missing fabric
+        abort_unless(DB::table(TableSchema::tableName('fabric'))->where('id', $fabric)->exists(), 404, 'No such fabric');
+        DB::table(TableSchema::tableName('fabric'))->where('id', $fabric)->update([
             'name' => trim($data['name']),
             'notes' => trim((string) ($data['notes'] ?? '')) === '' ? null : trim((string) $data['notes']),
             'updated_at' => now()->toDateTimeString(),
         ]);
-        abort_if($updated === 0, 404, 'No such fabric');
 
         return redirect()->route('netconf.fabric', [$fabric, 'overview'])->with('netconf_fabric_result', ['type' => 'success', 'text' => 'Saved.']);
     }

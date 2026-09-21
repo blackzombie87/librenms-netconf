@@ -77,11 +77,6 @@ class EsiLinkWriter
         return DB::table('links')->where('protocol', EsiLinks::PROTOCOL)->where('local_device_id', $deviceId)->delete();
     }
 
-    public function count(): int
-    {
-        return DB::table('links')->where('protocol', EsiLinks::PROTOCOL)->count();
-    }
-
     /**
      * @param  list<array<string, mixed>>  $rows
      */
