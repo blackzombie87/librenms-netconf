@@ -4,13 +4,15 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\Checks\IssueStore;
 use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
  * Fabric list and overview figures (plan §7.4): member counts by role, totals over the
  * per-leaf tables of the monitored members (DeviceStats, distinct VNIs / ESIs / instances),
  * and the health badges that need no checks engine (EVPN sessions down, ESIs degraded,
- * duplicate MACs, orphan VNIs, unknown VTEPs, members whose collector is failing).
+ * duplicate MACs, orphan VNIs, unknown VTEPs, members whose collector is failing), plus the
+ * open issues of the checks engine by severity.
  * Everything is computed for all fabrics at once: the tables are small at the fabric level
  * (tens of nodes, hundreds of VNIs).
  */
@@ -53,6 +55,7 @@ final class FabricSummary
         $sessions = OverlaySessions::forDevices($deviceIds);
         // every address of a monitored device (member address and router-id aliases) -> device
         $ipDevice = DB::table(TableSchema::tableName('vtep'))->whereNotNull('device_id')->pluck('device_id', 'vtep_ip')->map(fn ($id) => (int) $id)->all();
+        $checks = IssueStore::countByFabric();
 
         $summaries = [];
         foreach ($fabrics as $fabric) {
@@ -89,6 +92,7 @@ final class FabricSummary
                 'pinned' => $own->where('pinned', 1)->count(),
                 'totals' => array_intersect_key($totals, array_flip(['vnis', 'esis', 'instances', 'tunnels', 'neighbors', 'local_macs', 'remote_macs'])),
                 'health' => $health,
+                'checks' => $checks[(int) $fabric->id] ?? ['critical' => 0, 'warning' => 0, 'info' => 0],
                 'issues' => array_sum($health),
                 'last_seen' => $own->max('last_seen'),
                 'device_ids' => $devices,

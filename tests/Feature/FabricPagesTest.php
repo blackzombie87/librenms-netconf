@@ -27,7 +27,7 @@ final class FabricPagesTest extends LibrenmsTestCase
         $fabric = $this->fabric();
 
         $this->get('/plugin/netconf/fabrics')->assertOk()->assertSee('Fabric test');
-        foreach (['overview', 'members', 'bgp', 'vnis', 'esis', 'tunnels', 'macs'] as $tab) {
+        foreach (['overview', 'members', 'bgp', 'vnis', 'esis', 'tunnels', 'macs', 'checks'] as $tab) {
             $this->get("/plugin/netconf/fabric/$fabric/$tab")->assertOk();
         }
         $this->get("/plugin/netconf/fabric/$fabric/nope")->assertNotFound();

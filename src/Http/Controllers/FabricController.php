@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\View\FabricIssues;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricMembers;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricNodes;
 use SafferIt\LibrenmsNetconf\Fabric\View\EsiMatrix;
@@ -36,6 +37,7 @@ class FabricController extends Controller
         'esis' => 'ESI / multihoming',
         'tunnels' => 'Tunnels',
         'macs' => 'MACs',
+        'checks' => 'Checks',
     ];
 
     public function index(): View
@@ -114,6 +116,7 @@ class FabricController extends Controller
             'esis' => $this->esis($nodes, $request),
             'tunnels' => ['tunnels' => TunnelMatrix::forFabric($nodes)],
             'macs' => ['search' => MacSearch::run((string) $request->query('q', ''), $deviceIds), 'q' => (string) $request->query('q', '')],
+            'checks' => $this->checks($summary['id'], $request),
             default => [],
         };
     }
@@ -151,6 +154,26 @@ class FabricController extends Controller
             'esi_issues' => count(array_filter($rows, fn ($r) => $r['flags'] !== [])),
             'q' => $q,
             'issues_only' => $issues,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function checks(int $fabricId, Request $request): array
+    {
+        $issues = FabricIssues::forFabric($fabricId);
+        $q = (string) $request->query('q', '');
+        $severity = (string) $request->query('severity', '');
+        $check = (string) $request->query('check', '');
+
+        return [
+            'issues' => FabricIssues::filter($issues, $q, $severity, $check),
+            'issue_total' => count($issues),
+            'issue_counts' => FabricIssues::counts($issues),
+            'q' => $q,
+            'severity' => $severity,
+            'check' => $check,
         ];
     }
 

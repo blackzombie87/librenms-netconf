@@ -40,12 +40,13 @@
                                     <th class="text-right">ESIs</th>
                                     <th class="text-right">MACs local / remote</th>
                                     <th>Health</th>
+                                    <th>Checks</th>
                                     <th>Last seen</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($fabrics as $f)
-                                    <tr class="{{ $f['issues'] > 0 ? 'warning' : '' }}">
+                                    <tr class="{{ $f['checks']['critical'] > 0 ? 'danger' : ($f['issues'] > 0 || $f['checks']['warning'] > 0 ? 'warning' : '') }}">
                                         <td>
                                             <a href="{{ route('netconf.fabric', $f['id']) }}"><strong>{{ $f['name'] }}</strong></a>
                                             @if ($f['notes'])<br><small class="text-muted">{{ \Illuminate\Support\Str::limit($f['notes'], 80) }}</small>@endif
@@ -58,6 +59,7 @@
                                         <td class="text-right">{{ $f['totals']['esis'] }}</td>
                                         <td class="text-right">{{ number_format($f['totals']['local_macs']) }} / {{ number_format($f['totals']['remote_macs']) }}</td>
                                         <td>@include('netconf::fabric.health', ['health' => $f['health'], 'fabric_id' => $f['id']])</td>
+                                        <td>@include('netconf::fabric.checks-badge', ['checks' => $f['checks'], 'fabric_id' => $f['id']])</td>
                                         <td><small>{{ $f['last_seen'] ? \Carbon\Carbon::parse($f['last_seen'])->diffForHumans() : '' }}</small></td>
                                     </tr>
                                 @endforeach

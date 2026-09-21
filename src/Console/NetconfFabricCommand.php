@@ -6,18 +6,20 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\Checks\IssueStore;
 use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 use SafferIt\LibrenmsNetconf\Fabric\FabricResolver;
 
 /**
  * lnms netconf:fabric — show the resolved EVPN fabrics (members, roles, unknown VTEPs,
- * underlay links); --resolve recomputes them from the current tables first.
+ * underlay links, open check issues); --resolve recomputes them from the current tables first.
  */
 class NetconfFabricCommand extends Command
 {
     protected $signature = 'netconf:fabric
         {--resolve : Recompute fabrics, members and underlay links now}
-        {--links : Also list the underlay links}';
+        {--links : Also list the underlay links}
+        {--checks : Also list the open issues of the consistency checks}';
 
     protected $description = 'Show the EVPN fabrics resolved from the netconf_evpn_* tables';
 
@@ -32,7 +34,7 @@ class NetconfFabricCommand extends Command
             if ($summary === null) {
                 $this->warn('Not resolved: a poller holds the fabric resolver lock, its run covers this one.');
             } else {
-                $this->line(sprintf('<info>Resolved:</info> %d nodes on %d devices (%d unknown), %d fabrics, %d underlay links, %d ESI peer links', $summary['nodes'], $summary['devices'], $summary['unknown'], $summary['fabrics'], $summary['links'], $summary['esi_links']));
+                $this->line(sprintf('<info>Resolved:</info> %d nodes on %d devices (%d unknown), %d fabrics, %d underlay links, %d ESI peer links, %d open issues (%d new, %d cleared)', $summary['nodes'], $summary['devices'], $summary['unknown'], $summary['fabrics'], $summary['links'], $summary['esi_links'], $summary['issues'], $summary['issues_new'], $summary['issues_cleared']));
             }
         }
 
@@ -51,8 +53,10 @@ class NetconfFabricCommand extends Command
                 TableSchema::tableName('fabric_member') . '.pinned', 'device_id', 'router_id', 'border', 'name_hint', 'last_seen',
             ]);
 
-        $this->table(['Id', 'Name', 'Key', 'Members', 'Leaves', 'Gateways', 'Spines', 'Unknown VTEPs'], $fabrics->map(function ($fabric) use ($members) {
+        $issueCounts = IssueStore::countByFabric();
+        $this->table(['Id', 'Name', 'Key', 'Members', 'Leaves', 'Gateways', 'Spines', 'Unknown VTEPs', 'Issues (crit/warn/info)'], $fabrics->map(function ($fabric) use ($members, $issueCounts) {
             $own = $members->where('fabric_id', $fabric->id);
+            $issues = $issueCounts[(int) $fabric->id] ?? ['critical' => 0, 'warning' => 0, 'info' => 0];
 
             return [
                 $fabric->id,
@@ -63,6 +67,7 @@ class NetconfFabricCommand extends Command
                 $own->where('role', 'gateway')->count(),
                 $own->where('role', 'spine')->count(),
                 $own->whereNull('device_id')->count(),
+                sprintf('%d / %d / %d', $issues['critical'], $issues['warning'], $issues['info']),
             ];
         })->all());
 
@@ -93,6 +98,22 @@ class NetconfFabricCommand extends Command
                 $l->state ?? '',
                 $l->lldp ? 'yes' : '',
                 $l->wan ? 'yes' : '',
+            ])->all());
+        }
+
+        if ($this->option('checks')) {
+            $issues = DB::table(IssueStore::TABLE)->orderBy('fabric_id')->orderByRaw("field(severity, 'critical', 'warning', 'info')")->orderBy('check')->orderBy('subject')->get();
+            $devices = [];
+            foreach (DB::table(IssueStore::DEVICE_TABLE)->get() as $link) {
+                $devices[(int) $link->issue_id][] = $hostnames[(int) $link->device_id] ?? (string) $link->device_id;
+            }
+            $this->table(['Fabric', 'Severity', 'Check', 'Issue', 'Devices', 'First seen'], $issues->map(fn ($i) => [
+                $i->fabric_id,
+                $i->severity === 'critical' ? "<error>{$i->severity}</error>" : ($i->severity === 'warning' ? "<comment>{$i->severity}</comment>" : $i->severity),
+                $i->check,
+                $i->message,
+                implode(', ', $devices[(int) $i->id] ?? []),
+                $i->first_seen,
             ])->all());
         }
 

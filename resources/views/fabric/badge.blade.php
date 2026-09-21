@@ -12,4 +12,5 @@
     @foreach ([['vnis', $badge['vnis'] . ' VNIs' . ($badge['irbs'] ? ' (' . $badge['irbs'] . ' IRB)' : '')], ['esis', $badge['esis'] . ' ESI-LAGs, DF for ' . $badge['esis_df']], ['bgp', $badge['neighbors'] . ' EVPN neighbours'], ['tunnels', $badge['tunnels'] . ' tunnels']] as [$tabId, $text])
         &middot; @if ($tab($tabId))<a href="{{ $tab($tabId) }}">{{ $text }}</a>@else{{ $text }}@endif
     @endforeach
+    &middot; @include('netconf::fabric.checks-badge', ['checks' => $badge['issues'], 'fabric_id' => $badge['fabric_id'], 'link' => $fabricLinks]) <span class="text-muted">fabric issues involving this device</span>
 </small>

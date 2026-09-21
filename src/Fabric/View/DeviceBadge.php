@@ -4,11 +4,12 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\Checks\IssueStore;
 
 /**
  * The "EVPN fabric" line of a device (plan §7.4 badge): its fabric, role, VTEP address and a
  * few counts from DeviceStats — VNIs, ESI-LAGs with the DF count, EVPN neighbours, tunnels —
- * or null when the device is not a fabric member.
+ * and the open fabric issues that involve it, or null when the device is not a fabric member.
  */
 final class DeviceBadge
 {
@@ -44,6 +45,7 @@ final class DeviceBadge
             'irbs' => $stats['irbs'],
             'neighbors' => $stats['neighbors'],
             'tunnels' => $stats['tunnels'],
+            'issues' => IssueStore::countForDevice($deviceId),
         ];
     }
 }
