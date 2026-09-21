@@ -82,35 +82,43 @@ talking to a device needs the admin role.
 ## Device login class (Junos)
 
 The plugin only runs `show` commands. A dedicated read-only class keeps the monitoring
-account from doing anything else:
+account from doing anything else. Verified 2026-09-21 on an EX4650 (Junos 23.4R2-S7.4):
+the single permission `view` is enough for every shipped definition (22 commands over cli/22
+and netconf/830, password and SSH-key login), and `show cli authorization` parses for it.
 
 ```
 set system login class LIBRENMS_NETCONF idle-timeout 5
 set system login class LIBRENMS_NETCONF permissions view
-set system login class LIBRENMS_NETCONF permissions view-configuration
-set system login class LIBRENMS_NETCONF permissions access
-set system login class LIBRENMS_NETCONF permissions firewall
-set system login class LIBRENMS_NETCONF permissions interface
-set system login class LIBRENMS_NETCONF permissions network
-set system login class LIBRENMS_NETCONF permissions routing
-set system login class LIBRENMS_NETCONF permissions security
-set system login class LIBRENMS_NETCONF permissions snmp
-set system login class LIBRENMS_NETCONF permissions storage
-set system login class LIBRENMS_NETCONF permissions system
-set system login class LIBRENMS_NETCONF permissions trace
-set system login class LIBRENMS_NETCONF allow-commands "^show "
-set system login class LIBRENMS_NETCONF deny-configuration-regexps .*
+set system login class LIBRENMS_NETCONF deny-commands "^(file|request|restart|start|clear|test|monitor|op|load|save|copy|set|edit|configure)"
 set system login user librenms class LIBRENMS_NETCONF
 set system login user librenms authentication ssh-ed25519 "ssh-ed25519 AAAA… librenms@poller"
 ```
 
-For the optional `netconf` transport additionally enable the subsystem and allow the
-XML-session commands:
+Notes from the verification:
+
+- `view` alone also permits `file list` (and `ping`, `traceroute`, `monitor` are governed
+  by other flags), so the `deny-commands` line is what actually pins the account to `show`.
+  `allow-commands "^show "` is not needed: on Junos `allow-commands` *adds* commands on top
+  of the permission flags, it never restricts them.
+- `view-configuration` is not needed by any shipped definition; leave it out unless a user
+  definition reads `show configuration`. Without the `configure` permission
+  `deny-configuration-regexps` has nothing to deny.
+- Do not use the wider set `access firewall interface network routing security snmp
+  storage system trace`; it changes nothing for the plugin and grants operational commands
+  the plugin never issues.
+
+For the optional `netconf` transport enable the subsystem:
 
 ```
 set system services netconf ssh
-set system login class LIBRENMS_NETCONF allow-commands "^(show |netconf|xml-mode|need-trailer)"
 ```
+
+The subsystem on port 830 is authorised with the same permission flags as the CLI; no
+`allow-commands` entry for `xml-mode` or `netconf` is needed (verified on 23.4R2, the class
+above logs in and answers `show version` and `<command>` RPCs). `set system services netconf
+rfc-compliant` changes reply formatting but the server still advertises only `base:1.0`
+(end-of-message framing) on 23.4R2; chunked framing (`base:1.1`) is implemented and
+unit-tested, but has not been seen live.
 
 ## Transports
 

@@ -10,6 +10,10 @@ Gaps closed on the way to 1.1 (`docs/PLAN.md` §6.2):
 - Bulk enable (G7): `lnms netconf:device --group=<name|id> [--os=<os>]` applies `--enable`,
   `--disable` and the credential overrides to every device of a device group and/or os and
   lists them; the status page gets an *Enable per device group or os* form for admins.
+- Login class verified on an EX4650 (R4): `permissions view` alone runs every shipped
+  definition over both transports and with key auth; README now recommends that plus a
+  `deny-commands` regex and explains why `allow-commands` cannot restrict. `rfc-compliant`
+  does not enable `base:1.1` on 23.4R2 (G5 stays unobserved).
 - Metrics page (G12): every mapping and the port table are collapsed fold-outs, graph images
   are created on open instead of shipped as `<img>` tags (99 graph renders per page view on
   a 48-port leaf before; the HTML shrank from 397 kB to 248 kB, of which 73 kB is the
