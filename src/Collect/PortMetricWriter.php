@@ -126,6 +126,27 @@ class PortMetricWriter
         return $deleted;
     }
 
+    /**
+     * Remove rows of mappings no matched definition has any more (definition edited, disabled
+     * or gone, or nothing matches the device): the counterpart of the table orphan prune.
+     *
+     * @param  list<string>  $knownMappings  "definition/mapping" pairs of the matched definitions
+     */
+    public function deleteOrphans(array $knownMappings): int
+    {
+        $deleted = 0;
+        $pairs = NetconfPortMetric::query()->where('device_id', $this->device->device_id)->distinct()->get(['definition', 'mapping']);
+        foreach ($pairs as $pair) {
+            if (! in_array($pair->definition . '/' . $pair->mapping, $knownMappings, true)) {
+                $deleted += NetconfPortMetric::query()->where('device_id', $this->device->device_id)
+                    ->where('definition', $pair->definition)->where('mapping', $pair->mapping)->delete();
+                Log::info(sprintf('  port metric rows of %s/%s deleted, no matching definition fills them any more', $pair->definition, $pair->mapping));
+            }
+        }
+
+        return $deleted;
+    }
+
     public function deleteAll(): int
     {
         return NetconfPortMetric::query()->where('device_id', $this->device->device_id)->delete();

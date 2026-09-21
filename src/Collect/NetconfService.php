@@ -122,10 +122,16 @@ class NetconfService
 
         Log::info(sprintf('netconf: %d matching definition(s): %s', count($definitions), implode(', ', $names) ?: '-'));
         if ($definitions === []) {
-            // not a failure: nothing to connect for, so no back-off and no eventlog entry
-            $this->saveStatus($status, $status->transport ?? '', $names, null, 'no definitions match this device', microtime(true) - $start, $discovery, failure: false);
+            // not a failure: nothing to connect for, so no back-off and no eventlog entry. The
+            // writers still run with an empty result so what earlier definitions stored (an OS
+            // change, every definition disabled) is pruned instead of lingering as live data
+            $result = new CollectionResult;
+            $summary = $result->summary() + $this->store($device, [], $result, $datastore, $discovery);
+            $duration = microtime(true) - $start;
+            $this->saveStatus($status, $status->transport ?? '', $names, $result, 'no definitions match this device', $duration, $discovery, failure: false);
+            Log::info(sprintf('netconf: nothing to collect; %d sensor(s) synced, %d metric, %d port and %d table row(s) pruned in %.2fs', $summary['sensors_synced'] ?? 0, $summary['metrics_pruned'] ?? 0, $summary['ports_pruned'] ?? 0, $summary['tables_pruned'] ?? 0, $duration));
 
-            return new RunReport($discovery, $status->transport ?? '', [], [], [], [], microtime(true) - $start);
+            return new RunReport($discovery, $status->transport ?? '', [], $summary, [], [], $duration, $result);
         }
 
         $credentials = $this->credentials->forDevice($device);
@@ -192,12 +198,15 @@ class NetconfService
         $ports = new PortMetricWriter($device, $layout);
         $tables = new TableWriter($device);
 
-        // mappings whose command did not deliver data this run keep their existing rows
+        // mappings whose command did not deliver data this run keep their existing rows;
+        // mappings no matched definition has any more lose theirs
         /** @var array<string, SensorMapping> $skipped */
         $skipped = [];
         $classes = [];
         $mappingsWithData = [];
         $portMappingsWithData = [];
+        $knownMappings = [];
+        $knownPortMappings = [];
         /** @var array<string, bool> $tableComplete  logical table => every mapping delivered data */
         $tableComplete = [];
         foreach ($definitions as $definition) {
@@ -211,11 +220,13 @@ class NetconfService
                 }
             }
             foreach ($definition->metrics as $mapping) {
+                $knownMappings[] = $definition->name . '/' . $mapping->id;
                 if ($def !== null && ! in_array($mapping->id, $def->skippedMappings, true)) {
                     $mappingsWithData[] = $definition->name . '/' . $mapping->id;
                 }
             }
             foreach ($definition->ports as $mapping) {
+                $knownPortMappings[] = $definition->name . '/' . $mapping->id;
                 if ($def !== null && ! in_array($mapping->id, $def->skippedMappings, true)) {
                     $portMappingsWithData[] = $definition->name . '/' . $mapping->id;
                 }
@@ -229,7 +240,7 @@ class NetconfService
         $counts = [];
         $values = $result->sensors();
 
-        if ($discovery) {
+        if ($discovery || $definitions === []) {
             $sync = $sensors->sync($values, $skipped, array_keys($classes));
             $counts['sensors_synced'] = $sync['synced'];
             $counts['sensors_kept'] = $sync['kept'];
@@ -246,7 +257,7 @@ class NetconfService
 
         $m = $metrics->write($result->metrics(), $discovery ? null : ($datastore ?? app('Datastore')));
         $counts['metrics_rows'] = $m['rows'];
-        $counts['metrics_pruned'] = $metrics->prune($result->metrics(), $mappingsWithData);
+        $counts['metrics_pruned'] = $metrics->prune($result->metrics(), $mappingsWithData) + $metrics->deleteOrphans($knownMappings);
 
         $p = $ports->write($result->ports(), $discovery ? null : ($datastore ?? app('Datastore')));
         if (($summary = $layout->summary()) !== null) {
@@ -254,7 +265,7 @@ class NetconfService
         }
         $counts['ports_matched'] = $p['matched'];
         $counts['ports_unmatched'] = count($p['unmatched']);
-        $counts['ports_pruned'] = $ports->prune($portMappingsWithData);
+        $counts['ports_pruned'] = $ports->prune($portMappingsWithData) + $ports->deleteOrphans($knownPortMappings);
         if ($p['unmatched'] !== []) {
             Log::debug('netconf: unmatched ports: ' . implode(', ', array_slice($p['unmatched'], 0, 20)));
         }
@@ -274,6 +285,11 @@ class NetconfService
             if ($orphans !== []) {
                 $pruned += $tables->deleteTables($orphans);
                 Log::info('  table rows deleted, no matching definition fills them any more: ' . implode(', ', $orphans));
+                if ($tableComplete === []) {
+                    // the device left the fabric tables altogether: its memberships and VTEP
+                    // links go the way they do when the device is deleted
+                    $pruned += FabricResolver::make()->forget($device->device_id);
+                }
             }
             $counts['table_rows'] = $written;
             $counts['tables_pruned'] = $pruned;

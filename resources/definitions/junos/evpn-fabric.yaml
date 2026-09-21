@@ -135,14 +135,14 @@ tables:
       ifname:         string(name)
       snmp_index:     number(snmp-index)
 
-  # next-hop id and mode of the same tunnels, plus the per-routing-instance name (vtep-4.N)
+  # next-hop id and mode of the same tunnels; ifname stays with the kernel IFL of `tunnel`
+  # (both mappings name the same vtep.N here, but the last mapping would win on a mismatch)
   - id: tunnel-nexthop
     table: tunnel
     command: vtep_remote
     rows: //vxlan-real-rvtep-information[remote-vtep-address]
     columns:
       remote_vtep_ip: string(remote-vtep-address)
-      ifname:         string(remote-vtep-interface-name)
       mode:           string(remote-vtep-mode)
       nh_id:          number(remote-vtep-nh-id)
 

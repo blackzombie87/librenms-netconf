@@ -49,7 +49,9 @@ class SensorWriter
     {
         $discovery = new \App\Discovery\Sensor($this->device);
         $existing = $this->existing();
-        $classes = array_fill_keys($classes, true);
+        // classes of the sensors the device has are synced too, so sensors of a class no
+        // matched definition produces any more (or no definition at all) are deleted
+        $classes = array_fill_keys(array_merge($classes, $existing->pluck('sensor_class')->all()), true);
         $kept = 0;
 
         foreach ($values as $value) {

@@ -223,7 +223,7 @@ it('fills the EVPN fabric tables of the leaf', function () {
     expect(tablesOf('junos-evpn-fabric', 'vni-vtep'))->toHaveCount(12)
         ->and(tablesOf('junos-evpn-fabric', 'vni-vtep')['452/192.0.2.11']->values['instance'])->toBe('default-switch')
         ->and(tablesOf('junos-evpn-fabric', 'tunnel')['192.0.2.21']->values)->toBe(['remote_vtep_ip' => '192.0.2.21', 'ifname' => 'vtep.32770', 'snmp_index' => 524])
-        ->and(tablesOf('junos-evpn-fabric', 'tunnel-nexthop')['192.0.2.11']->values)->toBe(['remote_vtep_ip' => '192.0.2.11', 'ifname' => 'vtep.32776', 'mode' => 'RNVE', 'nh_id' => 2445])
+        ->and(tablesOf('junos-evpn-fabric', 'tunnel-nexthop')['192.0.2.11']->values)->toBe(['remote_vtep_ip' => '192.0.2.11', 'mode' => 'RNVE', 'nh_id' => 2445])   // no ifname: only `tunnel` writes the kernel IFL
         ->and(tablesOf('junos-evpn-fabric', 'tunnel-instance')['192.0.2.11']->values['ri_ifname'])->toBe('vtep-4.32776');
 
     $mac = tablesOf('junos-evpn-fabric-mac', 'mac');
