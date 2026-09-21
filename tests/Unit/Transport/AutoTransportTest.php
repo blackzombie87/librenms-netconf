@@ -6,6 +6,8 @@ use SafferIt\LibrenmsNetconf\Transport\AutoTransport;
 use SafferIt\LibrenmsNetconf\Transport\Credentials;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\AuthenticationException;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\ConnectionException;
+use SafferIt\LibrenmsNetconf\Transport\Exceptions\ProtocolException;
+use SafferIt\LibrenmsNetconf\Transport\Exceptions\TimeoutException;
 use SafferIt\LibrenmsNetconf\Transport\NetconfTransport;
 use SafferIt\LibrenmsNetconf\Transport\SshCliTransport;
 use SafferIt\LibrenmsNetconf\Transport\TransportFactory;
@@ -82,4 +84,37 @@ it('does not swallow authentication failures', function () {
     expect(fn () => $transport->connect())->toThrow(AuthenticationException::class)
         ->and($transport->name())->toBe('auto')
         ->and($client->subsystems)->toBe([]);
+});
+
+it('hangs up on close() when the login succeeded but no inner transport was assigned', function () {
+    // a timeout while opening the subsystem is not a refusal: connect() throws with SSH up
+    $client = new FakeSshClient;
+    $client->subsystemError = new TimeoutException('leaf1:22: no answer to the subsystem request');
+    $transport = new AutoTransport(autoCredentials(), $client);
+
+    expect(fn () => $transport->connect())->toThrow(TimeoutException::class)
+        ->and($client->connected)->toBeTrue()
+        ->and($client->disconnected)->toBeFalse();
+
+    $transport->close();
+    expect($client->disconnected)->toBeTrue();
+});
+
+it('hangs up on close() when the netconf hello failed after the login', function () {
+    $client = new FakeSshClient;
+    $client->channel = new \SafferIt\LibrenmsNetconf\Tests\Support\FakeChannel('not a hello]]>]]>');
+    $transport = new AutoTransport(autoCredentials(), $client);
+
+    expect(fn () => $transport->connect())->toThrow(ProtocolException::class)
+        ->and($client->disconnected)->toBeFalse();
+
+    $transport->close();
+    expect($client->disconnected)->toBeTrue();
+});
+
+it('does nothing on close() before connect()', function () {
+    $client = new FakeSshClient;
+    (new AutoTransport(autoCredentials(), $client))->close();
+
+    expect($client->disconnected)->toBeFalse();
 });

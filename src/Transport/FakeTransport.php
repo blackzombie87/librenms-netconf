@@ -19,6 +19,19 @@ class FakeTransport implements TransportInterface
 
     public bool $connected = false;
 
+    /** Times close() was called: the assertion that a caller hangs up on every path. */
+    public int $closes = 0;
+
+    /** Thrown by connect() after the "login" (connected stays true), like a failed hello. */
+    public ?\Throwable $connectError = null;
+
+    /**
+     * Thrown by run() in order, one per call, before the registered replies are consulted.
+     *
+     * @var list<\Throwable>
+     */
+    public array $runErrors = [];
+
     /**
      * @param  array<string, string>  $replies  command => raw xml
      */
@@ -44,6 +57,9 @@ class FakeTransport implements TransportInterface
     public function connect(): void
     {
         $this->connected = true;
+        if ($this->connectError !== null) {
+            throw $this->connectError;
+        }
     }
 
     public function run(string $command): Reply
@@ -51,6 +67,9 @@ class FakeTransport implements TransportInterface
         $this->connect();
         $key = self::normalize($command);
         $this->executed[] = $key;
+        if ($this->runErrors !== []) {
+            throw array_shift($this->runErrors);
+        }
 
         if (! array_key_exists($key, $this->replies)) {
             // behave like a device that does not know the command: only this command fails
@@ -78,6 +97,7 @@ class FakeTransport implements TransportInterface
     public function close(): void
     {
         $this->connected = false;
+        $this->closes++;
     }
 
     public static function normalize(string $command): string

@@ -23,6 +23,9 @@ class AutoTransport implements TransportInterface
 
     private ?string $fallbackReason = null;
 
+    /** SSH login done; set before the inner transport exists so close() can still hang up. */
+    private bool $sshUp = false;
+
     public function __construct(
         private readonly Credentials $credentials,
         private readonly SshClientInterface $client,
@@ -47,6 +50,7 @@ class AutoTransport implements TransportInterface
         }
 
         $authMethod = $this->client->connect($this->credentials, $this->credentials->connectTimeout);
+        $this->sshUp = true;
 
         try {
             $channel = $this->client->startSubsystem('netconf', $this->credentials->commandTimeout);
@@ -96,8 +100,19 @@ class AutoTransport implements TransportInterface
         return $info;
     }
 
+    /**
+     * Hangs up on every path: the inner transport when one exists (also one whose own
+     * connect() failed after the login), else the bare SSH connection when the login went
+     * through but no inner transport was assigned (the subsystem request threw something
+     * other than a refusal).
+     */
     public function close(): void
     {
-        $this->inner?->close();
+        if ($this->inner !== null) {
+            $this->inner->close();
+        } elseif ($this->sshUp) {
+            $this->client->disconnect();
+        }
+        $this->sshUp = false;
     }
 }

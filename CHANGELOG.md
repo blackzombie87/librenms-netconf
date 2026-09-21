@@ -34,6 +34,12 @@ Gaps closed on the way to 1.1 (internal plan §6.2):
 - Missing-session check and BGP tab (F4a): a peer is counted under the member address of its
   device, so members that reach the same node on its VTEP and on its router-id no longer
   split the count or flag each other as missing.
+- Session hygiene on the interactive callers (F4a): the device page's *Test* button, the
+  status page's run form and `netconf:test` close the SSH session on every path, not only
+  on success, and `netconf:test` also hangs up when the login succeeded but the hello or
+  the subsystem request failed. `netconf:run` retries once after two seconds when the
+  device's SSH connection rate limit closes the socket ("Error reading SSH identification
+  string").
 
 EVPN fabric checks, phase F4 (internal plan §7.5):
 

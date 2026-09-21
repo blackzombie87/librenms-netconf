@@ -92,8 +92,8 @@ class DeviceController extends Controller
         $lines = [];
         $ok = false;
         $started = microtime(true);
+        $transport = $transports->make($credentials->forDevice($device));
         try {
-            $transport = $transports->make($credentials->forDevice($device));
             $transport->connect();
             $lines[] = sprintf('Connected in %.2fs', microtime(true) - $started);
             foreach ($transport->sessionInfo() as $key => $value) {
@@ -103,10 +103,12 @@ class DeviceController extends Controller
             }
             $reply = $transport->run('show version');
             $lines[] = sprintf('show version: %s %s %s (%d bytes, %.2fs)', $reply->text('host-name') ?? '?', $reply->text('product-model') ?? '?', $reply->text('junos-version') ?? '?', strlen($reply->raw), $reply->duration);
-            $transport->close();
             $ok = true;
         } catch (TransportException $e) {
             $lines[] = $e->getMessage();
+        } finally {
+            // a timeout or rpc-error after the login must not leave the SSH session open
+            $transport->close();
         }
 
         return redirect()->route('netconf.device', $device->device_id)

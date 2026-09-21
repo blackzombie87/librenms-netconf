@@ -42,6 +42,8 @@ class NetconfTestCommand extends Command
             $transport->connect();
             $this->info(sprintf('Connected in %.2fs', microtime(true) - $start));
         } catch (TransportException $e) {
+            // the login may have succeeded before the hello / subsystem failed: hang up
+            $transport->close();
             $this->error('Connection failed: ' . $e->getMessage());
 
             return self::FAILURE;
