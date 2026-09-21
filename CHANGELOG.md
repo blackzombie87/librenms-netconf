@@ -2,6 +2,28 @@
 
 ## Unreleased (1.1)
 
+EVPN fabric checks, phase F4 (`docs/PLAN.md` §7.5):
+
+- Consistency checks over every fabric at the end of each resolve: asymmetric neighbours,
+  overlay sessions down or missing, flood-list gaps / stale entries / orphans, VLAN tag
+  mismatch, IRB down or partial, ESI single PE / DF disagreement / mode / LAG down /
+  unresolved / LACP / aliasing, duplicate MACs and differing detection parameters, MAC
+  mobility, missing MAC routes, version skew, unknown VTEPs, tunnels without reverse or with
+  errors, members whose collection fails. Findings live in the new tables
+  `netconf_evpn_issue` and `netconf_evpn_issue_device` with a stable `first_seen`.
+- Eventlog entries of type `netconf-evpn` on every involved device when an issue appears,
+  changes severity or clears; nothing between polls.
+- Count sensor **EVPN fabric issues** (`netconf-evpn-fabric-issues`, limit 0) on every
+  monitored member with the critical and warning issues involving it, recorded by the
+  member's own poll.
+- **Checks** tab on the fabric pages with filters and a legend; issue counts on the fabric
+  list, the overview and the device badge; `lnms netconf:fabric --checks`.
+- MAC move counter on `netconf_evpn_mac` (`moves`, `moves_recent`, `moves_since`) and the
+  setting *MAC mobility limit* (`evpn_mac_moves`, default 5 per hour, 0 = off).
+- `junos-evpn` stores the duplicate-MAC detection threshold, window and recovery time as
+  labels of the instance metric.
+- Alert-rule examples for the sensor and the issue tables in the README.
+
 Polish from the F3 review (`docs/REVIEW-2026-09-f3.md`, plan item F3a):
 
 - Fabric list and overview count VNIs, ESIs and instances distinct over the monitored

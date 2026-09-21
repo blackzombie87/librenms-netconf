@@ -163,6 +163,12 @@
                 <td><code>{{ $effective['evpn_links'] ? 'yes' : 'no' }}</code></td>
             </tr>
             <tr>
+                <td><label for="evpn_mac_moves">MAC mobility limit (moves / hour)</label></td>
+                <td><input class="form-control" id="evpn_mac_moves" type="number" min="0" name="settings[evpn_mac_moves]"
+                           value="{{ $settings['evpn_mac_moves'] ?? '' }}" placeholder="{{ $defaults['evpn_mac_moves'] }} — 0 turns the check off"></td>
+                <td><code>{{ $effective['evpn_mac_moves'] }}</code></td>
+            </tr>
+            <tr>
                 <td><label for="definitions_dir">User definitions directory</label></td>
                 <td><input class="form-control" id="definitions_dir" type="text" name="settings[definitions_dir]"
                            value="{{ $settings['definitions_dir'] ?? '' }}" placeholder="storage/app/netconf-definitions"></td>

@@ -316,7 +316,7 @@ those into NaN, while the plugin parses strings itself. Rows inside `multi-routi
 | `sensors` | native sensors with `poller_type = netconf`, `sensor_type = netconf-<definition>-<id>`; state sensors get state translations | `sensors` table, `rrd/<host>/sensor-<class>-netconf-…rrd`, any other configured datastore | standard sensor alert rules (`sensors.sensor_current > sensors.sensor_limit`, state generic value); eventlog on threshold crossing and state change |
 | `ports` | rows matched to the `ports` table by ifIndex (or ifName/ifDescr/ifAlias) | `netconf_port_metrics` (last values as JSON), `rrd/<host>/netconf-port-<port_id>-<definition>-<mapping>.rrd`, one data source per field | Advanced-SQL alert rules on `netconf_port_metrics.values` |
 | `metrics` | free-form rows | `netconf_metrics` (last values + labels as JSON), `rrd/<host>/netconf-<definition>-<mapping>-<index>.rrd` | Advanced-SQL alert rules on `netconf_metrics.values` |
-| `tables` | rows of the EVPN fabric tables, typed columns, merged on the key across mappings, pruned per device | `netconf_evpn_<table>` (neighbor, esi, vni, vni_vtep, tunnel, mac); no RRD. The fabric resolver derives `netconf_evpn_{vtep,fabric,fabric_member,underlay_link}` from them and, with *ESI peers as neighbours*, rows in the core `links` table (`protocol = evpn-esi`) | Advanced-SQL alert rules on the `netconf_evpn_*` tables (only with the *EVPN fabric view* setting) |
+| `tables` | rows of the EVPN fabric tables, typed columns, merged on the key across mappings, pruned per device | `netconf_evpn_<table>` (neighbor, esi, vni, vni_vtep, tunnel, mac); no RRD. The fabric resolver derives `netconf_evpn_{vtep,fabric,fabric_member,underlay_link}` from them, the checks `netconf_evpn_issue{,_device}` and the *EVPN fabric issues* sensor, and, with *ESI peers as neighbours*, rows in the core `links` table (`protocol = evpn-esi`) | Advanced-SQL alert rules on the `netconf_evpn_*` tables (only with the *EVPN fabric view* setting) |
 
 Per device, `netconf_device_status` keeps the transport, matched definitions, poll count,
 last success, last error and the back-off: after a failed session the device is skipped
@@ -395,6 +395,7 @@ fabric has tabs:
 | ESI / multihoming | per Ethernet segment: every PE (monitored sides with LAG and resolution state, remote-only PEs), mode, DF/BDF, aliasing, LACP members not distributing, remote MACs; flags for single PE, DF disagreement, mode mismatch, LAG down, unresolved, aliasing off |
 | Tunnels | per member: `vtep.N` per remote VTEP with mode, next-hop, and — once core has discovered the IFL as a port — traffic, errors and a graph; reverse-tunnel check where the far end is monitored |
 | MACs | the MAC search scoped to the fabric |
+| Checks | the open issues of the consistency checks (below) with severity, message, involved devices, first and last seen; filter by severity, check and text; legend of every check |
 
 **MAC search** (`/plugin/netconf/evpn/mac?q=`, also linked from the fabric list): a MAC in any
 notation (or a prefix), an IP or a VNI. Results are every opted-in leaf's view from the EVPN
@@ -403,8 +404,57 @@ database — local port, ESI with its PEs and their LAGs, or remote VTEP resolve
 
 Everything on these pages is read from the `netconf_evpn_*` tables and core tables; nothing
 talks to a device. Only sessions, flood lists and ESIs of *monitored* members are known, so
-gaps can only be judged between monitored leaves. The consistency checks with alerting
-(plan §7.5) follow in phase F4.
+gaps can only be judged between monitored leaves.
+
+### Fabric checks
+
+At the end of every resolve (each poll of a member leaf) the plugin runs a set of consistency
+checks over the fabric and keeps the findings in `netconf_evpn_issue` (the devices each one
+involves in `netconf_evpn_issue_device`). An issue keeps its `first_seen` while it persists;
+`last_seen` is the last resolve that still found it. Severities are `critical`, `warning` and
+`info`.
+
+| Check | Severity | Raised when |
+|---|---|---|
+| `neighbor-asymmetric` | warning | a member lists another monitored member as EVPN neighbour, the other does not list it back |
+| `session-down` | critical | an overlay BGP session of a member towards another member is not established (state from core `bgpPeers` or `show bgp summary`) |
+| `session-missing` | warning | a member lacks a session to a peer that the other monitored members have |
+| `vni-flood-gap` | critical | a leaf carries a VNI but is missing from another carrier's flood list |
+| `vni-stale-flood` | warning | a flood list points at a monitored member that does not carry the VNI |
+| `vni-orphan` | warning | a VNI on a leaf has no remote VTEP at all |
+| `vni-vlan-mismatch` | info | the same VNI maps to different VLAN tags on different leaves (legal) |
+| `vni-irb-down` | critical | the anycast IRB of a VNI is not up on a gateway |
+| `vni-irb-partial` | info | some carriers of a VNI have an IRB, others do not (legal for a gateway pair) |
+| `esi-single-pe` | critical | an Ethernet segment with a local ESI-LAG has no peer PE (warning when the segment is only known from one remote PE) |
+| `esi-df-disagree` | critical | the PEs name different designated forwarders, or more than one monitored side claims the DF role |
+| `esi-mode-differs` | critical | all-active on one PE, single-active on the other |
+| `esi-lag-down` | critical | the ESI-LAG is not up on a PE |
+| `esi-unresolved` | critical | the ESI is not resolved on a PE |
+| `esi-lacp-degraded` | warning | LACP members of the ESI-LAG are not distributing (`junos-lacp`) |
+| `esi-no-aliasing` | warning | aliasing is disabled on one PE of a segment |
+| `dup-mac` | critical | MACs are suppressed by duplicate-MAC detection on a leaf (the `dup-mac-instance` sensor) |
+| `dup-mac-params` | warning | threshold, window or recovery time of duplicate-MAC detection differ between leaves of one instance |
+| `mac-mobility` | warning | a MAC in the MAC database changed its active source more than *MAC mobility limit* times within one hour (opted-in leaves only; `moves`, `moves_recent`, `moves_since` on `netconf_evpn_mac`) |
+| `route-count` | warning | a member receives no MAC routes from a neighbour that has local MACs in the same instance |
+| `version-skew` | info | the monitored members run different software versions |
+| `unknown-vtep` | warning | a member address does not belong to a monitored device |
+| `tunnel-asymmetric` | warning | a member has a VXLAN tunnel to another member that has none back |
+| `tunnel-errors` | warning | the `vtep.N` port of a tunnel counted errors or discards in the last poll |
+| `member-not-polling` | warning | the NETCONF collection of a member is failing, so its data may be stale |
+
+Alerting hooks, in the order you will probably use them:
+
+- **Eventlog** entries of type `netconf-evpn` when an issue appears (severity error / warning /
+  notice), changes severity or clears (ok), on every monitored device the issue involves; a
+  fabric-level finding (unknown VTEP, version skew) is logged without a device.
+- A **count sensor "EVPN fabric issues"** (`netconf-evpn-fabric-issues`, `limit: 0`) on every
+  monitored member with the number of critical and warning issues that involve it, recorded by
+  the member's own poll (so it reflects the resolve before that poll). Alert on it like on
+  any sensor (*Alerting* below), graph it on the health tab.
+- **Advanced-SQL rules** on `netconf_evpn_issue` for one alert per fabric or per check
+  (examples below).
+
+`lnms netconf:fabric --checks` prints the open issues on the command line.
 
 ## Alerting
 
@@ -426,6 +476,31 @@ sensors.sensor_class = "count" AND sensors.sensor_type = "netconf-junos-evpn-dup
 
 Template line: `{{ $value['sensor_descr'] }}: {{ $value['sensor_current'] }} duplicate MACs`
 inside the `@foreach ($alert->faults as $key => $value)` loop.
+
+**EVPN fabric issues (count sensor).** One alert per fabric member with critical or
+warning issues involving it (the *Checks* tab of the fabric lists them):
+
+```
+sensors.sensor_type = "netconf-evpn-fabric-issues" AND sensors.sensor_current > 0
+  AND sensors.sensor_alert = 1 AND macros.device_up = 1
+```
+
+**Fabric checks by check or severity (Override SQL on `netconf_evpn_issue`).** The issue table
+is fabric-level; join `netconf_evpn_issue_device` to alert on the devices involved (the rule
+then fires per device), or leave the device out for one alert per fabric on any device that
+runs the plugin:
+
+```sql
+-- critical issues involving this device, with the check and the message for the template
+SELECT netconf_evpn_issue.check, netconf_evpn_issue.severity, netconf_evpn_issue.message, netconf_evpn_issue.first_seen
+FROM netconf_evpn_issue JOIN netconf_evpn_issue_device ON netconf_evpn_issue_device.issue_id = netconf_evpn_issue.id
+WHERE netconf_evpn_issue_device.device_id = ? AND netconf_evpn_issue.severity = 'critical'
+-- one check only, e.g. flood-list gaps anywhere in the fabric of this device
+SELECT i.check, i.message FROM netconf_evpn_issue i
+JOIN netconf_evpn_fabric_member m ON m.fabric_id = i.fabric_id
+JOIN netconf_evpn_vtep v ON v.vtep_ip = m.vtep_ip
+WHERE v.device_id = ? AND i.check = 'vni-flood-gap'
+```
 
 **ESI-LAG down (state sensor).** The `state_sensor_critical` macro joins the state
 translations, so the rule fires on the state the definition marks `generic: 2` (`Down`)
