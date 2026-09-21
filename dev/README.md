@@ -34,3 +34,25 @@ lnms-dev 'cd /code/librenms_new && php lnms netconf:run 10.0.0.5 show version'
 
 Files matching `dev/*.local.*` are ignored by git and can hold throw-away helper scripts
 that are executed inside the container via `/code/librenms-netconf/dev/…`.
+
+## Feature tests
+
+`tests/Feature/` runs against a LibreNMS installation and its **testing** database connection
+(`config/database.php`: `DB_TEST_*`), every test inside a transaction. On a bare checkout
+(`composer test`) the suite loads and skips itself. Inside the dev instance:
+
+```bash
+# one-time: a test database the librenms user may use, its settings in the LibreNMS .env,
+# the schema (Laravel loads database/schema/testing-schema.sql through the mysql client)
+docker exec librenms-dev-db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" -e "CREATE DATABASE librenms_test; GRANT ALL ON librenms_test.* TO librenms@\"%\""'
+docker exec -u root lnms-web apk add --no-cache mariadb-client
+lnms-dev 'cd /code/librenms_new && printf "DB_TEST_HOST=host.docker.internal\nDB_TEST_PORT=33306\nDB_TEST_DATABASE=librenms_test\nDB_TEST_USERNAME=librenms\nDB_TEST_PASSWORD=<DB_PASSWORD>\n" >> .env'
+lnms-dev 'cd /code/librenms_new && DB_CONNECTION=testing php artisan migrate --force'   # not lnms migrate
+
+# every run: the plugin's phpunit with the LibreNMS autoloader in front (tests/Feature/bootstrap.php)
+lnms-dev 'cd /code/librenms-netconf && LIBRENMS_PATH=/code/librenms_new php vendor/bin/phpunit -c phpunit.feature.xml'
+```
+
+The base class (`tests/Feature/LibrenmsTestCase.php`) enables the plugin in the test database
+once (routes and hooks register only for an enabled plugin) and boots the application again.
+Users come from LibreNMS's factory with `enabled => 1` (the default is a disabled account).
