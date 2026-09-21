@@ -22,8 +22,10 @@ final class BulkEnableTest extends LibrenmsTestCase
         [$a, $b, $other] = $this->devices();
         $group = $this->group([$a, $other]);
 
-        $this->assertSame([$a->hostname, $b->hostname], DeviceSelection::resolve(null, 'netconf-test-os')->pluck('hostname')->sort()->values()->all());
-        $this->assertSame([$a->hostname, $other->hostname], DeviceSelection::resolve($group->name, null)->pluck('hostname')->sort()->values()->all());
+        // factory hostnames are random, so both sides are sorted in PHP instead of relying on
+        // creation order (the database's collation order is not the point of this test)
+        $this->assertSame($this->sorted($a, $b), DeviceSelection::resolve(null, 'netconf-test-os')->pluck('hostname')->sort()->values()->all());
+        $this->assertSame($this->sorted($a, $other), DeviceSelection::resolve($group->name, null)->pluck('hostname')->sort()->values()->all());
         $this->assertSame([$a->hostname], DeviceSelection::resolve((string) $group->id, 'netconf-test-os')->pluck('hostname')->all());
         $this->assertSame('device group "x" and os junos', DeviceSelection::describe('x', 'junos'));
 
@@ -77,6 +79,17 @@ final class BulkEnableTest extends LibrenmsTestCase
         $other = Device::factory()->create(['os' => 'netconf-test-other']);
 
         return [$a, $b, $other];
+    }
+
+    /**
+     * @return list<string> the hostnames, PHP-sorted like the actual side of the assertions
+     */
+    private function sorted(Device ...$devices): array
+    {
+        $names = array_map(fn (Device $d) => $d->hostname, $devices);
+        sort($names);
+
+        return $names;
     }
 
     /**
