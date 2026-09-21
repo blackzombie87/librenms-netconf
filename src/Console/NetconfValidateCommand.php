@@ -159,7 +159,7 @@ class NetconfValidateCommand extends Command
         foreach ($definitions as $definition) {
             foreach ($definition->commands as $spec) {
                 if ($spec->cli !== null) {
-                    $commands[] = $spec->cli;
+                    $commands[] = $spec->command();
                 }
             }
         }

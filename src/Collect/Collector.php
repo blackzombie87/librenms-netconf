@@ -79,7 +79,7 @@ class Collector
     {
         $t = microtime(true);
         try {
-            $reply = $spec->isRpc() ? $this->transport->rpc((string) $spec->rpc) : $this->transport->run((string) $spec->cli);
+            $reply = $spec->isRpc() ? $this->transport->rpc((string) $spec->rpc) : $this->transport->run($spec->command());
             $document = XmlDocument::fromReply($reply);
 
             // Junos answers "daemon not running" style conditions with plain text (<output>) or an

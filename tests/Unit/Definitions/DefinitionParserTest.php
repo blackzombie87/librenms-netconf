@@ -178,3 +178,26 @@ it('rejects table mappings that do not fit the schema', function () {
         ->and(fn () => $table(['columns' => ['vni' => 'number(vn-id']]))->toThrow(DefinitionException::class, 'tables[0].columns.vni')
         ->and(fn () => parseDef(minimal(['tables' => [['table' => 'vni', 'command' => 'ver', 'columns' => []]]])))->toThrow(DefinitionException::class, 'at least one column');
 });
+
+it('splices a command filter in at {filter} or appends it', function () {
+    $appended = parseDef(minimal(['commands' => ['ver' => ['cli' => 'show interfaces extensive', 'filter' => 'xe-0/0/*']]]))->commands['ver'];
+    $placed = parseDef(minimal(['commands' => ['ver' => ['cli' => 'show interfaces {filter} extensive', 'filter' => ' et-* ']]]))->commands['ver'];
+    $unfiltered = parseDef(minimal(['commands' => ['ver' => ['cli' => 'show interfaces {filter} extensive']]]))->commands['ver'];
+
+    expect($appended->filter)->toBe('xe-0/0/*')
+        ->and($appended->command())->toBe('show interfaces extensive xe-0/0/*')
+        ->and($appended->label())->toBe('show interfaces extensive xe-0/0/*')
+        ->and($appended->identity())->toBe('cli:show interfaces extensive xe-0/0/*')
+        ->and($placed->command())->toBe('show interfaces et-* extensive')
+        ->and($unfiltered->filter)->toBeNull()
+        ->and($unfiltered->command())->toBe('show interfaces extensive')
+        ->and($appended->merge($placed)->filter)->toBe('xe-0/0/*');
+});
+
+it('rejects filters on rpc commands and filters that chain or pipe', function () {
+    expect(fn () => parseDef(minimal(['commands' => ['ver' => ['rpc' => '<x/>', 'filter' => 'a']]])))->toThrow(DefinitionException::class, 'only cli commands')
+        ->and(fn () => parseDef(minimal(['commands' => ['ver' => ['cli' => 'show a', 'filter' => 'x | display']]])))->toThrow(DefinitionException::class, 'single line')
+        ->and(fn () => parseDef(minimal(['commands' => ['ver' => ['cli' => 'show a', 'filter' => "x\nrequest"]]])))->toThrow(DefinitionException::class, 'single line')
+        ->and(fn () => parseDef(minimal(['commands' => ['ver' => ['cli' => 'show a', 'filter' => ['x']]]])))->toThrow(DefinitionException::class, 'must be a string')
+        ->and(parseDef(minimal(['commands' => ['ver' => ['cli' => 'show a', 'filter' => '']]]))->commands['ver']->filter)->toBeNull();
+});

@@ -113,7 +113,7 @@ class DefinitionParser
             if (! is_array($spec)) {
                 throw $this->error($path, 'must be a cli string or a mapping');
             }
-            $this->knownKeys($spec, ['cli', 'rpc', 'optional', 'every', 'description'], $path);
+            $this->knownKeys($spec, ['cli', 'rpc', 'optional', 'every', 'description', 'filter'], $path);
 
             $cli = $this->string($spec, 'cli', $path);
             $rpc = $this->string($spec, 'rpc', $path);
@@ -127,6 +127,7 @@ class DefinitionParser
             if ($every < 1) {
                 throw $this->error("$path.every", 'must be >= 1');
             }
+            $filter = $this->filter($spec, $cli, $path);
 
             $commands[$key] = new CommandSpec(
                 key: $key,
@@ -135,10 +136,40 @@ class DefinitionParser
                 optional: $this->bool($spec, 'optional', false, $path),
                 every: $every,
                 description: $this->string($spec, 'description', $path) ?? '',
+                filter: $filter,
             );
         }
 
         return $commands;
+    }
+
+    /**
+     * `filter:` narrows a cli command to part of the device (plan §3.3: an interface pattern
+     * appended to `show interfaces extensive`, as junos_exporter does). A single token or a
+     * few words, spliced in at `{filter}` or appended; pipes and chaining stay out.
+     *
+     * @param  array<string, mixed>  $spec
+     */
+    private function filter(array $spec, ?string $cli, string $path): ?string
+    {
+        if (! array_key_exists('filter', $spec) || $spec['filter'] === null) {
+            return null;
+        }
+        if ($cli === null) {
+            throw $this->error("$path.filter", 'only cli commands take a filter');
+        }
+        if (! is_scalar($spec['filter'])) {
+            throw $this->error("$path.filter", 'must be a string');
+        }
+        $filter = trim((string) $spec['filter']);
+        if ($filter === '') {
+            return null;
+        }
+        if (preg_match('/[\r\n|;`$]/', $filter)) {
+            throw $this->error("$path.filter", 'must be a single line without pipes or command chaining');
+        }
+
+        return $filter;
     }
 
     /**

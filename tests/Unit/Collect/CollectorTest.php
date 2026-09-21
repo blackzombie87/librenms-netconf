@@ -22,7 +22,7 @@ function replayTransport(array $definitions): FakeTransport
     $commands = [];
     foreach ($definitions as $d) {
         foreach ($d->commands as $c) {
-            $commands[] = $c->cli;
+            $commands[] = $c->command();
         }
     }
     [$transport] = FixtureReplay::transport(__DIR__ . '/../../fixtures/junos', $commands);

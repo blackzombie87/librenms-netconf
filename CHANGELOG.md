@@ -2,6 +2,12 @@
 
 ## Unreleased (1.1)
 
+Gaps closed on the way to 1.1 (`docs/PLAN.md` §6.2):
+
+- `filter:` on cli commands (G1): a pattern spliced in at `{filter}` or appended, e.g.
+  `filter: 'et-*'` on a copy of `junos-interfaces` turns the 1 MB reply of a 48-port leaf
+  into the uplinks only. Part of the command identity and of the replay fixture name.
+
 EVPN fabric checks, phase F4 (`docs/PLAN.md` §7.5):
 
 - Consistency checks over every fabric at the end of each resolve: asymmetric neighbours,

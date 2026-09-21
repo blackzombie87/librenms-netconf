@@ -10,6 +10,7 @@ commands:
   if_ext:
     cli: show interfaces extensive
     description: about 1 MB of XML on a 48-port switch, 3 s
+    # a copy of this definition may narrow it, e.g. filter: 'et-*' -> show interfaces extensive et-*
 
 ports:
   - id: ethernet

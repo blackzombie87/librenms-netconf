@@ -228,6 +228,7 @@ commands:                        # each runs once per poll, shared by all mappin
     optional: true               # device error -> mappings skipped silently; without it the
                                  # error fails the run (status, back-off, eventlog)
     every: 3                     # only every 3rd poll
+    filter: 'xe-0/0/*'           # narrows the command: appended, or placed at {filter} in cli
   other: show something else     # shorthand
   raw: { rpc: '<get-something/>' }   # netconf transport only
 
@@ -295,6 +296,13 @@ Table columns are coerced to the column type (`int`, `string`, `ip`, `mac` as 12
 text, `datetime`); a value that does not fit is stored as null with a warning. Rows are merged on
 the key, so several mappings (and commands) may fill different columns of the same row; rows that
 vanish from a reply are deleted per device once every mapping of that table delivered data.
+
+`filter:` keeps big replies small: Junos accepts an interface pattern before or after the
+options (`show interfaces extensive xe-0/0/*`, `show interfaces et-0/0/[0-3] extensive`), so a
+user definition can copy `junos-interfaces` with `filter: 'et-*'` and the 1 MB reply of a 48-port
+leaf shrinks to the uplinks. The filter is part of the command identity: two definitions with
+different filters run the command twice. Fixtures for `--replay` are named after the filtered
+command.
 
 Namespaces are stripped before evaluation, so paths never need prefixes; attributes keep
 their local name (`elapsed-time/@seconds`). Prefer `string(...)` over `number(...)` for
