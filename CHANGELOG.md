@@ -2,6 +2,38 @@
 
 ## Unreleased (1.1)
 
+Polish from the F3 review (`docs/REVIEW-2026-09-f3.md`, plan item F3a):
+
+- Fabric list and overview count VNIs, ESIs and instances distinct over the monitored
+  members (array union on 0-based lists dropped the second member's entries); the per-device
+  EVPN figures live in one `Fabric\View\DeviceStats` helper shared by the list, overview,
+  members tab and device badge.
+- Overlay arcs on the topology and the "EVPN sessions down" badge canonicalise a neighbour or
+  peer listed by its router-id to the member address of its device, so a leaf whose VTEP
+  differs from its router-id no longer loses arcs or is undercounted.
+- The device badge links to the fabric pages only for users with global read; others get
+  the figures as text.
+- Deleting a device removes its unpinned fabric memberships and always recomputes the
+  fabrics, also while the fabric setting is off. A fabric rename saved twice within one
+  second is no longer a 404.
+- A required command the device does not answer (`<output>`, `<xnm:warning>`, rpc-error)
+  fails the run like a lost connection: status row, back-off and eventlog. Both EVPN
+  definitions mark `show evpn instance extensive` optional (every Junos device matches
+  them). Definitions sharing a command run it with `every = min` and required if any use is
+  required; `netconf:validate` prints a hint when they disagree.
+- When no definition matches a device the writers still run: sensors synced, metric and port
+  rows pruned, the EVPN tables emptied and the device forgotten by the resolver. Metric and
+  port rows of mappings no matched definition contains are deleted, and sensors of a class no
+  definition produces any more go at discovery.
+- `discovery_modules.netconf` is persisted against the config table (the in-memory config hid
+  a missing row, and `device:discover -m netconf` then ran only `core`).
+- `tunnel-nexthop` no longer writes `tunnel.ifname` (the kernel IFL from `show interfaces
+  vtep` owns it); MAC search loads its device and VTEP lookups in one query each; overlay
+  session discovery exists once (`Fabric\EvpnSessions`) for the resolver and the BGP tab.
+- First feature tests (`tests/Feature/`, `phpunit.feature.xml`, LibreNMS-bootstrapped): fabric
+  pages 302 / 200 / 403, `TableWriter` merge and prune, `EsiLinkWriter` sync, `FabricResolver`
+  forget/run round trip. Skipped without a LibreNMS installation.
+
 EVPN fabric view, phase F1 (`docs/PLAN.md` §7), feature-flagged by the new *EVPN fabric view*
 setting (`evpn_fabric`, default off).
 
