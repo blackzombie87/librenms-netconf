@@ -14,6 +14,7 @@ use SafferIt\LibrenmsNetconf\Definitions\DefinitionMatcher;
 use SafferIt\LibrenmsNetconf\Definitions\DeviceFacts;
 use SafferIt\LibrenmsNetconf\Definitions\SensorMapping;
 use SafferIt\LibrenmsNetconf\Extract\Extractor;
+use SafferIt\LibrenmsNetconf\Fabric\Checks\IssueSensor;
 use SafferIt\LibrenmsNetconf\Fabric\FabricResolver;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
 use SafferIt\LibrenmsNetconf\NetconfSettings;
@@ -239,6 +240,15 @@ class NetconfService
 
         $counts = [];
         $values = $result->sensors();
+        if (self::fabricEnabled()) {
+            // the fabric checks' per-leaf count sensor rides along with the YAML sensors: it is
+            // discovered, recorded and deleted (no membership) the same way. Its value is the
+            // state after the previous resolve; this run's resolver comes later in store()
+            $issues = IssueSensor::value($device);
+            if ($issues !== null) {
+                $values[] = $issues;
+            }
+        }
 
         if ($discovery || $definitions === []) {
             $sync = $sensors->sync($values, $skipped, array_keys($classes));
