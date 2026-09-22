@@ -18,7 +18,7 @@ function replayGateway(): \SafferIt\LibrenmsNetconf\Collect\CollectionResult
             ->on('show evpn instance extensive', (string) file_get_contents($fixtures . 'show-evpn-instance-extensive-mx.xml'))
             ->on('show bgp summary', (string) file_get_contents($fixtures . 'show-bgp-summary-mx.xml'))
             ->on('show route summary', (string) file_get_contents($fixtures . 'show-route-summary.xml'))
-            ->on('show evpn database state duplicate', (string) file_get_contents($fixtures . 'show-evpn-database-state-duplicate.xml'))
+            ->on('show evpn database state duplicate', (string) file_get_contents($fixtures . 'show-evpn-database-state-duplicate-empty.xml'))
             ->on('show evpn l3-context', (string) file_get_contents($fixtures . 'show-evpn-l3-context.xml'));
         $all = (new DefinitionLoader([DefinitionLoader::shippedDirectory()]))->all();
         $result = (new Collector($transport))->collect([$all['junos-evpn'], $all['junos-routing'], $all['junos-evpn-fabric']]);

@@ -28,13 +28,42 @@ it('creates one sensor per row with templated descriptions', function () {
 
 it('evaluates a single sensor against the whole document when rows is omitted', function () {
     $def = defWith(['sensors' => [['class' => 'count', 'command' => 'c', 'index' => "'total'", 'descr' => 'Dup MACs', 'value' => 'count(//mac-entry)']]]);
-    $doc = new XmlDocument(fixture('junos/show-evpn-database-state-duplicate.xml'));
+    $doc = new XmlDocument(fixture('junos/show-evpn-database-state-duplicate-empty.xml'));
 
     $sensors = (new Extractor)->sensors($def, $def->sensors[0], $doc);
 
     expect($sensors)->toHaveCount(1)
         ->and($sensors[0]->index)->toBe('total')
         ->and($sensors[0]->value)->toBe(0.0);
+});
+
+it('counts the suppressed MACs per instance in the positive duplicate-MAC sample', function () {
+    // G3 sample 2026-09-22 (EX4650 VC, 23.4R2-S8.7): the element shape equals the normal
+    // "show evpn database", one mac-entry whose active-source is an ESI
+    $def = defWith(['sensors' => [
+        ['id' => 'per-instance', 'class' => 'count', 'command' => 'c', 'rows' => '//evpn-database-instance', 'index' => 'string(instance-name)', 'descr' => '{index}', 'value' => 'count(mac-entry)'],
+        ['id' => 'total', 'class' => 'count', 'command' => 'c', 'index' => "'total'", 'descr' => 'Dup MACs', 'value' => 'count(//mac-entry)'],
+    ]]);
+    $doc = new XmlDocument(fixture('junos/show-evpn-database-state-duplicate.xml'));
+
+    $perInstance = (new Extractor)->sensors($def, $def->sensors[0], $doc);
+    $total = (new Extractor)->sensors($def, $def->sensors[1], $doc);
+
+    expect(array_map(fn ($s) => [$s->index, $s->value], $perInstance))->toBe([['mgmt-vrf', 1.0]])
+        ->and($total[0]->value)->toBe(1.0)
+        ->and($doc->scalar('string(//mac-entry/active-source)'))->toBe('00:11:22:33:44:55:00:00:06:00')
+        ->and($doc->scalar('string(//mac-entry/vni-id)'))->toBe('3001250');
+});
+
+it('reads the mobility history of the per-MAC extensive sample', function () {
+    // the same MAC ten minutes earlier on the peer ESI-LAG: one local mobility event, sequence 1
+    $doc = new XmlDocument(fixture('junos/show-evpn-database-mac-address-extensive.xml'));
+
+    expect($doc->scalar('count(//mobility-history/mobility-event)'))->toBe(1.0)
+        ->and($doc->scalar('string(//mobility-event/event-type)'))->toBe('local')
+        ->and($doc->scalar('string(//mac-source/source-local-origin)'))->toBe('ae5.0')
+        ->and($doc->scalar('string(//mac-source/source-mobility-seq-num)'))->toBe('1')
+        ->and($doc->scalar('string(//mac-source/source-status)'))->toBe('Active');
 });
 
 it('skips rows without a value, filters with when and warns on duplicates', function () {

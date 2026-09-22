@@ -1,0 +1,41 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S8.7/junos">
+    <evpn-database-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <evpn-database-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+            <instance-name>mgmt-vrf</instance-name>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                <vlan-id></vlan-id>
+                <vni-id>3001250</vni-id>
+                <mac-address>00:00:5e:00:01:96</mac-address>
+                <mac-state-value>0x0</mac-state-value>
+                <mobility-history xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <mobility-event xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                        <event-time>Sep 22 09:12:31.592071</event-time>
+                        <event-type>local</event-type>
+                        <event-source>00:11:22:33:44:55:00:00:05:00</event-source>
+                        <event-seq-num>1</event-seq-num>
+                    </mobility-event>
+                </mobility-history>
+                <mac-source xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="extensive">
+                    <source-name>00:11:22:33:44:55:00:00:05:00</source-name>
+                    <source-rank>1</source-rank>
+                    <source-status>Active</source-status>
+                    <source-local-origin>ae5.0</source-local-origin>
+                    <source-mobility-seq-num>1</source-mobility-seq-num>
+                    <source-mobility-min-origin-address>192.0.2.104</source-mobility-min-origin-address>
+                    <source-timestamp>Sep 22 09:12:31.081348</source-timestamp>
+                    <source-timestamp-value>0x6ab2467f</source-timestamp-value>
+                    <source-state>&lt;Local-MAC-Only Local-To-Remote-Adv-Allowed&gt;</source-state>
+                    <source-mac-adv-route-status>created</source-mac-adv-route-status>
+                </mac-source>
+                <history-db junos:style="extensive" junos:indent="4">
+                    <history-db-heading>History db: &lt;No entries&gt;</history-db-heading>
+                    <history-db-maximum-size>0</history-db-maximum-size>
+                    <history-db-current-size>0</history-db-current-size>
+                </history-db>
+            </mac-entry>
+        </evpn-database-instance>
+    </evpn-database-information>
+    <cli>
+        <banner>{master:0}</banner>
+    </cli>
+</rpc-reply>

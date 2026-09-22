@@ -11,8 +11,9 @@ saffer-it/librenms-netconf. EVPN commands added 2026-09-18 (instance list, ESIs,
 
 File names follow `FixtureReplay::slug(command)` (`show route summary` → `show-route-summary.xml`) so the
 directory can be replayed with `lnms netconf:validate --replay=tests/fixtures/junos`; variants carry a
-suffix (`show-chassis-cluster-status-not-enabled.xml`). The duplicate-MAC, L3-context and chassis-alarm
-samples are the empty/none cases.
+suffix (`show-chassis-cluster-status-not-enabled.xml`). The L3-context and chassis-alarm samples are the
+empty/none cases; the duplicate-MAC sample is positive since 2026-09-22 (below), its empty case is
+`show-evpn-database-state-duplicate-empty.xml`.
 
 Tier 2 samples (2026-09-18): `show-ntp-status.xml`, `show-ntp-associations.xml` (peer renamed),
 `show-krt-queue.xml`, `show-system-license-usage.xml`, `show-system-commit.xml` (four entries, user
@@ -45,3 +46,13 @@ MX204 L3 gateway variants (2026-09-18, owner-supplied, 23.4R2-S3.9): `show-evpn-
 type-1 ESIs and 3 **type-5 gateway ESIs** whose local interface is `irb.N` with an empty status) and
 `show-bgp-summary-mx.xml` (iBGP overlay peers, an eBGP EVPN peer to the other site's gateway without description,
 and Internet/IX peers that carry no evpn RIB). Documentation ASNs 64496–64500 and 65000.
+
+Duplicate-MAC positive sample (2026-09-22, owner-supplied, EX4650 Virtual Chassis on 23.4R2-S8.7; plan G3):
+`show-evpn-database-state-duplicate.xml` holds one suppressed entry, a VRRP virtual MAC (`00:00:5e:00:01:96`) in
+the L3 VNI of `mgmt-vrf` whose `active-source` is an ESI; the element shape equals the normal `show evpn database`,
+so the shipped `count(mac-entry)` sensors read `dup-mac-instance[mgmt-vrf] = 1` and `dup-mac-total = 1`.
+`show-evpn-database-mac-address-extensive.xml` is the per-MAC `show evpn database mac-address X extensive` taken
+ten minutes earlier: the same MAC on the *peer* ESI-LAG (`source-local-origin ae5.0`, `source-mobility-seq-num 1`,
+one `mobility-history/mobility-event` of type `local`); no shipped command polls it, it pins the element names
+for the mobility work. What the sample does not give is the second source: `state duplicate` carries only the
+current `active-source`. ESIs → `00:11:22:33:44:55:00:00:NN:00`, VTEP → `192.0.2.N`.

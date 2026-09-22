@@ -1,5 +1,15 @@
-<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S3.9/junos">
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S8.7/junos">
     <evpn-database-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <evpn-database-instance xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+            <instance-name>mgmt-vrf</instance-name>
+            <mac-entry xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing" junos:style="normal">
+                <vlan-id></vlan-id>
+                <vni-id>3001250</vni-id>
+                <mac-address>00:00:5e:00:01:96</mac-address>
+                <active-source>00:11:22:33:44:55:00:00:06:00</active-source>
+                <active-source-timestamp>Sep 22 09:22:55</active-source-timestamp>
+            </mac-entry>
+        </evpn-database-instance>
     </evpn-database-information>
     <cli>
         <banner>{master:0}</banner>

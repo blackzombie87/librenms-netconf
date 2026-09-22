@@ -76,8 +76,11 @@ it('replays every shipped definition without errors or warnings', function () {
 });
 
 it('extracts the EVPN state of the leaf', function () {
-    expect(sensorsOf('junos-evpn', 'dup-mac-total')['total']->value)->toBe(0.0)
-        ->and(sensorsOf('junos-evpn', 'dup-mac-instance'))->toBe([])
+    // the 2026-09-22 sample: one suppressed MAC (a VRRP virtual MAC in an L3 VNI) in mgmt-vrf
+    expect(sensorsOf('junos-evpn', 'dup-mac-total')['total']->value)->toBe(1.0)
+        ->and(array_keys(sensorsOf('junos-evpn', 'dup-mac-instance')))->toBe(['mgmt-vrf'])
+        ->and(sensorsOf('junos-evpn', 'dup-mac-instance')['mgmt-vrf']->value)->toBe(1.0)
+        ->and(sensorsOf('junos-evpn', 'dup-mac-instance')['mgmt-vrf']->descr)->toBe('EVPN duplicate MACs mgmt-vrf')
         ->and(sensorsOf('junos-evpn', 'esi-lag-status')['ae2.0']->state?->label)->toBe('Up')
         ->and(sensorsOf('junos-evpn', 'esi-lag-status')['ae4.0']->state?->generic)->toBe(2)
         ->and(sensorsOf('junos-evpn', 'esi-resolution')['ae2.0']->rawText)->toBe('Resolved by IFL ae2.0')
