@@ -153,6 +153,29 @@ class SensorWriter
         return ['recorded' => $recorded, 'unknown' => $unknown, 'events' => $events];
     }
 
+    /**
+     * Store the reading of one discovered sensor without a datastore write or events (used
+     * on discovery for the issues sensor, whose value is known only after the resolve).
+     * False when the device has no such sensor.
+     */
+    public function setCurrent(SensorValue $value): bool
+    {
+        /** @var Sensor|null $sensor */
+        $sensor = $this->device->sensors()->where('poller_type', self::POLLER_TYPE)
+            ->where('sensor_type', $value->type())->where('sensor_index', $value->index)->first();
+        if ($sensor === null) {
+            return false;
+        }
+        if ($sensor->sensor_current === null || (float) $sensor->sensor_current != $value->value) {
+            $sensor->sensor_prev = $sensor->sensor_current;
+            $sensor->sensor_current = $value->value;
+            $sensor->lastupdate = now();
+            $sensor->save();
+        }
+
+        return true;
+    }
+
     public function count(): int
     {
         return $this->device->sensors()->where('poller_type', self::POLLER_TYPE)->count();

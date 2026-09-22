@@ -127,12 +127,18 @@ class NetconfService
             // writers still run with an empty result so what earlier definitions stored (an OS
             // change, every definition disabled) is pruned instead of lingering as live data
             $result = new CollectionResult;
-            $summary = array_merge($result->summary(), $this->store($device, [], $result, $datastore, $discovery));
+            $transportName = $status->transport ?? '';
+            $this->saveStatus($status, $transportName, $names, $result->summary(), 'no definitions match this device', microtime(true) - $start, $discovery, failure: false);
+            try {
+                $summary = array_merge($result->summary(), $this->store($device, [], $result, $datastore, $discovery));
+            } catch (\Throwable $e) {
+                return $this->storageFailed($device, $status, $e, $transportName, $names, $result, $discovery, $start);
+            }
             $duration = microtime(true) - $start;
-            $this->saveStatus($status, $status->transport ?? '', $names, $summary, 'no definitions match this device', $duration, $discovery, failure: false);
+            $this->finishStatus($status, $summary, $duration);
             Log::info(sprintf('netconf: nothing to collect; %d sensor(s) synced, %d metric, %d port and %d table row(s) pruned in %.2fs', $summary['sensors_synced'] ?? 0, $summary['metrics_pruned'] ?? 0, $summary['ports_pruned'] ?? 0, $summary['tables_pruned'] ?? 0, $duration));
 
-            return new RunReport($discovery, $status->transport ?? '', [], $summary, [], [], $duration, $result);
+            return new RunReport($discovery, $transportName, [], $summary, [], [], $duration, $result);
         }
 
         $credentials = $this->credentials->forDevice($device);
@@ -160,14 +166,24 @@ class NetconfService
             Log::info(sprintf('  %-55s %s%s', $run->label, $run->status, $run->message ? ' (' . $run->message . ')' : ''));
         }
 
-        $summary = array_merge($result->summary(), $this->store($device, $definitions, $result, $datastore, $discovery));
-        $duration = microtime(true) - $start;
+        // the outcome first: the fabric checks read the status row during the resolve
+        // (member-not-polling), so a poll that succeeded must already say so (F5 3). The
+        // summary counts follow once the writers are through.
         $error = $result->errors !== [] ? implode('; ', $result->errors) : null;
+        $this->saveStatus($status, $transport->name(), $names, $result->summary(), $error, microtime(true) - $start, $discovery);
+        $recovered = $error === null && $status->consecutive_failures === 0 && $status->wasChanged('consecutive_failures');
 
-        $this->saveStatus($status, $transport->name(), $names, $summary, $error, $duration, $discovery);
+        try {
+            $summary = array_merge($result->summary(), $this->store($device, $definitions, $result, $datastore, $discovery));
+        } catch (\Throwable $e) {
+            return $this->storageFailed($device, $status, $e, $transport->name(), $names, $result, $discovery, $start);
+        }
+        $duration = microtime(true) - $start;
+        $this->finishStatus($status, $summary, $duration);
+
         if ($error !== null) {
             $this->logFailure($device, $status, $error);
-        } elseif ($status->consecutive_failures === 0 && $status->wasChanged('consecutive_failures')) {
+        } elseif ($recovered) {
             Eventlog::log('NETCONF polling recovered', $device, 'netconf', Severity::Ok);
         }
 
@@ -239,11 +255,12 @@ class NetconfService
         }
 
         $counts = [];
-        $m = $metrics->write($result->metrics(), $discovery ? null : ($datastore ?? app('Datastore')));
+        $live = $discovery ? null : ($datastore ?? app('Datastore'));
+        $m = $metrics->write($result->metrics(), $live);
         $counts['metrics_rows'] = $m['rows'];
         $counts['metrics_pruned'] = $metrics->prune($result->metrics(), $mappingsWithData) + $metrics->deleteOrphans($knownMappings);
 
-        $p = $ports->write($result->ports(), $discovery ? null : ($datastore ?? app('Datastore')));
+        $p = $ports->write($result->ports(), $live);
         if (($summary = $layout->summary()) !== null) {
             Log::info('  ' . $summary);
         }
@@ -254,7 +271,28 @@ class NetconfService
             Log::debug('netconf: unmatched ports: ' . implode(', ', array_slice($p['unmatched'], 0, 20)));
         }
 
-        if (self::fabricEnabled()) {
+        // YAML sensors before the fabric resolve: the checks read the dup-mac counts and the
+        // l3-contexts sensor from sensors.sensor_current, so the rows must hold this run's
+        // values when the resolve runs (F5 3). The fabric checks' per-leaf issues sensor
+        // rides along with its reading as of the previous resolve, so its row is kept (or
+        // created / dropped with the membership as it was); it is brought up to date below.
+        $fabricOn = self::fabricEnabled();
+        $values = $result->sensors();
+        $before = IssueSensor::reading($device, $fabricOn, $discovery);
+        $syncing = $discovery || $definitions === [];
+        $unknown = 0;
+        if ($syncing) {
+            $sync = $sensors->sync(self::withIssues($values, $before), $skipped, array_keys($classes));
+            $counts['sensors_synced'] = $sync['synced'];
+            $counts['sensors_kept'] = $sync['kept'];
+        } else {
+            $recorded = $sensors->record($values, $live ?? app('Datastore'));
+            $counts['sensors_recorded'] = $recorded['recorded'];
+            $counts['sensor_events'] = $recorded['events'];
+            $unknown = count($recorded['unknown']);
+        }
+
+        if ($fabricOn) {
             $rows = $result->tables();
             $written = 0;
             $pruned = 0;
@@ -294,30 +332,33 @@ class NetconfService
             }
         }
 
-        // sensors last: the fabric checks' per-leaf count sensor rides along with the YAML
-        // sensors (discovered, recorded and deleted the same way) and reads the state after
-        // this run's resolve. On poll it reads 0 rather than vanishing while the fabric view
-        // is off or the device has left the fabric (IssueSensor::reading())
-        $values = $result->sensors();
-        $issues = IssueSensor::reading($device, self::fabricEnabled(), $discovery);
-        if ($issues !== null) {
-            $values[] = $issues;
-        }
+        // the issues sensor after the resolve: the count as of this run. On poll it reads 0
+        // rather than vanishing while the fabric view is off or the device has left the
+        // fabric (IssueSensor::reading()); on discovery a device without membership gets none
+        $after = IssueSensor::reading($device, $fabricOn, $discovery);
         // the status page counts what was stored, not what the YAML produced
-        $counts['sensors'] = count($values);
+        $counts['sensors'] = count($values) + ($after === null ? 0 : 1);
 
-        if ($discovery || $definitions === []) {
-            $sync = $sensors->sync($values, $skipped, array_keys($classes));
-            $counts['sensors_synced'] = $sync['synced'];
-            $counts['sensors_kept'] = $sync['kept'];
+        if ($syncing) {
+            if (($before === null) !== ($after === null)) {
+                // the membership changed in this very resolve (first discovery of a leaf, or
+                // it left the fabric): the row follows, one more sync
+                $sync = $sensors->sync(self::withIssues($values, $after), $skipped, array_keys($classes));
+                $counts['sensors_synced'] = $sync['synced'];
+            } elseif ($after !== null && $before !== null && $after->value !== $before->value) {
+                $sensors->setCurrent($after);
+            }
         } else {
-            $recorded = $sensors->record($values, $datastore ?? app('Datastore'));
-            $counts['sensors_recorded'] = $recorded['recorded'];
-            $counts['sensor_events'] = $recorded['events'];
-            if ($recorded['unknown'] !== []) {
+            if ($unknown === 0 && $after !== null) {
+                $recorded = $sensors->record([$after], $live ?? app('Datastore'));
+                $counts['sensors_recorded'] += $recorded['recorded'];
+                $counts['sensor_events'] += $recorded['events'];
+                $unknown = count($recorded['unknown']);
+            }
+            if ($unknown > 0) {
                 // new rows appeared since discovery: discover them now and record on the next poll
-                Log::info(sprintf('  %d new sensor(s), running sensor discovery', count($recorded['unknown'])));
-                $counts['sensors_synced'] = $sensors->sync($values, $skipped, array_keys($classes))['synced'];
+                Log::info(sprintf('  %d new sensor(s), running sensor discovery', $unknown));
+                $counts['sensors_synced'] = $sensors->sync(self::withIssues($values, $after), $skipped, array_keys($classes))['synced'];
             }
         }
 
@@ -325,13 +366,74 @@ class NetconfService
     }
 
     /**
+     * @param  list<\SafferIt\LibrenmsNetconf\Extract\SensorValue>  $values
+     * @return list<\SafferIt\LibrenmsNetconf\Extract\SensorValue>
+     */
+    private static function withIssues(array $values, ?\SafferIt\LibrenmsNetconf\Extract\SensorValue $issues): array
+    {
+        if ($issues !== null) {
+            $values[] = $issues;
+        }
+
+        return $values;
+    }
+
+    /**
+     * The writers threw (a schema limit, a lost database connection): the run is recorded as
+     * a failure with back-off and an eventlog entry instead of leaving the status row with
+     * the pre-storage outcome and the data half written (F5 4).
+     *
+     * @param  list<string>  $names
+     */
+    private function storageFailed(Device $device, NetconfDeviceStatus $status, \Throwable $e, string $transport, array $names, CollectionResult $result, bool $discovery, float $start): RunReport
+    {
+        $error = 'storing the results failed: ' . $e->getMessage();
+        $duration = microtime(true) - $start;
+        if ($status->next_attempt === null) {
+            // the collection itself succeeded, so saveStatus() reset the counter; this run fails after all
+            $status->consecutive_failures = $status->consecutive_failures + 1;
+            $status->next_attempt = now()->addSeconds($this->backoff($status->consecutive_failures));
+        }
+        $status->last_error = mb_substr($error, 0, 2000);
+        $status->last_duration = $duration;
+        $status->save();
+        Eventlog::log('NETCONF ' . $error, $device, 'netconf', Severity::Error);
+        Log::error(sprintf('netconf %s: %s (%s)', $device->hostname, $error, $e::class));
+
+        return new RunReport($discovery, $transport, $names, $result->summary(), array_merge($result->errors, [$error]), $result->warnings(), $duration, $result);
+    }
+
+    /**
+     * Second half of the status row, after the writers: what the run stored.
+     *
+     * @param  array<string, int>  $summary
+     */
+    private function finishStatus(NetconfDeviceStatus $status, array $summary, float $duration): void
+    {
+        $status->last_summary = $summary;
+        $status->last_duration = $duration;
+        $status->save();
+    }
+
+    private function backoff(int $failures): int
+    {
+        return Backoff::delaySeconds(
+            $failures,
+            (int) (NetconfSettings::effective()['backoff_max'] ?? 32),
+            (int) LibrenmsConfig::get('rrd.step', 300)
+        );
+    }
+
+    /**
+     * The run's outcome: transport, definitions, attempt, failure counter and back-off; the
+     * summary holds the collection counts until finishStatus() adds what was stored.
+     *
      * @param  list<string>  $definitions
-     * @param  array<string, int>|null  $summary  what the run collected and stored, null on a failed connect
+     * @param  array<string, int>|null  $summary  what the run collected, null on a failed connect
      * @param  bool  $failure  whether a non-null $error counts towards the back-off
      */
     private function saveStatus(NetconfDeviceStatus $status, string $transport, array $definitions, ?array $summary, ?string $error, float $duration, bool $discovery, bool $failure = true): void
     {
-        $settings = NetconfSettings::effective();
         $status->transport = $transport;
         $status->definitions = $definitions;
         $status->last_attempt = now();
@@ -349,12 +451,7 @@ class NetconfService
         } else {
             $status->consecutive_failures = $status->consecutive_failures + 1;
             $status->last_error = mb_substr($error, 0, 2000);
-            $delay = Backoff::delaySeconds(
-                $status->consecutive_failures,
-                (int) ($settings['backoff_max'] ?? 32),
-                (int) LibrenmsConfig::get('rrd.step', 300)
-            );
-            $status->next_attempt = now()->addSeconds($delay);
+            $status->next_attempt = now()->addSeconds($this->backoff($status->consecutive_failures));
         }
 
         $status->save();
