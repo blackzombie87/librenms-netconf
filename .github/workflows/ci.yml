@@ -13,7 +13,7 @@ jobs:
       matrix:
         php: ['8.2', '8.3', '8.4', '8.5']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -28,7 +28,7 @@ jobs:
     name: Code style (php-cs-fixer, LibreNMS rules)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -41,14 +41,14 @@ jobs:
     name: Workflow lint (actionlint)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: raven-actions/actionlint@v2
 
   analyse:
     name: Static analysis (phpstan)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -64,7 +64,7 @@ jobs:
       matrix:
         php: ['8.2', '8.5']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -76,8 +76,8 @@ jobs:
   # Feature suite (tests/Feature, phpunit.feature.xml): needs a LibreNMS installation and its
   # testing database. Pinned to a LibreNMS tag on purpose - bump it deliberately, a plugin
   # that breaks against a newer core should fail here and not on someone's poller.
-  # Never executed yet: the repository has no remote (plan R5), so the first push is its
-  # first run. Until then dev/README.md makes the Docker run a pre-tag step.
+  # First green run 2026-09-22 (40 tests); dev/README.md keeps the Docker recipe for the
+  # live checks that need a real device.
   feature:
     # `env` is not evaluated in a job name, only `matrix` is (GitHub rejects the whole
     # workflow otherwise), so the pinned tag lives in a one-entry matrix
@@ -103,11 +103,11 @@ jobs:
           --health-retries=10
     steps:
       - name: Check out the plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: plugin
       - name: Check out LibreNMS
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: librenms/librenms
           ref: ${{ matrix.librenms }}

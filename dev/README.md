@@ -66,8 +66,9 @@ Users come from LibreNMS's factory with `enabled => 1` (the default is a disable
 
 ## Pre-tag checklist
 
-Until the repository has a remote and the `feature` job of `.github/workflows/ci.yml` has run
-at least once (plan G17, R5), these run by hand before a tag:
+The `feature` job of `.github/workflows/ci.yml` runs steps 1–4 on every push (first green run
+2026-09-22, 40 tests against LibreNMS 26.7.0); before a tag they still run by hand here, and
+steps 5–6 only exist here because they need the fixtures directory and a real device:
 
 1. `vendor/bin/pest` — unit suite green on the bare checkout (the Feature tests skip there).
 2. `vendor/bin/phpstan analyse` and `vendor/bin/php-cs-fixer check --diff` — clean.
