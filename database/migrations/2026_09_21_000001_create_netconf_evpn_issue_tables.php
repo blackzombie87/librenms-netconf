@@ -12,7 +12,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // one row per open issue; issue_key = check|subject is stable across resolves so
+        // one row per open issue; issue_key (check|sha1(subject) since F5, check|subject cut at
+        // the column before) is stable across resolves so
         // first_seen survives and the eventlog only sees appear / clear / severity change
         Schema::create('netconf_evpn_issue', function (Blueprint $table) {
             $table->increments('id');

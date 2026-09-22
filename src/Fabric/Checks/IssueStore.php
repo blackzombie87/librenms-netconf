@@ -26,7 +26,7 @@ class IssueStore
      */
     public function sync(int $fabricId, array $issues, string $now): array
     {
-        $existing = DB::table(self::TABLE)->where('fabric_id', $fabricId)->get(['id', 'issue_key', 'severity', 'message'])->keyBy('issue_key');
+        $existing = DB::table(self::TABLE)->where('fabric_id', $fabricId)->get(['id', 'issue_key', 'check', 'subject', 'severity', 'message'])->keyBy('issue_key');
         $devices = [];
         foreach (DB::table(self::DEVICE_TABLE)->whereIn('issue_id', $existing->pluck('id')->all() ?: [0])->get() as $row) {
             $devices[(int) $row->issue_id][] = (int) $row->device_id;
@@ -44,11 +44,24 @@ class IssueStore
             $ids = array_values(array_unique($issue->deviceIds));
             sort($ids);
             $row = $existing->get($key);
+            if ($row === null) {
+                // a row from before the digest keys (check|subject cut at the column): re-keyed
+                // in place, so first_seen survives and the eventlog sees no appear/clear pair
+                $legacy = Issue::legacyKey($issue->check, $issue->subject);
+                $row = $existing->get($legacy);
+                if ($row !== null && (string) $row->check === $issue->check && (string) $row->subject === mb_substr($issue->subject, 0, 191)) {
+                    DB::table(self::TABLE)->where('id', $row->id)->update(['issue_key' => $key]);
+                    $existing->forget($legacy);
+                    $existing->put($key, $row);
+                } else {
+                    $row = null;
+                }
+            }
 
             if ($row === null) {
                 $id = (int) DB::table(self::TABLE)->insertGetId([
                     'fabric_id' => $fabricId,
-                    'issue_key' => mb_substr($key, 0, 191),
+                    'issue_key' => $key,
                     'check' => $issue->check,
                     'severity' => $issue->severity,
                     'subject' => mb_substr($issue->subject, 0, 191),
@@ -86,7 +99,7 @@ class IssueStore
             $ids = $devices[(int) $row->id] ?? [];
             DB::table(self::DEVICE_TABLE)->where('issue_id', $row->id)->delete();
             DB::table(self::TABLE)->where('id', $row->id)->delete();
-            $this->logTo($ids, Severity::Ok, sprintf('EVPN fabric check %s cleared: %s', explode('|', (string) $key, 2)[0], $row->message));
+            $this->logTo($ids, Severity::Ok, sprintf('EVPN fabric check %s cleared: %s', $row->check, $row->message));
             $cleared++;
         }
 

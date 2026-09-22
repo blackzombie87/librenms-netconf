@@ -31,10 +31,26 @@ final class Issue
     ) {
     }
 
-    /** Stable identity of the finding: check and subject. */
+    /**
+     * Stable identity of the finding: the check and a digest of the subject. The digest keeps
+     * the key at 32 + 1 + 40 characters whatever the subject's length (the column holds 191
+     * and the subject is a display value), so lookup, dedupe, insert and clear all use the
+     * same string and two subjects that share a long prefix stay two issues (F5 5).
+     */
     public function key(): string
     {
-        return $this->check . '|' . $this->subject;
+        return self::keyFor($this->check, $this->subject);
+    }
+
+    public static function keyFor(string $check, string $subject): string
+    {
+        return $check . '|' . sha1($subject);
+    }
+
+    /** The key rows carried before the digest: check|subject cut at the column width. */
+    public static function legacyKey(string $check, string $subject): string
+    {
+        return mb_substr($check . '|' . $subject, 0, 191);
     }
 
     public static function rank(string $severity): int

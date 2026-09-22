@@ -172,23 +172,28 @@ class FabricResolver
             $graph->mergeEvidence($ips);
         }
 
-        // 8. persist
+        // 8. persist: one transaction, so a failing writer (a schema limit, a lost connection)
+        // leaves the previous snapshot instead of a half-refreshed one (F5 5)
         $components = $graph->components();
-        $fabricIds = $this->storeFabrics($components, $now);
-        $unknown = $this->storeVteps($graph, $components, $fabricIds, $ipDevice, $deviceNodes, $routerIds, $nameHints, $now);
-        $this->storeUnderlay($edges, $graph, $deviceNodes, $fabricIds, $now);
-        $this->resolvePorts(array_keys($participants), $ipDevice);
-        $this->cleanup($graph);
-        // ESI peers as core links (plan §3.8), after the vtep rows and local_port_ids are current;
-        // with the setting off the rows go, so toggling it cleans up on the next resolve
-        $esiLinks = 0;
-        if (NetconfService::esiLinksEnabled()) {
-            $esiLinks = $this->links->sync(array_keys($participants));
-        } else {
-            $this->links->deleteAll();
-        }
-        // the consistency checks (plan §7.5) over the fabrics as they are now
-        $checks = $this->checks->run($now);
+        [$unknown, $esiLinks, $checks] = DB::transaction(function () use ($components, $graph, $ipDevice, $deviceNodes, $routerIds, $nameHints, $edges, $participants, $now) {
+            $fabricIds = $this->storeFabrics($components, $now);
+            $unknown = $this->storeVteps($graph, $components, $fabricIds, $ipDevice, $deviceNodes, $routerIds, $nameHints, $now);
+            $this->storeUnderlay($edges, $graph, $deviceNodes, $fabricIds, $now);
+            $this->resolvePorts(array_keys($participants), $ipDevice);
+            $this->cleanup($graph);
+            // ESI peers as core links (plan §3.8), after the vtep rows and local_port_ids are current;
+            // with the setting off the rows go, so toggling it cleans up on the next resolve
+            $esiLinks = 0;
+            if (NetconfService::esiLinksEnabled()) {
+                $esiLinks = $this->links->sync(array_keys($participants));
+            } else {
+                $this->links->deleteAll();
+            }
+            // the consistency checks (plan §7.5) over the fabrics as they are now
+            $checks = $this->checks->run($now);
+
+            return [$unknown, $esiLinks, $checks];
+        });
 
         return [
             'nodes' => count($graph->nodes()),
