@@ -53,6 +53,13 @@ lnms-dev 'cd /code/librenms_new && DB_CONNECTION=testing php artisan migrate --f
 lnms-dev 'cd /code/librenms-netconf && LIBRENMS_PATH=/code/librenms_new php vendor/bin/phpunit -c phpunit.feature.xml'
 ```
 
+Gotcha for a fresh checkout (the CI job builds one): LibreNMS's `composer install` ends with
+`artisan optimize`, so a route cache written *before* the plugin was required hides every
+plugin route (legacy 404 with an open output buffer, nine HTTP tests red). Run
+`php artisan route:clear` after adding the plugin; `optimize:clear` needs the default database
+connection. LibreNMS also refuses artisan for any user other than `LIBRENMS_USER`, and
+`composer require` exits in its `pre-update-cmd` hook unless `FORCE=1` is set.
+
 The base class (`tests/Feature/LibrenmsTestCase.php`) enables the plugin in the test database
 once (routes and hooks register only for an enabled plugin) and boots the application again.
 Users come from LibreNMS's factory with `enabled => 1` (the default is a disabled account).

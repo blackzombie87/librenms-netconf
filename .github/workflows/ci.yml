@@ -123,14 +123,28 @@ jobs:
       - name: Install the plugin's dependencies
         working-directory: plugin
         run: composer install --no-interaction --no-progress
+      # LibreNMS refuses artisan (and so its composer scripts, package:discover included) for
+      # any user other than config librenms.user, which defaults to "librenms"
+      - name: Let LibreNMS run as the runner's user
+        run: echo "LIBRENMS_USER=$(id -un)" >> "$GITHUB_ENV"
       - name: Install LibreNMS and add the plugin as a path repository
         working-directory: librenms
         run: |
           cp .env.example .env
           composer config repositories.netconf path ../plugin
           composer install --no-interaction --no-progress
-          composer require saffer-it/librenms-netconf:@dev --no-interaction --no-progress
+          # composer require runs LibreNMS's pre-update-cmd hook, which exits 1 unless FORCE is
+          # set (lnms plugin:add sets it the same way); the lock file of this checkout is
+          # disposable, so rewriting it is fine here
+          FORCE=1 composer require saffer-it/librenms-netconf:@dev --no-interaction --no-progress
           php artisan key:generate --force
+          # composer install's post-install scripts ran `artisan optimize` before the plugin
+          # existed: with that route cache in place the plugin's routes never register and
+          # every plugin page is a legacy 404 (which also leaves an output buffer open).
+          # Not optimize:clear - its cache:clear needs the default database connection
+          php artisan route:clear
+          php artisan event:clear
+          php artisan view:clear
       - name: Migrate the testing database
         working-directory: librenms
         env:
