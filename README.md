@@ -268,7 +268,10 @@ sensors:
     rows: //table-row            # one sensor per node; omit for a single sensor
     when: not(skip)              # XPath boolean filter per row (optional)
     repeat: count(node/name)     # flattened tables: run the row N times with {n} = 1..N
-    index: string(name)          # XPath (relative to the row) or template; must be unique
+    index: string(name)          # XPath (relative to the row) or template; must be unique and
+                                 # at most 128 chars (metrics: 191): a longer one is stored as
+                                 # its first 119 chars + "~" + 8 hex digits of its sha1, and
+                                 # netconf:validate --replay warns about it
     descr: 'Thing {index} ({row:type})'   # template: {index} {re} {n} {row:<xpath>} {device:hostname}
     value: number(active)        # XPath; NaN/empty -> row skipped
     value_any: [number(new-shape), number(old-shape)]   # first non-empty wins

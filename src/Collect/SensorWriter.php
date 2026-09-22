@@ -205,7 +205,7 @@ class SensorWriter
             'sensor_class' => $mapping->class,
             'device_id' => $this->device->device_id,
             'sensor_oid' => self::DUMMY_OID,
-            'sensor_index' => mb_substr($value->index, 0, 255),
+            'sensor_index' => $value->index,   // fitted to the column at extraction time (Identity)
             'sensor_type' => $value->type(),
             'sensor_descr' => mb_substr($value->descr, 0, 255),
             'sensor_divisor' => 1,

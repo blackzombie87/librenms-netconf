@@ -61,7 +61,7 @@ class Extractor
 
         foreach ($this->iterate($doc, $mapping->rows, $mapping->when, $mapping->repeat, $label) as [$row, $n]) {
             $vars = $this->vars($doc, $row, $n);
-            $index = $this->index($doc, $row, $mapping->index, $vars, $label);
+            $index = $this->index($doc, $row, $mapping->index, $vars, $label, Identity::SENSOR_WIDTH);
             if ($index === null) {
                 continue;
             }
@@ -160,7 +160,7 @@ class Extractor
 
         foreach ($this->iterate($doc, $mapping->rows, $mapping->when, $mapping->repeat, $label) as [$row, $n]) {
             $vars = $this->vars($doc, $row, $n);
-            $index = $this->index($doc, $row, $mapping->index, $vars, $label);
+            $index = $this->index($doc, $row, $mapping->index, $vars, $label, Identity::METRIC_WIDTH);
             if ($index === null) {
                 continue;
             }
@@ -445,9 +445,12 @@ class Extractor
     }
 
     /**
+     * The row's index, fitted to the column it will be stored in (Identity::fit()), so
+     * discovery, the record lookup and the RRD name all use the same string.
+     *
      * @param  array<string, string>  $vars
      */
-    private function index(XmlDocument $doc, DOMElement $row, string $expression, array $vars, string $label): ?string
+    private function index(XmlDocument $doc, DOMElement $row, string $expression, array $vars, string $label, int $width): ?string
     {
         $index = Template::isTemplate($expression)
             ? Template::render($expression, $doc, $row, $vars)
@@ -458,6 +461,12 @@ class Extractor
             $this->warn("$label: row with empty index, skipped");
 
             return null;
+        }
+        if (Identity::exceeds($index, $width)) {
+            $fitted = Identity::fit($index, $width);
+            $this->warn(sprintf('%s: index "%s" has %d characters, the column holds %d; stored as "%s" (shorten index:)', $label, mb_strimwidth($index, 0, 40, '…'), mb_strlen($index), $width, $fitted));
+
+            return $fitted;
         }
 
         return $index;

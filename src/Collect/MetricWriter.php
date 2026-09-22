@@ -7,6 +7,7 @@ use App\Models\Device;
 use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
 use SafferIt\LibrenmsNetconf\Collect\Concerns\WritesRrd;
+use SafferIt\LibrenmsNetconf\Extract\Identity;
 use SafferIt\LibrenmsNetconf\Extract\MetricRow;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 
@@ -130,9 +131,13 @@ class MetricWriter
         return NetconfMetric::query()->where('device_id', $this->device->device_id)->delete();
     }
 
-    /** The index as stored in metric_index and used to name the RRD (column width 191). */
+    /**
+     * The index as stored in metric_index and used to name the RRD. The extractor already
+     * fits it to the column (Identity::METRIC_WIDTH); rows built elsewhere go through the
+     * same policy here.
+     */
     public static function index(string $index): string
     {
-        return mb_substr($index, 0, 191);
+        return Identity::fit($index, Identity::METRIC_WIDTH);
     }
 }

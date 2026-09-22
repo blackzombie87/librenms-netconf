@@ -10,6 +10,7 @@ use SafferIt\LibrenmsNetconf\Collect\RrdLayout;
 use SafferIt\LibrenmsNetconf\Definitions\MetricField;
 use SafferIt\LibrenmsNetconf\Definitions\MetricMapping;
 use SafferIt\LibrenmsNetconf\Definitions\PortMapping;
+use SafferIt\LibrenmsNetconf\Extract\Identity;
 use SafferIt\LibrenmsNetconf\Extract\MetricRow;
 use SafferIt\LibrenmsNetconf\Extract\PortMetricRow;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
@@ -35,7 +36,8 @@ final class WritersTest extends LibrenmsTestCase
         $this->assertSame(['rows' => 1, 'written' => 1], $result);
         $stored = NetconfMetric::query()->where('device_id', $device->device_id)->sole();
         $this->assertSame(191, mb_strlen($stored->metric_index));
-        $this->assertSame(mb_substr($index, 0, 191), $stored->metric_index);
+        $this->assertSame(Identity::fit($index, Identity::METRIC_WIDTH), $stored->metric_index);
+        $this->assertSame(str_repeat('a', 182) . '~' . substr(sha1($index), 0, 8), $stored->metric_index);
 
         // the datastore names the file from the stored index, not from the untruncated one
         $put = $datastore->puts[0];
