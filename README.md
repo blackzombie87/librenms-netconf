@@ -31,7 +31,10 @@ cd /opt/librenms
 ```
 
 The plugin is enabled automatically. Open *Overview → Plugins → Plugin Admin → netconf* to
-set the global defaults (transport, port, username, password or SSH key).
+set the global defaults (transport, port, username, password or SSH key). The *poll budget*
+there is a scheduling budget: the collector checks it between commands and stops issuing new
+ones once it is spent, so a run takes the budget plus the command in flight, extraction and
+storage; it does not abort a command.
 
 Then run the migrations and enable devices:
 

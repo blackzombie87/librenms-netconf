@@ -130,7 +130,8 @@
             <tr>
                 <td><label for="poll_budget">Poll budget per device (s)</label></td>
                 <td><input class="form-control" id="poll_budget" type="number" min="1" name="settings[poll_budget]"
-                           value="{{ $settings['poll_budget'] ?? '' }}" placeholder="{{ $defaults['poll_budget'] }}"></td>
+                           value="{{ $settings['poll_budget'] ?? '' }}" placeholder="{{ $defaults['poll_budget'] }}">
+                    <small class="text-muted">checked between commands: no new command once spent, the one in flight completes</small></td>
                 <td><code>{{ $effective['poll_budget'] }}</code></td>
             </tr>
             <tr>
