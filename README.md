@@ -1,13 +1,16 @@
 # librenms-netconf
 
+[![CI](https://github.com/blackzombie87/librenms-netconf/actions/workflows/ci.yml/badge.svg)](https://github.com/blackzombie87/librenms-netconf/actions/workflows/ci.yml)
+[![Packagist](https://img.shields.io/packagist/v/saffer-it/librenms-netconf)](https://packagist.org/packages/saffer-it/librenms-netconf)
+
 LibreNMS plugin that collects operational data from Junos devices over SSH — either as
 `show … | display xml` on a plain SSH session or through the NETCONF subsystem — and maps
 the values onto native LibreNMS objects (sensors, per-port metrics, custom metrics) using
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: 1.0.1, not yet on Packagist** (install from a Git checkout or a path repository
-until then, see *Development*). Transports, credentials and the settings page, the YAML
+**Status: 1.0.1 on Packagist; the EVPN fabric view below ships with 1.1** (until that tag,
+install it from a Git checkout or a path repository, see *Development*). Transports, credentials and the settings page, the YAML
 definition engine and the `netconf` poller/discovery module are verified against an EX4650
 (Junos 23.4R2); the LDP, RPKI and VRRP definitions against recorded replies of a Junos 22.2
 MPLS router. Extracted values are stored as native LibreNMS
