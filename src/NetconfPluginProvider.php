@@ -26,6 +26,7 @@ use SafferIt\LibrenmsNetconf\Hooks\Menu;
 use SafferIt\LibrenmsNetconf\Hooks\Page;
 use SafferIt\LibrenmsNetconf\Hooks\PortTab;
 use SafferIt\LibrenmsNetconf\Hooks\Settings;
+use SafferIt\LibrenmsNetconf\Http\DeviceTab\TabRegistration;
 use SafferIt\LibrenmsNetconf\Support\SettingsSecrets;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
 use SafferIt\LibrenmsNetconf\Transport\DeviceCredentials;
@@ -74,6 +75,8 @@ class NetconfPluginProvider extends ServiceProvider
         }
 
         $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+        // the NETCONF device tab (plan §8 U2); without the core seam the standalone pages stay
+        TabRegistration::register(__DIR__ . '/../resources/lnms-views');
 
         if ($this->app->runningInConsole()) {
             $this->commands([

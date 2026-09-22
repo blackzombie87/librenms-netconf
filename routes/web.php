@@ -24,8 +24,11 @@ Route::middleware(['web', 'auth'])
             Route::get('evpn/mac', [FabricController::class, 'mac'])->name('evpn.mac');
         });
 
+        // per-device page: redirects to the NETCONF device tab when that is registered,
+        // otherwise the standalone page (plan §8 U2)
         Route::get('device/{device}', [DeviceController::class, 'show'])->name('device');
-        Route::get('device/{device}/metrics', [DeviceController::class, 'metrics'])->name('device.metrics');
+        Route::get('device/{device}/{section}', [DeviceController::class, 'show'])
+            ->whereIn('section', \SafferIt\LibrenmsNetconf\Support\DevicePage::SECTIONS)->name('device.section');
 
         // graphs from the plugin's own RRDs (authorised per device inside the controller)
         Route::get('graph/metric/{metric}', [GraphController::class, 'metric'])->name('graph.metric');

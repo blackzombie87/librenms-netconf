@@ -1,20 +1,15 @@
-@extends('layouts.librenmsv1')
-
-@section('title', 'NETCONF metrics - ' . $device->displayName())
-
-@section('content')
+{{-- Metrics section (plan G12): every custom metric mapping as a fold-out table, graphs rendered
+     when their fold-out is opened. Variables: DevicePageData::metrics(). --}}
 @php($periods = ['-6h' => '6h', '-1d' => 'day', '-1w' => 'week', '-1mo' => 'month', '-1y' => 'year'])
 @php($graph = fn (string $route, array $params) => route($route, $params + ['from' => $period, 'width' => 600, 'height' => 220]))
-<div class="container-fluid">
     <div class="panel panel-default">
-        <div class="panel-heading"><i class="fa fa-table fa-fw" aria-hidden="true"></i> <strong>NETCONF metrics</strong> — {!! \LibreNMS\Util\Url::deviceLink($device) !!}
+        <div class="panel-heading"><i class="fa fa-table fa-fw" aria-hidden="true"></i> <strong>Metrics</strong>
             <span class="pull-right">
                 graphs:
                 @foreach ($periods as $from => $label)
                     <a href="{{ request()->fullUrlWithQuery(['period' => $from]) }}" class="{{ $period === $from ? 'text-primary' : 'text-muted' }}"><strong>{{ $label }}</strong></a>@if (! $loop->last) &middot; @endif
                 @endforeach
                 &nbsp;|&nbsp; <a href="#" data-netconf-fold="open">expand all</a> &middot; <a href="#" data-netconf-fold="close">collapse all</a>
-                &nbsp;|&nbsp; <a href="{{ route('netconf.device', $device->device_id) }}">NETCONF settings</a>
             </span>
         </div>
         <div class="panel-body">
@@ -80,7 +75,6 @@
             @endif
         </div>
     </div>
-</div>
 <script>
 (function () {
     // graphs cost one rrdtool run each: create the <img> only when its fold-out is opened (plan G12)
@@ -107,4 +101,3 @@
     });
 })();
 </script>
-@endsection

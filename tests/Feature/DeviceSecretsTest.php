@@ -46,7 +46,7 @@ final class DeviceSecretsTest extends LibrenmsTestCase
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
 
         $this->post("/plugin/netconf/device/$device->device_id", ['password' => ' x ', 'key_passphrase' => ' p ', 'username' => ' admin '])
-            ->assertRedirect("/plugin/netconf/device/$device->device_id")
+            ->assertRedirect("/device/$device->device_id/netconf/edit")
             ->assertSessionHas('netconf_result', fn (array $result) => $result['lines'] === ['username: admin', 'password: updated', 'key_passphrase: updated']);
 
         $device->refresh();

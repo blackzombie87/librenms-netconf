@@ -301,6 +301,30 @@ namespace LibreNMS\Interfaces\Data {
     }
 }
 
+namespace LibreNMS\Interfaces\UI {
+    interface DeviceTab
+    {
+        public function visible(\App\Models\Device $device): bool;
+
+        public function slug(): string;
+
+        public function icon(): string;
+
+        public function name(): string;
+
+        /** @return array<string, mixed> */
+        public function data(\App\Models\Device $device, \Illuminate\Http\Request $request): array;
+    }
+}
+
+namespace App\View\Components\Device {
+    class PageTabs
+    {
+        /** @var array<string, class-string<\LibreNMS\Interfaces\UI\DeviceTab>> */
+        public static array $tabsClasses = [];
+    }
+}
+
 namespace LibreNMS\Interfaces {
     interface Module
     {

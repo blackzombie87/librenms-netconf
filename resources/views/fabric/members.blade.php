@@ -21,7 +21,7 @@
                 <td>
                     @if ($m['device'])
                         {!! \LibreNMS\Util\Url::deviceLink($m['device']) !!}
-                        <small><a href="{{ route('netconf.device', $m['device_id']) }}" title="plugin page"><i class="fa fa-terminal" aria-hidden="true"></i></a></small>
+                        <small><a href="{{ \SafferIt\LibrenmsNetconf\Support\DevicePage::url($m['device_id']) }}" title="NETCONF page"><i class="fa fa-terminal" aria-hidden="true"></i></a></small>
                     @else
                         <span title="not monitored by the plugin">{{ $m['name'] }}</span>
                         <br><small class="text-muted">unknown VTEP — add the device to LibreNMS with the plugin enabled</small>

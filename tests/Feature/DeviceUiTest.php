@@ -4,7 +4,11 @@ namespace SafferIt\LibrenmsNetconf\Tests\Feature;
 
 use App\Models\Device;
 use App\Models\User;
+use App\View\Components\Device\PageTabs;
+use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Hooks\DeviceOverview;
+use SafferIt\LibrenmsNetconf\Http\DeviceTab\NetconfTab;
+use SafferIt\LibrenmsNetconf\Http\DeviceTab\TabRegistration;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
@@ -13,7 +17,8 @@ require_once __DIR__ . '/LibrenmsTestCase.php';
 
 /**
  * The per-device UI after the re-home (plan §8): the overview panel is one summary without
- * value tables (U1).
+ * value tables (U1); the NETCONF device tab with its sections, who may see which, and the
+ * redirects from the old standalone URLs (U2).
  */
 final class DeviceUiTest extends LibrenmsTestCase
 {
@@ -53,6 +58,93 @@ final class DeviceUiTest extends LibrenmsTestCase
         // a viewer without access to the device sees nothing, whatever the device's state
         $this->actingAs(User::factory()->create(['enabled' => 1]));
         $this->assertFalse($hook->authorize($enabled));
+    }
+
+    public function testTheTabIsRegisteredBeforeEditAndOnlyOfferedForNetconfDevices(): void
+    {
+        $this->assertTrue(TabRegistration::active());
+        $keys = array_keys(PageTabs::$tabsClasses);
+        $this->assertSame(NetconfTab::class, PageTabs::$tabsClasses['netconf']);
+        $this->assertSame(array_search('edit', $keys, true) - 1, array_search('netconf', $keys, true), 'netconf sits right before edit');
+        $this->assertSame(1, count(array_keys($keys, 'netconf', true)));
+
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        $tab = new NetconfTab;
+        $this->assertFalse($tab->visible(Device::factory()->create(['os' => 'junos'])));
+        $this->assertTrue($tab->visible($this->polledDevice()));
+    }
+
+    public function testAdminSeesEverySectionOnTheDeviceTab(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        $device = $this->polledDevice();
+        $id = $device->device_id;
+
+        $status = $this->get("/device/$id/netconf")->assertOk()->getContent();
+        // the tab bar carries the tab, the section bar is on the page, the sensitive part is not
+        $this->assertMatchesRegularExpression('#href="[^"]*/device/' . $id . '/netconf"[^>]*>\s*<i class="fa fa-terminal[^>]*></i>\s*NETCONF#', $status);
+        $this->assertStringContainsString('pagemenu-selected', $status);
+        $this->assertStringContainsString('4 ok / 1 skipped / 0 failed', $status);
+        $this->assertMatchesRegularExpression('/<summary>\d+ matching<\/summary>/', $status);   // the shipped junos definitions
+        $this->assertStringContainsString('<code>junos-system</code>', $status);
+        $this->assertStringContainsString('Test connection', $status);
+        $this->assertStringNotContainsString('name="password"', $status);
+
+        $metrics = $this->get("/device/$id/netconf/metrics?period=-1w")->assertOk()->getContent();
+        $this->assertStringContainsString('junos-system / mapping', $metrics);
+        $this->assertStringContainsString('Routing engine re1', $metrics);
+        $section = substr($metrics, strpos($metrics, 'netconf-mapping'), strpos($metrics, '<script>', strpos($metrics, 'netconf-mapping')) - strpos($metrics, 'netconf-mapping'));
+        $this->assertStringNotContainsString('<img', $section);   // graphs load on fold-out
+        $this->assertStringContainsString('netconf-graph" data-src=', $section);
+
+        $edit = $this->get("/device/$id/netconf/edit")->assertOk()->getContent();
+        $this->assertStringContainsString('name="password"', $edit);
+        $this->assertMatchesRegularExpression('#action="[^"]*/plugin/netconf/device/' . $id . '"#', $edit);   // POST targets stay under the plugin prefix
+
+        $this->get("/device/$id/netconf/nope")->assertNotFound();
+        $this->get('/device/999999/netconf')->assertNotFound();
+    }
+
+    public function testAViewerWithAccessToTheDeviceReadsButCannotEdit(): void
+    {
+        $device = $this->polledDevice();
+        $id = $device->device_id;
+        $viewer = User::factory()->create(['enabled' => 1]);
+        $viewer->assignRole('user');
+        DB::table('devices_perms')->insert(['user_id' => $viewer->user_id, 'device_id' => $id]);
+        $this->actingAs($viewer);
+
+        $status = $this->get("/device/$id/netconf")->assertOk()->getContent();
+        $this->assertStringContainsString('4 ok / 1 skipped / 0 failed', $status);
+        $this->assertStringNotContainsString('Test connection', $status);
+        $this->assertStringNotContainsString("/device/$id/netconf/edit", $status);   // no Edit option offered
+        $this->assertStringNotContainsString('plugin/netconf/fabric', $status);
+        $this->get("/device/$id/netconf/metrics")->assertOk();
+        $this->get("/device/$id/netconf/edit")->assertForbidden();
+
+        // a device the viewer may not see: core's device policy, before the tab is reached
+        $other = $this->polledDevice();
+        $this->get("/device/$other->device_id/netconf")->assertForbidden();
+
+        // the overview panel of the accessible device shows the same summary
+        $html = app(DeviceOverview::class)->handle('netconf', [], $device)->render();
+        $this->assertStringContainsString("/device/$id/netconf\"", $html);
+    }
+
+    public function testTheOldStandaloneUrlsRedirectToTheTab(): void
+    {
+        $device = $this->polledDevice();
+        $id = $device->device_id;
+
+        $this->get("/plugin/netconf/device/$id")->assertRedirect('/login');
+        $this->get("/device/$id/netconf")->assertRedirect('/login');
+
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        $this->get("/plugin/netconf/device/$id")->assertRedirect("/device/$id/netconf");
+        $this->get("/plugin/netconf/device/$id/metrics")->assertRedirect("/device/$id/netconf/metrics");
+        $this->get("/plugin/netconf/device/$id/edit")->assertRedirect("/device/$id/netconf/edit");
+        // the status list links to the tab
+        $this->assertStringContainsString("/device/$id/netconf\"", $this->get('/plugin/netconf/status')->assertOk()->getContent());
     }
 
     private function polledDevice(): Device

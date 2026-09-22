@@ -2,10 +2,14 @@
 
 namespace SafferIt\LibrenmsNetconf\Support;
 
+use App\Models\Device;
+use SafferIt\LibrenmsNetconf\Collect\NetconfService;
+use SafferIt\LibrenmsNetconf\Http\DeviceTab\TabRegistration;
+
 /**
- * Where the per-device NETCONF pages live. One place for every link into them, so the
- * device tab (plan §8 U2) can take over from the standalone plugin page without touching
- * the views that link there.
+ * Where the per-device NETCONF pages live (plan §8): the NETCONF device tab when the core
+ * seam let the plugin register it, the standalone plugin pages otherwise. One place for
+ * every link into them.
  */
 final class DevicePage
 {
@@ -13,9 +17,24 @@ final class DevicePage
 
     public static function url(int $deviceId, string $section = 'status'): string
     {
-        return match ($section) {
-            'metrics' => route('netconf.device.metrics', $deviceId),
-            default => route('netconf.device', $deviceId),
-        };
+        if (TabRegistration::active()) {
+            return $section === 'status'
+                ? route('device', [$deviceId, 'netconf'])
+                : route('device', [$deviceId, 'netconf', $section]);
+        }
+
+        return $section === 'status'
+            ? route('netconf.device', $deviceId)
+            : route('netconf.device.section', [$deviceId, $section]);
+    }
+
+    /**
+     * Whether the device has a NETCONF page worth offering: enabled, or polled before.
+     */
+    public static function offered(Device $device): bool
+    {
+        $service = NetconfService::make();
+
+        return $service->isEnabled($device) || $service->status($device)->exists;
     }
 }

@@ -26,9 +26,7 @@ class DeviceOverview implements DeviceOverviewHook
             return false;
         }
 
-        $service = NetconfService::make();
-
-        return $service->isEnabled($device) || $service->status($device)->exists;
+        return DevicePage::offered($device);
     }
 
     /**

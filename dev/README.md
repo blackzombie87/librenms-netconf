@@ -35,6 +35,19 @@ lnms-dev 'cd /code/librenms_new && php lnms netconf:run 10.0.0.5 show version'
 Files matching `dev/*.local.*` are ignored by git and can hold throw-away helper scripts
 that are executed inside the container via `/code/librenms-netconf/dev/…`.
 
+## The device tab seam
+
+The NETCONF device tab (`src/Http/DeviceTab/`) is not a plugin hook: core has none for device
+tabs. `TabRegistration::register()` inserts `NetconfTab` into `App\View\Components\Device\PageTabs::$tabsClasses`
+(public static array, tab order = array order, inserted before `edit`) and adds
+`resources/lnms-views` to the default view path so core's `view()->exists('device.tabs.netconf')`
+finds the Blade file. Verified against LibreNMS 26.7.0 (the dev instance and CI) and the
+26.7.0-280 master checkout at `~/VScode/librenms_new` on 2026-09-22; `DeviceController::index`
+reads the tab from the third path segment, the plugin reads its section from the fourth.
+When the seam disappears, `register()` logs once and `DevicePage::url()` falls back to the
+standalone `/plugin/netconf/device/{id}[/section]` pages — CI's pinned core tag is where a seam
+change shows up first. Upstreaming a `DeviceTabHook` (plan §8 U5) removes the need for this.
+
 ## Feature tests
 
 `tests/Feature/` runs against a LibreNMS installation and its **testing** database connection

@@ -68,7 +68,7 @@ final class SessionHygieneTest extends LibrenmsTestCase
         $this->transport->runErrors = [new TimeoutException('leaf1: no complete answer to "show version" within 30s')];
 
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
-        $this->post("/plugin/netconf/device/{$device->device_id}/test")->assertRedirect("/plugin/netconf/device/{$device->device_id}");
+        $this->post("/plugin/netconf/device/{$device->device_id}/test")->assertRedirect("/device/{$device->device_id}/netconf");
 
         $this->assertSame('danger', session('netconf_result')['type']);
         $this->assertFalse($this->transport->connected);

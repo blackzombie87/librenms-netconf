@@ -45,7 +45,7 @@
                                 @php($st = $row['status'])
                                 <tr class="{{ $st && $st->consecutive_failures > 0 ? 'danger' : ($row['enabled'] ? '' : 'text-muted') }}">
                                     <td>
-                                        <a href="{{ route('netconf.device', $row['device']->device_id) }}">{{ $row['device']->displayName() }}</a>
+                                        <a href="{{ \SafferIt\LibrenmsNetconf\Support\DevicePage::url($row['device']->device_id) }}">{{ $row['device']->displayName() }}</a>
                                         <small><a href="{{ \LibreNMS\Util\Url::deviceUrl($row['device']) }}" title="device page"><i class="fa fa-external-link" aria-hidden="true"></i></a></small>
                                     </td>
                                     <td>

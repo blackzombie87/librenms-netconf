@@ -11,6 +11,14 @@ own place, the overview keeps a summary.
   gone from the overview; Health graphs the sensors, Neighbours lists the ESI links. On a core
   with `<x-device.overview.panel>` (26.8+) the panel is that component, older cores get the
   same markup.
+- NETCONF is a device tab: `/device/{id}/netconf` with the sections status (default), metrics,
+  ESI-LAGs and edit, inside the device header and tab bar next to Health and Neighbours.
+  Credentials and the polling switch are on the edit section, admin only (403 otherwise); a
+  viewer with access to the device sees status, metrics and ESI-LAGs. The old
+  `/plugin/netconf/device/{id}` and `…/metrics` URLs redirect to the tab. The tab is
+  registered through core's `PageTabs::$tabsClasses` (no plugin hook exists for device tabs
+  yet); when a core release changes that seam the plugin logs a warning once and the
+  standalone pages come back in place of the redirects.
 
 ## 1.1.0 – 2026-09-22
 
