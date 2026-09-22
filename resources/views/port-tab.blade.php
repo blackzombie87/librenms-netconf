@@ -3,6 +3,7 @@
      the same pattern as the metrics section: one rrdtool run per graph, only when asked for. --}}
 @php($periods = ['-6h' => '6h', '-1d' => 'day', '-1w' => 'week', '-1mo' => 'month', '-1y' => 'year'])
 @php($graph = fn (array $params) => route('netconf.graph.port', $params + ['from' => $period]))
+@include('netconf::fold-style')
 <div class="panel panel-default">
     <div class="panel-heading">
         <i class="fa fa-terminal fa-fw" aria-hidden="true"></i> <strong>NETCONF port counters</strong>
@@ -34,26 +35,26 @@
             </div>
             <p class="text-muted"><small>* counters, graphed as rate per second</small></p>
             @if ($counters !== [] || $gauges !== [])
-                <details class="netconf-fold netconf-graphs tw:mb-4">
-                    <summary>Graphs{{ $counters !== [] ? ': all counters' : '' }}{{ $gauges !== [] ? ($counters !== [] ? ', ' : ': ') . count($gauges) . ' gauge' . (count($gauges) === 1 ? '' : 's') : '' }}</summary>
-                    <div class="row">
+                <details class="netconf-graphs panel panel-default">
+                    <summary class="panel-heading">Graphs{{ $counters !== [] ? ': all counters' : '' }}{{ $gauges !== [] ? ($counters !== [] ? ', ' : ': ') . count($gauges) . ' gauge' . (count($gauges) === 1 ? '' : 's') : '' }}</summary>
+                    <div class="panel-body"><div class="row">
                         @if ($counters !== [])
                             <div class="col-md-6 netconf-graph" data-src="{{ $graph(['portMetric' => $row->id, 'field' => implode(',', $counters), 'width' => 600, 'height' => 220]) }}" data-alt="all counters"></div>
                         @endif
                         @foreach ($gauges as $field)
                             <div class="col-md-6 netconf-graph" data-src="{{ $graph(['portMetric' => $row->id, 'field' => $field, 'width' => 600, 'height' => 220]) }}" data-alt="{{ $field }}"></div>
                         @endforeach
-                    </div>
+                    </div></div>
                 </details>
             @endif
             @if (count($counters) > 1)
-                <details class="netconf-fold netconf-graphs tw:mb-4">
-                    <summary>Individual counter graphs ({{ count($counters) }})</summary>
-                    <div class="row">
+                <details class="netconf-graphs panel panel-default">
+                    <summary class="panel-heading">Individual counter graphs ({{ count($counters) }})</summary>
+                    <div class="panel-body"><div class="row">
                         @foreach ($counters as $field)
                             <div class="col-md-4 netconf-graph" data-src="{{ $graph(['portMetric' => $row->id, 'field' => $field, 'width' => 400, 'height' => 150]) }}" data-alt="{{ $field }}"></div>
                         @endforeach
-                    </div>
+                    </div></div>
                 </details>
             @endif
         @endforeach

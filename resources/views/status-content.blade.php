@@ -1,3 +1,4 @@
+@include('netconf::fold-style')
 <div class="row">
     <div class="col-md-12">
         <div class="panel panel-default">
@@ -35,7 +36,6 @@
                                 <th>Last OK</th>
                                 <th>Polls</th>
                                 <th>Failures</th>
-                                <th>Duration</th>
                                 <th>Last result</th>
                                 <th>Overrides</th>
                             </tr>
@@ -58,9 +58,12 @@
                                     </td>
                                     <td>{{ $st?->transport }}</td>
                                     <td>
-                                        @foreach ($st?->definitions ?? [] as $name)
-                                            <span class="label label-info">{{ $name }}</span>
-                                        @endforeach
+                                        @if ($st?->definitions)
+                                            <details class="netconf-fold">
+                                                <summary>{{ count($st->definitions) }}</summary>
+                                                <small>@foreach ($st->definitions as $name)<code>{{ $name }}</code><br>@endforeach</small>
+                                            </details>
+                                        @endif
                                     </td>
                                     <td>{{ $st?->last_ok?->diffForHumans() }}</td>
                                     <td>{{ $st?->poll_count }}</td>
@@ -72,12 +75,12 @@
                                             0
                                         @endif
                                     </td>
-                                    <td>{{ $st && $st->last_duration !== null ? sprintf('%.1fs', $st->last_duration) : '' }}</td>
                                     <td>
                                         @if ($st?->last_error)
                                             <span class="text-danger" title="{{ $st->last_error }}">{{ \Illuminate\Support\Str::limit($st->last_error, 60) }}</span>
                                         @elseif ($st?->last_summary)
-                                            <small>{{ $st->last_summary['sensors'] ?? 0 }} sensors, {{ $st->last_summary['metric_rows'] ?? 0 }} metric rows, {{ $st->last_summary['port_rows'] ?? 0 }} port rows</small>
+                                            <small>{{ \SafferIt\LibrenmsNetconf\Support\RunSummary::line($st->last_summary, $st->last_duration) }}</small>
+                                            @if (($st->last_summary['commands_failed'] ?? 0) > 0)<i class="fa fa-exclamation-triangle text-danger" title="commands failed in the last run" aria-hidden="true"></i>@endif
                                         @endif
                                     </td>
                                     <td>
@@ -122,9 +125,9 @@
                     </form>
                     @if ($bulk)
                         @if ($bulk['error'])
-                            <div class="alert alert-danger" style="margin-top: 10px;">{{ $bulk['error'] }}</div>
+                            <div class="alert alert-danger tw:mt-2">{{ $bulk['error'] }}</div>
                         @else
-                            <div class="alert alert-success" style="margin-top: 10px;">
+                            <div class="alert alert-success tw:mt-2">
                                 {{ $bulk['devices'] }} device(s) match {{ $bulk['selection'] }}, {{ $bulk['changed'] }} changed
                                 ({{ ['1' => 'enabled', '0' => 'disabled', 'inherit' => 'global default'][$bulk['action']] ?? $bulk['action'] }}).
                                 @if ($bulk['action'] === '1' && $bulk['changed'] > 0)
@@ -156,10 +159,10 @@
                         <button type="submit" class="btn btn-primary">Run</button>
                     </form>
                     @if ($errors->any())
-                        <div class="alert alert-danger" style="margin-top: 10px;">{{ implode(' ', $errors->all()) }}</div>
+                        <div class="alert alert-danger tw:mt-2">{{ implode(' ', $errors->all()) }}</div>
                     @endif
                     @if ($run)
-                        <div style="margin-top: 15px;">
+                        <div class="tw:mt-4">
                             @if ($run['ok'])
                                 <p><strong>{{ $run['device'] }}</strong>: <code>{{ $run['command'] }}</code> — {{ $run['bytes'] }} bytes in {{ sprintf('%.2f', $run['duration']) }}s</p>
                                 <pre style="max-height: 600px; overflow: auto;">{{ $run['xml'] }}</pre>

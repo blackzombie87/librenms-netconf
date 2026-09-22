@@ -22,6 +22,11 @@ own place, the overview keeps a summary.
 - The Plugins tab of a port shows the counter values and requests its graphs only when a
   fold-out is opened, like the metrics section; it used to render every graph (one rrdtool run
   each) on page load.
+- List pages: the status list's last result reads `20 ok / 7 skipped / 0 failed · 141 sensors ·
+  8.0 s` with a marker when commands failed, the definitions column is a count that folds out
+  to the names, fold-outs look like clickable headings and the mapping fold-outs like panels,
+  `/plugin/netconf` redirects to `/plugin/netconf/status` instead of rendering the list a
+  second time.
 
 ## 1.1.0 – 2026-09-22
 

@@ -15,6 +15,9 @@ Route::middleware(['web', 'auth'])
     ->prefix('plugin/netconf')
     ->name('netconf.')
     ->group(function (): void {
+        // one canonical list page: core's generic /plugin/{name} page redirects there (plan §8 U4)
+        Route::get('', fn () => redirect()->route('netconf.status'))->name('root');
+
         Route::middleware('can:global-read')->group(function (): void {
             Route::get('status', [StatusController::class, 'index'])->name('status');
             Route::get('definitions', [StatusController::class, 'definitions'])->name('definitions');

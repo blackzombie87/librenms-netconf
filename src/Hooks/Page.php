@@ -2,12 +2,15 @@
 
 namespace SafferIt\LibrenmsNetconf\Hooks;
 
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Gate;
 use LibreNMS\Interfaces\Plugins\Hooks\SinglePageHook;
-use SafferIt\LibrenmsNetconf\Support\StatusOverview;
 
 /**
- * /plugin/netconf — the same status content as the plugin's own status route.
+ * Core's generic /plugin/netconf page. The plugin's own route for that path redirects to the
+ * status list before this hook is reached (plan §8 U4); this stays for a core whose route
+ * order puts the generic page first, so there is one list page either way instead of two
+ * renderings of the same content.
  */
 class Page implements SinglePageHook
 {
@@ -22,6 +25,6 @@ class Page implements SinglePageHook
      */
     public function handle(string $pluginName, array $settings): array
     {
-        return ['content_view' => "$pluginName::status-content", 'run' => session('netconf_run'), 'bulk' => session('netconf_bulk')] + StatusOverview::data();
+        throw new HttpResponseException(redirect()->route('netconf.status'));
     }
 }

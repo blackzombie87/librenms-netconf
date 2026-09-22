@@ -18,9 +18,10 @@
                 @php([$definition, $mapping] = explode(' / ', $group, 2))
                 @php($numeric = collect($rows)->flatMap(fn ($r) => array_keys($r->dataSources()))->unique()->values())
                 @php($fields = collect($rows)->flatMap(fn ($r) => array_keys(($r->values ?? []) + ($r->labels ?? [])))->unique()->values())
-                <details class="netconf-mapping" style="margin-bottom: 10px;">
-                    <summary><code>{{ $group }}</code> <small class="text-muted">{{ $rows->count() }} rows, {{ $fields->count() }} fields, updated {{ $rows->first()->last_seen?->diffForHumans() }}</small></summary>
-                    <div style="overflow-x: auto;">
+                <details class="netconf-mapping panel panel-default">
+                    <summary class="panel-heading"><code>{{ $group }}</code> <small class="text-muted">{{ $rows->count() }} rows, {{ $fields->count() }} fields, updated {{ $rows->first()->last_seen?->diffForHumans() }}</small></summary>
+                    <div class="panel-body">
+                    <div class="tw:overflow-x-auto">
                     <table class="table table-condensed table-hover table-striped">
                         <thead><tr><th>Index</th><th>Description</th>@foreach ($fields as $f)<th class="text-right">{{ $f }}</th>@endforeach<th></th></tr></thead>
                         <tbody>
@@ -31,7 +32,7 @@
                     </table>
                     </div>
                     @if ($numeric->isNotEmpty())
-                        <details class="netconf-graphs" style="margin-bottom: 10px;">
+                        <details class="netconf-graphs">
                             <summary>Graphs per field ({{ $numeric->count() }}), one line per row{{ $rows->count() > $max_series ? sprintf(', first %d of %d rows', $max_series, $rows->count()) : '' }}</summary>
                             <div class="row">
                                 @foreach ($numeric as $field)
@@ -40,6 +41,7 @@
                             </div>
                         </details>
                     @endif
+                    </div>
                 </details>
             @empty
                 <p>No custom metrics stored for this device yet.</p>
@@ -48,9 +50,10 @@
             @if ($ports->isNotEmpty())
                 @php($pfields = collect($ports)->flatMap(fn ($r) => array_keys($r->values ?? []))->unique()->values())
                 @php($pgroups = collect($ports)->map(fn ($r) => $r->definition . '/' . $r->mapping)->unique()->values())
-                <details class="netconf-mapping" style="margin-bottom: 10px;">
-                    <summary><strong>Port metrics</strong> <small class="text-muted">{{ $ports->count() }} ports, {{ $pfields->count() }} counters, {{ $pgroups->count() }} mapping(s)</small></summary>
-                    <div style="overflow-x: auto;">
+                <details class="netconf-mapping panel panel-default">
+                    <summary class="panel-heading"><strong>Port metrics</strong> <small class="text-muted">{{ $ports->count() }} ports, {{ $pfields->count() }} counters, {{ $pgroups->count() }} mapping(s)</small></summary>
+                    <div class="panel-body">
+                    <div class="tw:overflow-x-auto">
                     <table class="table table-condensed table-hover table-striped">
                         <thead><tr><th>Port</th><th>Mapping</th>@foreach ($pfields as $f)<th class="text-right">{{ $f }}</th>@endforeach<th></th></tr></thead>
                         <tbody>
@@ -60,7 +63,7 @@
                         </tbody>
                     </table>
                     </div>
-                    <details class="netconf-graphs" style="margin-bottom: 10px;">
+                    <details class="netconf-graphs">
                         <summary>Graphs per counter, one line per port{{ $ports->count() > $max_series ? sprintf(' (first %d of %d ports per mapping)', $max_series, $ports->count()) : '' }}</summary>
                         @foreach ($pgroups as $pg)
                             @php([$pdef, $pmap] = explode('/', $pg, 2))
@@ -71,6 +74,7 @@
                             </div>
                         @endforeach
                     </details>
+                    </div>
                 </details>
             @endif
         </div>
