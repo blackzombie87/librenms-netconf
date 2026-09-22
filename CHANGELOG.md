@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+UI re-home (internal plan §8): NETCONF per-device detail moves from the overview into its
+own place, the overview keeps a summary.
+
+- The device overview shows one NETCONF panel: polling state, fabric membership and the
+  stored counts (sensors with the critical count, metric rows, ESI-LAGs, definitions) with a
+  link to the per-device page. The metric tables and the second "EVPN multihoming" panel are
+  gone from the overview; Health graphs the sensors, Neighbours lists the ESI links. On a core
+  with `<x-device.overview.panel>` (26.8+) the panel is that component, older cores get the
+  same markup.
+
 ## 1.1.0 – 2026-09-22
 
 Fixes from the full software review of 2026-09-22 (internal plan item F5):
