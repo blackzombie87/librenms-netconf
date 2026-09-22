@@ -64,10 +64,14 @@ at least once (plan G17, R5), these run by hand before a tag:
 
 1. `vendor/bin/pest` — unit suite green on the bare checkout (the Feature tests skip there).
 2. `vendor/bin/phpstan analyse` and `vendor/bin/php-cs-fixer check --diff` — clean.
-3. Feature suite **green in Docker**, the command above; the count belongs in the release
-   notes (28 tests at the time of writing). Note that `UninstallTest` drops and re-creates
-   the plugin tables of `librenms_test`; it restores them in its teardown, so a suite that
-   aborts mid-run can leave the test database without them — re-run
-   `DB_CONNECTION=testing php artisan migrate --force` if the next run complains.
-4. `lnms netconf:validate` on the definitions, and `--replay` over the fixtures.
-5. One live discovery and poll against a real device.
+3. `actionlint` (`brew install actionlint`) — the workflow file validates. GitHub rejects a
+   workflow with an expression in the wrong place *before* any job runs, which a green local
+   suite cannot show; the `workflow` job runs the same check in CI.
+4. Feature suite **green in Docker**, the command above, with **no skipped test**
+   (`phpunit.feature.xml` sets `failOnSkipped`, so a container without `rrdtool` fails the
+   run instead of hiding `RrdLayoutTest`); the count belongs in the release notes. Note that
+   `UninstallTest` drops and re-creates the plugin tables of `librenms_test`; it restores
+   them in its teardown, so a suite that aborts mid-run can leave the test database without
+   them — re-run `DB_CONNECTION=testing php artisan migrate --force` if the next run complains.
+5. `lnms netconf:validate` on the definitions, and `--replay` over the fixtures.
+6. One live discovery and poll against a real device.

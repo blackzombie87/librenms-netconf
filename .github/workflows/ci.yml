@@ -37,6 +37,13 @@ jobs:
       - run: composer install --no-interaction --no-progress
       - run: vendor/bin/php-cs-fixer check --diff
 
+  workflow:
+    name: Workflow lint (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
+
   analyse:
     name: Static analysis (phpstan)
     runs-on: ubuntu-latest
@@ -72,10 +79,14 @@ jobs:
   # Never executed yet: the repository has no remote (plan R5), so the first push is its
   # first run. Until then dev/README.md makes the Docker run a pre-tag step.
   feature:
-    name: Feature tests (LibreNMS ${{ env.LIBRENMS_REF }})
+    # `env` is not evaluated in a job name, only `matrix` is (GitHub rejects the whole
+    # workflow otherwise), so the pinned tag lives in a one-entry matrix
+    name: Feature tests (LibreNMS ${{ matrix.librenms }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        librenms: ['26.7.0']
     env:
-      LIBRENMS_REF: '26.7.0'
       LIBRENMS_PATH: ${{ github.workspace }}/librenms
     services:
       mariadb:
@@ -99,13 +110,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: librenms/librenms
-          ref: ${{ env.LIBRENMS_REF }}
+          ref: ${{ matrix.librenms }}
           path: librenms
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           extensions: dom, libxml, openssl, mysqlnd, pdo_mysql, gd, bcmath, intl, zip, snmp
           coverage: none
+      # RrdLayoutTest skips without rrdtool, and phpunit.feature.xml fails the run on a skip
+      - name: Install rrdtool
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rrdtool
       - name: Install the plugin's dependencies
         working-directory: plugin
         run: composer install --no-interaction --no-progress
