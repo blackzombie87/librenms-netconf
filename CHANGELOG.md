@@ -19,6 +19,9 @@ own place, the overview keeps a summary.
   registered through core's `PageTabs::$tabsClasses` (no plugin hook exists for device tabs
   yet); when a core release changes that seam the plugin logs a warning once and the
   standalone pages come back in place of the redirects.
+- The Plugins tab of a port shows the counter values and requests its graphs only when a
+  fold-out is opened, like the metrics section; it used to render every graph (one rrdtool run
+  each) on page load.
 
 ## 1.1.0 – 2026-09-22
 

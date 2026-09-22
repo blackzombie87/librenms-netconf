@@ -6,11 +6,14 @@ use App\Models\Device;
 use App\Models\User;
 use App\View\Components\Device\PageTabs;
 use Illuminate\Support\Facades\DB;
+use App\Models\Port;
 use SafferIt\LibrenmsNetconf\Hooks\DeviceOverview;
+use SafferIt\LibrenmsNetconf\Hooks\PortTab;
 use SafferIt\LibrenmsNetconf\Http\DeviceTab\NetconfTab;
 use SafferIt\LibrenmsNetconf\Http\DeviceTab\TabRegistration;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
+use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 
 require_once __DIR__ . '/LibrenmsTestCase.php';
@@ -18,7 +21,8 @@ require_once __DIR__ . '/LibrenmsTestCase.php';
 /**
  * The per-device UI after the re-home (plan §8): the overview panel is one summary without
  * value tables (U1); the NETCONF device tab with its sections, who may see which, and the
- * redirects from the old standalone URLs (U2).
+ * redirects from the old standalone URLs (U2); the port Plugins tab renders numbers and
+ * requests graphs only when a fold-out is opened (U3).
  */
 final class DeviceUiTest extends LibrenmsTestCase
 {
@@ -145,6 +149,36 @@ final class DeviceUiTest extends LibrenmsTestCase
         $this->get("/plugin/netconf/device/$id/edit")->assertRedirect("/device/$id/netconf/edit");
         // the status list links to the tab
         $this->assertStringContainsString("/device/$id/netconf\"", $this->get('/plugin/netconf/status')->assertOk()->getContent());
+    }
+
+    public function testThePortPluginsTabShowsNumbersAndNoGraphUntilAFoldOutOpens(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        $device = $this->polledDevice();
+        $port = Port::factory()->create(['device_id' => $device->device_id, 'ifName' => 'et-0/0/1']);
+        $hook = app(PortTab::class);
+        $this->assertFalse($hook->authorize($port));
+
+        NetconfPortMetric::query()->create([
+            'device_id' => $device->device_id,
+            'port_id' => $port->port_id,
+            'definition' => 'junos-interfaces',
+            'mapping' => 'ethernet',
+            'values' => ['crc_errors' => 3.0, 'fec_ccw' => 0.0, 'input_pause' => 7.0],
+            'types' => ['crc_errors' => 'COUNTER', 'fec_ccw' => 'COUNTER', 'input_pause' => 'GAUGE'],
+            'last_seen' => now(),
+        ]);
+        $this->assertTrue($hook->authorize($port->fresh()));
+        $html = $hook->handle('netconf', $port->fresh(), [])->render();
+
+        $this->assertStringContainsString('junos-interfaces/ethernet', $html);
+        $this->assertStringContainsString('crc_errors*', $html);
+        $this->assertStringContainsString('text-warning">3<', $html);   // a counter with errors is highlighted
+        $this->assertStringNotContainsString('<img', substr($html, 0, strpos($html, '<script>')));
+        // one combined counter graph, one gauge, two individual counters: all deferred
+        $this->assertSame(4, substr_count($html, 'netconf-graph" data-src='));
+        $this->assertStringContainsString('field=crc_errors%2Cfec_ccw', $html);
+        $this->assertStringNotContainsString('<details open', $html);
     }
 
     private function polledDevice(): Device

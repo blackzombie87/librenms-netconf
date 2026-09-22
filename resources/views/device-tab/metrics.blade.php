@@ -77,7 +77,7 @@
     </div>
 <script>
 (function () {
-    // graphs cost one rrdtool run each: create the <img> only when its fold-out is opened (plan G12)
+    // graphs cost one rrdtool run each: the image element is created when its fold-out opens (plan G12)
     function materialize(details) {
         if (! details.open) { return; }
         details.querySelectorAll('.netconf-graph[data-src]').forEach(function (box) {
