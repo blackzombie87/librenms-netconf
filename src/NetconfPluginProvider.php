@@ -4,6 +4,7 @@ namespace SafferIt\LibrenmsNetconf;
 
 use App\Facades\LibrenmsConfig;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Foundation\Http\Middleware\TrimStrings;
 use Illuminate\Support\ServiceProvider;
 use LibreNMS\Interfaces\Plugins\Hooks\DeviceOverviewHook;
 use LibreNMS\Interfaces\Plugins\Hooks\MenuEntryHook;
@@ -59,6 +60,9 @@ class NetconfPluginProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__ . '/../resources/views', $name);
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         SettingsSecrets::register();
+        // Laravel trims every request string except `password`; the plugin's other secret
+        // fields (device form, and the nested settings form) must reach the store untouched
+        TrimStrings::except(['key_passphrase', 'settings.password', 'settings.key_passphrase']);
 
         if ($this->app->runningInConsole()) {
             // available while the plugin is disabled: it is the step before plugin:remove

@@ -42,3 +42,14 @@ it('does not double-encrypt values that are already sealed', function () use ($e
 
     expect($result['password'])->toBe('crypt:ALREADY');
 });
+
+it('seals a secret with its surrounding whitespace, only an empty field means "keep"', function () use ($encrypt) {
+    $result = SettingsSecrets::protect(
+        ['password' => ' x ', 'key_passphrase' => '   '],
+        ['password' => 'crypt:OLD', 'key_passphrase' => 'crypt:OLDPP'],
+        $encrypt
+    );
+
+    expect($result['password'])->toBe('crypt:ENC( x )')
+        ->and($result['key_passphrase'])->toBe('crypt:ENC(   )');
+});

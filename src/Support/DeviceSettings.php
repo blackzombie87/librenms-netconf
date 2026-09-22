@@ -106,7 +106,12 @@ class DeviceSettings
             if ($value === null || $value === '') {
                 continue;
             }
-            $value = trim((string) $value);
+            // secrets byte for byte: a password with leading or trailing spaces is a value
+            // (F5 6); the other fields are identifiers and trimmed, all-blank means unchanged
+            $value = $secret ? (string) $value : trim((string) $value);
+            if ($value === '') {
+                continue;
+            }
 
             if ($suffix === 'transport' && ! in_array($value, Credentials::TRANSPORTS, true)) {
                 throw new \InvalidArgumentException('transport must be auto, cli or netconf');
