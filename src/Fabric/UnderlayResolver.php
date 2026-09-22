@@ -68,8 +68,13 @@ class UnderlayResolver
         foreach (DB::table('ospf_nbrs')->whereIn('device_id', $deviceIds)->get(['device_id', 'ospfNbrIpAddr', 'ospfNbrRtrId', 'ospfNbrState']) as $nbr) {
             $ospf[(int) $nbr->device_id][] = ['ip' => (string) $nbr->ospfNbrIpAddr, 'rtr' => (string) $nbr->ospfNbrRtrId, 'state' => (string) $nbr->ospfNbrState];
         }
+        // core discovery protocols only: the plugin's own evpn-esi rows (EsiLinkWriter) describe
+        // a logical multihoming relation, not a cable, and must not confirm an underlay edge
         $lldp = [];   // local_port_id => list of [remote_device_id, remote_port_id]
-        foreach (DB::table('links')->whereIn('local_device_id', $deviceIds)->get(['local_port_id', 'local_device_id', 'remote_device_id', 'remote_port_id']) as $link) {
+        $links = DB::table('links')->whereIn('local_device_id', $deviceIds)
+            ->where(fn ($q) => $q->whereNull('protocol')->orWhere('protocol', '!=', EsiLinks::PROTOCOL))
+            ->get(['local_port_id', 'local_device_id', 'remote_device_id', 'remote_port_id']);
+        foreach ($links as $link) {
             $lldp[(int) $link->local_port_id][] = ['device_id' => (int) $link->remote_device_id, 'port_id' => (int) $link->remote_port_id, 'local_device_id' => (int) $link->local_device_id];
         }
 
