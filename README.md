@@ -9,10 +9,10 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: 1.0.1 on Packagist; the EVPN fabric view below ships with 1.1** (until that tag,
-install it from a Git checkout or a path repository, see *Development*). Transports, credentials and the settings page, the YAML
-definition engine and the `netconf` poller/discovery module are verified against an EX4650
-(Junos 23.4R2); the LDP, RPKI and VRRP definitions against recorded replies of a Junos 22.2
+**Status: 1.1.0 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
+credentials and the settings page, the YAML definition engine and the `netconf`
+poller/discovery module are verified against an EX4650 (Junos 23.4R2); the LDP, RPKI and
+VRRP definitions against recorded replies of a Junos 22.2
 MPLS router. Extracted values are stored as native LibreNMS
 sensors (health tab, graphs, alert rules), per-port metrics and custom metrics with their
 own RRDs and graphs. The web UI has a NETCONF status page, a per-device page (credentials,

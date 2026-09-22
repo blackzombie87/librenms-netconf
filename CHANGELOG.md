@@ -1,6 +1,32 @@
 # Changelog
 
-## Unreleased (1.1)
+## 1.1.0 – 2026-09-22
+
+Fixes from the full software review of 2026-09-22 (internal plan item F5):
+
+- The fabric checks judge this poll: YAML sensors and the run's outcome are stored before
+  the fabric resolve, the "EVPN fabric issues" sensor after it. `dup-mac` issues used to
+  open and clear one poll late, the border role and `member-not-polling` followed the
+  previous poll.
+- Sensor indices are fitted to core's 128-character column at extraction time (metrics: 191):
+  a longer index keeps its first 119 characters plus `~` and eight hex digits of its sha1, so
+  two long indices stay two sensors and discovery, polling and the RRD name agree. A
+  129-character index used to abort discovery. `netconf:validate --replay` warns about it.
+- Fabric issue keys are digests (`check|sha1(subject)`); a long subject (an ESI plus
+  instance names) used to make every later resolve of that fabric fail on the unique index.
+  Existing rows are re-keyed silently. The resolver writes its snapshot in one transaction.
+- The plugin's own `evpn-esi` rows in the core `links` table no longer count as LLDP evidence
+  for underlay links between two monitored PEs.
+- Per-device passwords and key passphrases are stored byte for byte; only usernames, ports and
+  paths are trimmed. The web forms keep the whitespace of secret fields too.
+- A writer that throws during storage (a schema limit, a lost database connection) is recorded
+  as a failed run with back-off and an eventlog entry instead of leaving the run half stored.
+- `poll_budget` is documented as what it is: a scheduling budget checked between commands.
+- Fixtures: the positive duplicate-MAC sample (one suppressed VRRP virtual MAC) and the
+  per-MAC `show evpn database mac-address … extensive` reply from an EX4650 on 23.4R2-S8.7.
+- Tests and CI: 40 feature tests (module scheduling matrix, service-level check transitions,
+  underlay evidence, index identity, issue store, secrets) run on GitHub against LibreNMS
+  26.7.0 next to the unit suite; the workflow is linted with actionlint.
 
 Gaps closed on the way to 1.1 (internal plan §6.2):
 
