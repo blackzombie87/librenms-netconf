@@ -31,6 +31,9 @@ class NetconfService
 {
     public const ATTRIB_ENABLED = 'netconf_enabled';
 
+    /** Whether this run's store() already committed a fabric resolve (F6 1). */
+    private bool $resolved = false;
+
     public function __construct(
         private readonly DefinitionLoader $loader,
         private readonly DeviceCredentials $credentials,
@@ -115,6 +118,10 @@ class NetconfService
     {
         $start = microtime(true);
         $status = $this->status($device);
+        // the counter as the run found it: saveStatus() zeroes it before the writers run, so a
+        // writer that throws must count from here and not from the optimistic success row (F6 1)
+        $failuresBefore = $status->consecutive_failures;
+        $this->resolved = false;
         $definitions = $this->matchingDefinitions($device);
         $names = array_map(fn ($d) => $d->name, $definitions);
         foreach ($this->loader->errors() as $error) {
@@ -132,10 +139,10 @@ class NetconfService
             try {
                 $summary = array_merge($result->summary(), $this->store($device, [], $result, $datastore, $discovery));
             } catch (\Throwable $e) {
-                return $this->storageFailed($device, $status, $e, $transportName, $names, $result, $discovery, $start);
+                return $this->storageFailed($device, $status, $e, $transportName, $names, $result, $discovery, $start, $failuresBefore);
             }
             $duration = microtime(true) - $start;
-            $this->finishStatus($status, $summary, $duration);
+            $this->finishStatus($status, $summary, $duration, ok: true);
             Log::info(sprintf('netconf: nothing to collect; %d sensor(s) synced, %d metric, %d port and %d table row(s) pruned in %.2fs', $summary['sensors_synced'] ?? 0, $summary['metrics_pruned'] ?? 0, $summary['ports_pruned'] ?? 0, $summary['tables_pruned'] ?? 0, $duration));
 
             return new RunReport($discovery, $transportName, [], $summary, [], [], $duration, $result);
@@ -176,10 +183,10 @@ class NetconfService
         try {
             $summary = array_merge($result->summary(), $this->store($device, $definitions, $result, $datastore, $discovery));
         } catch (\Throwable $e) {
-            return $this->storageFailed($device, $status, $e, $transport->name(), $names, $result, $discovery, $start);
+            return $this->storageFailed($device, $status, $e, $transport->name(), $names, $result, $discovery, $start, $failuresBefore);
         }
         $duration = microtime(true) - $start;
-        $this->finishStatus($status, $summary, $duration);
+        $this->finishStatus($status, $summary, $duration, ok: $error === null);
 
         if ($error !== null) {
             $this->logFailure($device, $status, $error);
@@ -325,6 +332,7 @@ class NetconfService
                 if ($fabric === null) {
                     Log::debug('  fabric resolver skipped: another poller holds the lock');
                 } else {
+                    $this->resolved = true;
                     $counts['fabric_nodes'] = $fabric['nodes'];
                     $counts['fabrics'] = $fabric['fabrics'];
                     Log::info(sprintf('  fabric: %d nodes on %d devices (%d unknown), %d fabric(s), %d underlay links, %d ESI peer links', $fabric['nodes'], $fabric['devices'], $fabric['unknown'], $fabric['fabrics'], $fabric['links'], $fabric['esi_links']));
@@ -383,35 +391,53 @@ class NetconfService
      * a failure with back-off and an eventlog entry instead of leaving the status row with
      * the pre-storage outcome and the data half written (F5 4).
      *
+     * The failure counter continues the streak the run started with, not the zero saveStatus()
+     * wrote before the writers, and `last_ok` keeps the last run that stored anything: it is
+     * finishStatus() that moves it (F6 1).
+     *
      * @param  list<string>  $names
+     * @param  int  $failuresBefore  the counter as the run found it
      */
-    private function storageFailed(Device $device, NetconfDeviceStatus $status, \Throwable $e, string $transport, array $names, CollectionResult $result, bool $discovery, float $start): RunReport
+    private function storageFailed(Device $device, NetconfDeviceStatus $status, \Throwable $e, string $transport, array $names, CollectionResult $result, bool $discovery, float $start, int $failuresBefore): RunReport
     {
         $error = 'storing the results failed: ' . $e->getMessage();
         $duration = microtime(true) - $start;
-        if ($status->next_attempt === null) {
-            // the collection itself succeeded, so saveStatus() reset the counter; this run fails after all
-            $status->consecutive_failures = $status->consecutive_failures + 1;
-            $status->next_attempt = now()->addSeconds($this->backoff($status->consecutive_failures));
-        }
+        $status->consecutive_failures = $failuresBefore + 1;
+        $status->next_attempt = now()->addSeconds($this->backoff($status->consecutive_failures));
         $status->last_error = mb_substr($error, 0, 2000);
         $status->last_duration = $duration;
         $status->save();
         Eventlog::log('NETCONF ' . $error, $device, 'netconf', Severity::Error);
         Log::error(sprintf('netconf %s: %s (%s)', $device->hostname, $error, $e::class));
 
+        if ($this->resolved) {
+            // the resolve committed while this run still looked healthy, and its member-not-polling
+            // check read that row: resolve once more now that the failure is stored, so the issue
+            // is re-opened for a leaf that stops polling here (F6 1). A second throw only logs.
+            try {
+                FabricResolver::make()->run();
+            } catch (\Throwable $second) {
+                Log::error('netconf: re-resolving the fabric after a storage failure failed: ' . $second->getMessage());
+            }
+        }
+
         return new RunReport($discovery, $transport, $names, $result->summary(), array_merge($result->errors, [$error]), $result->warnings(), $duration, $result);
     }
 
     /**
-     * Second half of the status row, after the writers: what the run stored.
+     * Second half of the status row, after the writers: what the run stored, and — for a run
+     * that got this far without an error — `last_ok`. The success branch of saveStatus() runs
+     * before the writers, so it may not claim a complete run yet (F6 1).
      *
      * @param  array<string, int>  $summary
      */
-    private function finishStatus(NetconfDeviceStatus $status, array $summary, float $duration): void
+    private function finishStatus(NetconfDeviceStatus $status, array $summary, float $duration, bool $ok): void
     {
         $status->last_summary = $summary;
         $status->last_duration = $duration;
+        if ($ok) {
+            $status->last_ok = now();
+        }
         $status->save();
     }
 
@@ -447,7 +473,7 @@ class NetconfService
             $status->consecutive_failures = 0;
             $status->next_attempt = null;
             $status->last_error = $error === null ? null : mb_substr($error, 0, 2000);
-            $status->last_ok = now();
+            // last_ok belongs to the complete run: finishStatus() sets it once storage is through
         } else {
             $status->consecutive_failures = $status->consecutive_failures + 1;
             $status->last_error = mb_substr($error, 0, 2000);

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+Fixes from the review of 2026-09-23 (internal plan F6); the first three are fixes to 1.1.0:
+
+- A poll whose collection succeeded but whose storage then failed no longer reports itself as
+  the last successful run: *Last OK* moves only once the writers are through, and the failure
+  counter continues the streak the run started with instead of restarting at 1 from the
+  success the status row had already written — so the back-off no longer collapses to its
+  first step. If the fabric resolve of that run had already cleared the "member not polling"
+  issue for the leaf (it reads the status row), the resolve runs again after the failure is
+  recorded, so the issue comes back.
+
 UI re-home (internal plan §8): NETCONF per-device detail moves from the overview into its
 own place, the overview keeps a summary.
 
