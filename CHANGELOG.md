@@ -28,6 +28,19 @@ own place, the overview keeps a summary.
   `/plugin/netconf` redirects to `/plugin/netconf/status` instead of rendering the list a
   second time.
 
+Fabric view at scale (internal plan G18):
+
+- The EVPN fabric resolve no longer costs a set of queries per monitored member. It ran seven
+  per device — the leaf's own VTEP addresses and router-ids, the IRB and tunnel checks, its
+  ports, and the tunnel, ESI and `links` rows to correct — which a poll of any one leaf paid
+  for the whole fabric. Those are grouped queries now, the remote-MAC sources are only written
+  where the resolved device changed, and the `evpn-esi` links are inserted and deleted in one
+  statement each. Measured in the feature harness on a synthetic full mesh: 24 members cost 2
+  queries more than 4 (it used to be 142 more); one real leaf 94 instead of 102, with the
+  stored fabric byte for byte the same. A new feature test keeps the per-member budget.
+- Which router-id a device is stored under is now the lowest one rather than whatever the
+  database returned first, so it cannot change from poll to poll on a device with several.
+
 Internal tidy-up, no behaviour change:
 
 - `Extractor::sensors()` and `::metrics()` share the indexed-row iterator they both opened

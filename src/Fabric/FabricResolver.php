@@ -74,13 +74,25 @@ class FabricResolver
                 $participants[(int) $id] = true;
             }
         }
+        // what every participant is known by, read for all of them at once: a query per device
+        // here is what makes a poll of one leaf cost the whole fabric (plan G18)
+        $ownVteps = $this->groupColumn('vni', 'source_vtep');
+        $routerIdsByDevice = $this->groupColumn('neighbor', 'router_id');
+        $hasTunnel = $this->deviceFlags('tunnel');
+        $hasIrb = $this->deviceFlags('vni', 'irb_ifname');
+        $noAddress = array_values(array_filter(
+            array_keys($participants),
+            fn (int $id) => ($ownVteps[$id] ?? []) === [] && ($routerIdsByDevice[$id] ?? []) === []
+        ));
+        $loopbacks = $this->loopbacks($noAddress);
+
         foreach (array_keys($participants) as $deviceId) {
-            $own = DB::table(TableSchema::tableName('vni'))->where('device_id', $deviceId)->whereNotNull('source_vtep')->distinct()->pluck('source_vtep')->map(fn ($v) => (string) $v)->all();
-            $rids = DB::table(TableSchema::tableName('neighbor'))->where('device_id', $deviceId)->whereNotNull('router_id')->distinct()->pluck('router_id')->map(fn ($v) => (string) $v)->all();
+            $own = $ownVteps[$deviceId] ?? [];
+            $rids = $routerIdsByDevice[$deviceId] ?? [];
             $routerIds[$deviceId] = $rids[0] ?? null;
             $ips = array_values(array_unique(array_merge($own, $rids)));
             if ($ips === []) {
-                $ips = $this->loopbacks($deviceId);
+                $ips = $loopbacks[$deviceId] ?? [];
             }
             if ($ips === []) {
                 Log::debug("netconf fabric: device $deviceId has EVPN rows but no VTEP address / router-id, skipped");
@@ -90,10 +102,10 @@ class FabricResolver
             foreach ($own as $ip) {
                 $graph->markVtep($ip);
             }
-            if ($own === [] && DB::table(TableSchema::tableName('tunnel'))->where('device_id', $deviceId)->exists()) {
+            if ($own === [] && isset($hasTunnel[$deviceId])) {
                 $graph->markVtep($ips[0]);
             }
-            if (DB::table(TableSchema::tableName('vni'))->where('device_id', $deviceId)->whereNotNull('irb_ifname')->exists()) {
+            if (isset($hasIrb[$deviceId])) {
                 $graph->markGateway($ips[0]);   // spread over the device's other addresses in step 7
             }
         }
@@ -273,14 +285,63 @@ class FabricResolver
     }
 
     /**
-     * @return list<string>
+     * @param  list<int>  $deviceIds
+     * @return array<int, list<string>> device_id => its loopback addresses
      */
-    private function loopbacks(int $deviceId): array
+    private function loopbacks(array $deviceIds): array
     {
-        return DB::table('ipv4_addresses')->join('ports', 'ports.port_id', '=', 'ipv4_addresses.port_id')
-            ->where('ports.device_id', $deviceId)->where('ipv4_prefixlen', 32)->where('ports.ifName', 'like', 'lo%')
+        if ($deviceIds === []) {
+            return [];
+        }
+
+        $result = [];
+        $rows = DB::table('ipv4_addresses')->join('ports', 'ports.port_id', '=', 'ipv4_addresses.port_id')
+            ->whereIn('ports.device_id', $deviceIds)->where('ipv4_prefixlen', 32)->where('ports.ifName', 'like', 'lo%')
             ->where('ipv4_address', 'not like', '127.%')
-            ->orderBy('ports.ifName')->pluck('ipv4_address')->map(fn ($v) => (string) $v)->all();
+            ->orderBy('ports.device_id')->orderBy('ports.ifName')->get(['ports.device_id', 'ipv4_address']);
+        foreach ($rows as $row) {
+            $result[(int) $row->device_id][] = (string) $row->ipv4_address;
+        }
+
+        return $result;
+    }
+
+    /**
+     * One column of a per-leaf table, grouped by device: device_id => distinct values, in a
+     * stable order so the address a device is stored under does not change between polls.
+     *
+     * @return array<int, list<string>>
+     */
+    private function groupColumn(string $table, string $column): array
+    {
+        $result = [];
+        $rows = DB::table(TableSchema::tableName($table))->whereNotNull($column)->distinct()
+            ->orderBy('device_id')->orderBy($column)->get(['device_id', $column]);
+        foreach ($rows as $row) {
+            $result[(int) $row->device_id][] = (string) $row->{$column};
+        }
+
+        return $result;
+    }
+
+    /**
+     * The devices that have a row in $table (with a value in $column, when given), as a set.
+     *
+     * @return array<int, true>
+     */
+    private function deviceFlags(string $table, ?string $column = null): array
+    {
+        $query = DB::table(TableSchema::tableName($table))->distinct();
+        if ($column !== null) {
+            $query->whereNotNull($column);
+        }
+
+        $result = [];
+        foreach ($query->pluck('device_id') as $id) {
+            $result[(int) $id] = true;
+        }
+
+        return $result;
     }
 
     /**
@@ -440,39 +501,70 @@ class FabricResolver
      */
     private function resolvePorts(array $deviceIds, array $ipDevice): void
     {
-        foreach ($deviceIds as $deviceId) {
-            $ports = DB::table('ports')->where('device_id', $deviceId)->where('deleted', 0)->get(['port_id', 'ifIndex', 'ifName']);
-            $byIndex = [];
-            $byName = [];
-            foreach ($ports as $port) {
-                $byIndex[(int) $port->ifIndex] = (int) $port->port_id;
-                $byName[(string) $port->ifName] = (int) $port->port_id;
-            }
-
-            $tunnels = DB::table(TableSchema::tableName('tunnel'))->where('device_id', $deviceId)->whereNotNull('snmp_index')->get(['id', 'snmp_index', 'port_id']);
-            foreach ($tunnels as $tunnel) {
-                $portId = $byIndex[(int) $tunnel->snmp_index] ?? null;
-                if ($portId !== null && (int) $tunnel->port_id !== $portId) {
-                    DB::table(TableSchema::tableName('tunnel'))->where('id', $tunnel->id)->update(['port_id' => $portId]);
-                }
-            }
-
-            $esis = DB::table(TableSchema::tableName('esi'))->where('device_id', $deviceId)->whereNotNull('local_ifname')->get(['id', 'local_ifname', 'local_port_id']);
-            foreach ($esis as $esi) {
-                $name = (string) $esi->local_ifname;
-                $portId = $byName[$name] ?? $byName[preg_replace('/\.0$/', '', $name) ?? $name] ?? null;
-                if ($portId !== null && (int) $esi->local_port_id !== $portId) {
-                    DB::table(TableSchema::tableName('esi'))->where('id', $esi->id)->update(['local_port_id' => $portId]);
-                }
-            }
+        if ($deviceIds === []) {
+            return;
         }
 
-        $sources = DB::table(TableSchema::tableName('mac'))->where('source_type', 'remote')->distinct()->pluck('source');
-        foreach ($sources as $source) {
-            $deviceId = $ipDevice[(string) $source] ?? null;
-            DB::table(TableSchema::tableName('mac'))->where('source_type', 'remote')->where('source', $source)
-                ->where(fn ($q) => $deviceId === null ? $q->whereNotNull('source_device_id') : $q->where('source_device_id', '!=', $deviceId)->orWhereNull('source_device_id'))
-                ->update(['source_device_id' => $deviceId]);
+        // the ports of every participant in one query, then the rows to correct (plan G18)
+        $byIndex = [];
+        $byName = [];
+        foreach (DB::table('ports')->whereIn('device_id', $deviceIds)->where('deleted', 0)->get(['device_id', 'port_id', 'ifIndex', 'ifName']) as $port) {
+            $byIndex[(int) $port->device_id][(int) $port->ifIndex] = (int) $port->port_id;
+            $byName[(int) $port->device_id][(string) $port->ifName] = (int) $port->port_id;
+        }
+
+        $tunnels = DB::table(TableSchema::tableName('tunnel'))->whereIn('device_id', $deviceIds)->whereNotNull('snmp_index')->get(['id', 'device_id', 'snmp_index', 'port_id']);
+        $this->setPortIds('tunnel', 'port_id', $tunnels, function ($tunnel) use ($byIndex) {
+            return $byIndex[(int) $tunnel->device_id][(int) $tunnel->snmp_index] ?? null;
+        });
+
+        $esis = DB::table(TableSchema::tableName('esi'))->whereIn('device_id', $deviceIds)->whereNotNull('local_ifname')->get(['id', 'device_id', 'local_ifname', 'local_port_id']);
+        $this->setPortIds('esi', 'local_port_id', $esis, function ($esi) use ($byName) {
+            $name = (string) $esi->local_ifname;
+            $ports = $byName[(int) $esi->device_id] ?? [];
+
+            return $ports[$name] ?? $ports[preg_replace('/\.0$/', '', $name) ?? $name] ?? null;
+        });
+
+        // remote MAC sources: only the addresses whose device changed are written
+        $clear = [];
+        $assign = [];
+        foreach (DB::table(TableSchema::tableName('mac'))->where('source_type', 'remote')->distinct()->get(['source', 'source_device_id']) as $row) {
+            $want = $ipDevice[(string) $row->source] ?? null;
+            $have = $row->source_device_id === null ? null : (int) $row->source_device_id;
+            if ($want === $have) {
+                continue;
+            }
+            if ($want === null) {
+                $clear[] = (string) $row->source;
+            } else {
+                $assign[$want][] = (string) $row->source;
+            }
+        }
+        foreach ($assign + ($clear === [] ? [] : ['' => $clear]) as $deviceId => $sources) {
+            DB::table(TableSchema::tableName('mac'))->where('source_type', 'remote')->whereIn('source', $sources)
+                ->update(['source_device_id' => $deviceId === '' ? null : (int) $deviceId]);
+        }
+    }
+
+    /**
+     * Write $column on the rows of $table whose port resolved to something else than stored;
+     * rows that agree cost nothing, and the writes are grouped by target port.
+     *
+     * @param  \Illuminate\Support\Collection<int, \stdClass>  $rows
+     * @param  callable(\stdClass): (int|null)  $resolve
+     */
+    private function setPortIds(string $table, string $column, \Illuminate\Support\Collection $rows, callable $resolve): void
+    {
+        $byPort = [];
+        foreach ($rows as $row) {
+            $portId = $resolve($row);
+            if ($portId !== null && (int) $row->{$column} !== $portId) {
+                $byPort[$portId][] = (int) $row->id;
+            }
+        }
+        foreach ($byPort as $portId => $ids) {
+            DB::table(TableSchema::tableName($table))->whereIn('id', $ids)->update([$column => $portId]);
         }
     }
 }

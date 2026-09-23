@@ -55,9 +55,25 @@ class EsiLinkWriter
             ];
         }
 
+        // the links of every participant in one query, and one insert / one delete for all of
+        // them, so the cost follows the rows that changed rather than the fabric (plan G18)
+        $existing = [];
+        foreach (DB::table('links')->where('protocol', EsiLinks::PROTOCOL)->whereIn('local_device_id', $deviceIds ?: [0])->get() as $link) {
+            $key = EsiLinks::key(['local_port_id' => $link->local_port_id, 'remote_hostname' => (string) $link->remote_hostname, 'remote_port' => (string) $link->remote_port]);
+            $existing[(int) $link->local_device_id][$key][] = $link;
+        }
+
         $total = 0;
+        $inserts = [];
+        $stale = [];
         foreach ($deviceIds as $deviceId) {
-            $total += $this->syncDevice($deviceId, EsiLinks::rows($byDevice[$deviceId] ?? [], $peers, $remoteEsis));
+            $total += $this->syncDevice($deviceId, EsiLinks::rows($byDevice[$deviceId] ?? [], $peers, $remoteEsis), $existing[$deviceId] ?? [], $inserts, $stale);
+        }
+        if ($stale !== []) {
+            DB::table('links')->whereIn('id', $stale)->delete();
+        }
+        foreach (array_chunk($inserts, 200) as $chunk) {
+            DB::table('links')->insert($chunk);
         }
         // devices that left the fabric tables altogether
         DB::table('links')->where('protocol', EsiLinks::PROTOCOL)->whereNotIn('local_device_id', $deviceIds ?: [0])->delete();
@@ -78,16 +94,17 @@ class EsiLinkWriter
     }
 
     /**
+     * Match the device's wanted rows against the links it already has: unchanged rows cost
+     * nothing, changed ones are updated in place (so their id survives), and new and stale
+     * rows are collected for the caller's single insert and delete.
+     *
      * @param  list<array<string, mixed>>  $rows
+     * @param  array<string, list<\stdClass>>  $existing  its current links, by row key
+     * @param  list<array<string, mixed>>  $inserts
+     * @param  list<int>  $stale
      */
-    private function syncDevice(int $deviceId, array $rows): int
+    private function syncDevice(int $deviceId, array $rows, array $existing, array &$inserts, array &$stale): int
     {
-        $existing = [];
-        foreach (DB::table('links')->where('protocol', EsiLinks::PROTOCOL)->where('local_device_id', $deviceId)->get() as $link) {
-            $existing[EsiLinks::key(['local_port_id' => $link->local_port_id, 'remote_hostname' => (string) $link->remote_hostname, 'remote_port' => (string) $link->remote_port])][] = $link;
-        }
-
-        $inserts = [];
         foreach ($rows as $row) {
             $key = EsiLinks::key($row);
             $current = ($existing[$key] ?? []) === [] ? null : array_shift($existing[$key]);
@@ -107,17 +124,10 @@ class EsiLinkWriter
         }
 
         // duplicates of a kept key and keys no ESI produces any more
-        $stale = [];
         foreach ($existing as $links) {
             foreach ($links as $link) {
                 $stale[] = (int) $link->id;
             }
-        }
-        if ($stale !== []) {
-            DB::table('links')->whereIn('id', $stale)->delete();
-        }
-        foreach (array_chunk($inserts, 200) as $chunk) {
-            DB::table('links')->insert($chunk);
         }
 
         return count($rows);
