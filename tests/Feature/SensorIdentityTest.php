@@ -4,6 +4,7 @@ namespace SafferIt\LibrenmsNetconf\Tests\Feature;
 
 use App\Models\Device;
 use App\Models\Sensor;
+use LibreNMS\Data\Store\Rrd;
 use SafferIt\LibrenmsNetconf\Collect\SensorWriter;
 use SafferIt\LibrenmsNetconf\Definitions\DefinitionParser;
 use SafferIt\LibrenmsNetconf\Extract\Extractor;
@@ -64,5 +65,21 @@ final class SensorIdentityTest extends LibrenmsTestCase
         sort($indices);
         $this->assertSame($indices, $names);
         $this->assertSame([7.0, 7.0, 7.0, 7.0], $rows()->map(fn (Sensor $s) => (float) $s->sensor_current)->all());
+
+        // the RRD file keeps the stored index: safeName() rewrites every character outside
+        // [A-Za-z0-9,._-], so the separator between prefix and hash must be one it keeps,
+        // or two fitted indices can end up in one file (F6 3)
+        foreach ($indices as $index) {
+            $this->assertSame($index, Rrd::safeName($index));
+        }
+        $this->assertNotSame(
+            Rrd::safeName(Identity::fit($twinA, Identity::SENSOR_WIDTH)),
+            Rrd::safeName(Identity::fit($twinB, Identity::SENSOR_WIDTH))
+        );
+        // and a natural index carrying the separator is still a different file
+        $this->assertNotSame(
+            Rrd::safeName(Identity::fit(str_repeat('c', 119) . ',0badc0de/x', Identity::SENSOR_WIDTH)),
+            Rrd::safeName(Identity::fit($twinA, Identity::SENSOR_WIDTH))
+        );
     }
 }

@@ -21,6 +21,12 @@ Fixes from the review of 2026-09-23 (internal plan F6); the first three are fixe
   them, so the issue it causes opens on the poll that first saw it and not on the next one.
   Only the "EVPN fabric issues" sensor is still written after the resolve, which is where it
   belongs.
+- The separator between the visible prefix and the hash of a shortened index is a comma
+  instead of a tilde: LibreNMS rewrites every character outside `[A-Za-z0-9,._-]` in an RRD
+  file name, so the stored index and its file name now agree. No shipped definition produces
+  an index over 128 (sensors) or 191 (metric rows) characters, so no stored row changes; a
+  user definition that does gets a new index on its next discovery and leaves its old RRD file
+  behind.
 
 UI re-home (internal plan §8): NETCONF per-device detail moves from the overview into its
 own place, the overview keeps a summary.

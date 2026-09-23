@@ -17,7 +17,7 @@ it('leaves an index that fits untouched and shortens a longer one to the column 
         ->and(Identity::exceeds($fits, Identity::SENSOR_WIDTH))->toBeFalse()
         ->and(Identity::exceeds($long, Identity::SENSOR_WIDTH))->toBeTrue()
         ->and(mb_strlen(Identity::fit($long, Identity::SENSOR_WIDTH)))->toBe(128)
-        ->and(Identity::fit($long, Identity::SENSOR_WIDTH))->toBe(str_repeat('x', 119) . '~' . substr(sha1($long), 0, 8))
+        ->and(Identity::fit($long, Identity::SENSOR_WIDTH))->toBe(str_repeat('x', 119) . ',' . substr(sha1($long), 0, 8))
         ->and(mb_strlen(Identity::fit(str_repeat('ü', 300), Identity::METRIC_WIDTH)))->toBe(191)
         ->and(Identity::fit(str_repeat('y', 191), Identity::METRIC_WIDTH))->toBe(str_repeat('y', 191));
 });
