@@ -13,32 +13,12 @@ use Illuminate\Support\Facades\DB;
 final class EvpnSessions
 {
     /**
-     * The routing.yaml metric rows this class reads, handed out so the BGP overlay tab does
-     * not query them a second time (they carry its per-RIB counts, flaps and labels).
-     *
-     * @var array{'bgp-peer-rib': list<object>, 'bgp-peer': list<object>}|null
-     */
-    private static ?array $lastMetrics = null;
-
-    /**
-     * The metric rows the last discover() read. Only meaningful right after that call.
-     *
-     * @return array{'bgp-peer-rib': list<object>, 'bgp-peer': list<object>}
-     */
-    public static function metricRows(): array
-    {
-        return self::$lastMetrics ?? ['bgp-peer-rib' => [], 'bgp-peer' => []];
-    }
-
-    /**
      * @param  list<int>|null  $deviceIds  restrict to these devices, null = every device
-     * @return list<array{device_id: int, peer: string, local: string|null, description: string|null, source: list<string>}>
      */
-    public static function discover(?array $deviceIds = null): array
+    public static function discover(?array $deviceIds = null): EvpnSessionSet
     {
-        self::$lastMetrics = ['bgp-peer-rib' => [], 'bgp-peer' => []];
         if ($deviceIds === []) {
-            return [];
+            return new EvpnSessionSet([]);
         }
         $scoped = fn ($query) => $deviceIds === null ? $query : $query->whereIn('device_id', $deviceIds);
 
@@ -56,8 +36,8 @@ final class EvpnSessions
             $sessions[$row->device_id . '/' . $row->bgpPeerIdentifier] = ['device_id' => (int) $row->device_id, 'peer' => (string) $row->bgpPeerIdentifier] + $info + ['source' => ['bgp']];
         }
 
-        self::$lastMetrics['bgp-peer-rib'] = $scoped(DB::table('netconf_metrics'))->where('mapping', 'bgp-peer-rib')->where('metric_index', 'like', '%/bgp.evpn.0')->get(['device_id', 'metric_index', 'values'])->all();
-        foreach (self::$lastMetrics['bgp-peer-rib'] as $metric) {
+        $ribMetrics = $scoped(DB::table('netconf_metrics'))->where('mapping', 'bgp-peer-rib')->where('metric_index', 'like', '%/bgp.evpn.0')->get(['device_id', 'metric_index', 'values'])->all();
+        foreach ($ribMetrics as $metric) {
             $peer = explode('/', (string) $metric->metric_index, 2)[0];
             if (filter_var($peer, FILTER_VALIDATE_IP) === false) {
                 continue;
@@ -72,8 +52,8 @@ final class EvpnSessions
         }
 
         // BGP descriptions from the routing.yaml peer metric where the core row has none
-        self::$lastMetrics['bgp-peer'] = $scoped(DB::table('netconf_metrics'))->where('mapping', 'bgp-peer')->get(['device_id', 'metric_index', 'values', 'labels', 'descr'])->all();
-        foreach (self::$lastMetrics['bgp-peer'] as $label) {
+        $peerMetrics = $scoped(DB::table('netconf_metrics'))->where('mapping', 'bgp-peer')->get(['device_id', 'metric_index', 'values', 'labels', 'descr'])->all();
+        foreach ($peerMetrics as $label) {
             $key = $label->device_id . '/' . $label->metric_index;
             if (! isset($sessions[$key]) || $sessions[$key]['description'] !== null) {
                 continue;
@@ -84,6 +64,6 @@ final class EvpnSessions
             }
         }
 
-        return array_values($sessions);
+        return new EvpnSessionSet(array_values($sessions), $ribMetrics, $peerMetrics);
     }
 }

@@ -17,8 +17,3 @@ it('classifies what the user typed', function (string $q, ?string $kind, string 
     ['10010', 'vni', '10010'],
     ['server-42', 'text', 'server-42'],
 ]);
-
-it('formats a 12-hex MAC with colons and leaves anything else alone', function () {
-    expect(MacSearch::readable('001122aabbcc'))->toBe('00:11:22:aa:bb:cc')
-        ->and(MacSearch::readable('0011'))->toBe('0011');
-});

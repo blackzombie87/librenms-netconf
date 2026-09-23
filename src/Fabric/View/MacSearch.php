@@ -6,6 +6,7 @@ use App\Models\Device;
 use App\Models\Port;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Support\Mac;
 
 /**
  * MAC search (plan §7.4 "MACs"): a MAC, an IP or a VNI looked up in the plugin's EVPN MAC
@@ -89,7 +90,7 @@ final class MacSearch
         foreach (['fdb', 'arp'] as $key) {
             foreach ($result[$key] as &$r) {
                 $r['device'] = $devices->get((int) $r['device_id']);
-                $r['mac'] = self::readable((string) $r['mac_address']);
+                $r['mac'] = Mac::readable((string) $r['mac_address']);
             }
             unset($r);
         }
@@ -111,7 +112,7 @@ final class MacSearch
         if (filter_var($q, FILTER_VALIDATE_IP) !== false) {
             return ['kind' => 'ip', 'value' => $q, 'q' => $q];
         }
-        $hex = strtolower(preg_replace('/[^0-9a-fA-F]/', '', $q) ?? '');
+        $hex = Mac::digits($q);
         $looksLikeMac = preg_match('/^[0-9a-fA-F]{1,4}([:.-][0-9a-fA-F]{1,4}){1,5}$/', $q) === 1 || preg_match('/^[0-9a-fA-F]{12}$/', $q) === 1;
         if ($looksLikeMac && strlen($hex) === 12) {
             return ['kind' => 'mac', 'value' => $hex, 'q' => $q];
@@ -124,11 +125,6 @@ final class MacSearch
         }
 
         return ['kind' => 'text', 'value' => $q, 'q' => $q];
-    }
-
-    public static function readable(string $hex): string
-    {
-        return strlen($hex) === 12 ? implode(':', str_split($hex, 2)) : $hex;
     }
 
     /**
@@ -255,7 +251,7 @@ final class MacSearch
                 'device_id' => $deviceId,
                 'vni' => (int) $r['vni'],
                 'instance' => $r['instance'],
-                'mac' => self::readable((string) $r['mac_address']),
+                'mac' => Mac::readable((string) $r['mac_address']),
                 'mac_hex' => (string) $r['mac_address'],
                 'ips' => array_values(array_filter((array) json_decode((string) ($r['ip_addresses'] ?? '[]'), true))),
                 'source' => $resolved,

@@ -12,6 +12,7 @@ use SafferIt\LibrenmsNetconf\Fabric\View\OverlaySessions;
 use SafferIt\LibrenmsNetconf\Fabric\View\TunnelMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\VniMatrix;
 use SafferIt\LibrenmsNetconf\NetconfSettings;
+use SafferIt\LibrenmsNetconf\Support\Mac;
 
 /**
  * The consistency checks of plan §7.5, run over one fabric at the end of every resolve. The
@@ -332,7 +333,7 @@ final class FabricChecks
         // 7. MAC mobility
         foreach ($input->macMoves as $m) {
             $deviceId = (int) $m['device_id'];
-            $mac = self::formatMac((string) $m['mac_address']);
+            $mac = Mac::readable((string) $m['mac_address']);
             $issues[] = new Issue('mac-mobility', Issue::WARNING, "{$m['vni']}/{$m['mac_address']}/$deviceId", sprintf('MAC %s in VNI %d moved %d times within an hour as seen by %s (now %s %s)', $mac, (int) $m['vni'], (int) $m['moves_recent'], $name($deviceId), $m['source_type'] ?? 'on', $m['source'] ?? '?'), [$deviceId], ['vni' => (int) $m['vni'], 'mac' => $mac, 'moves' => (int) $m['moves'], 'since' => $m['moves_since']]);
         }
 
@@ -433,13 +434,5 @@ final class FabricChecks
         usort($names, 'strnatcasecmp');
 
         return implode(', ', $names);
-    }
-
-    /** 12 hex digits (ports_fdb notation) as aa:bb:cc:dd:ee:ff. */
-    public static function formatMac(string $mac): string
-    {
-        $hex = strtolower(preg_replace('/[^0-9a-f]/i', '', $mac) ?? $mac);
-
-        return strlen($hex) === 12 ? implode(':', str_split($hex, 2)) : $mac;
     }
 }

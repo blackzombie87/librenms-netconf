@@ -114,7 +114,7 @@ class FabricResolver
         }
 
         // 3. EVPN BGP sessions: core bgpPeers_cbgp (safi evpn) and the plugin's per-RIB metrics
-        foreach (EvpnSessions::discover() as $session) {
+        foreach (EvpnSessions::discover()->sessions as $session) {
             $deviceId = $session['device_id'];
             if (! isset($deviceNodes[$deviceId])) {
                 if ($session['local'] === null) {

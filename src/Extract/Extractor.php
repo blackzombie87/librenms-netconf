@@ -11,6 +11,7 @@ use SafferIt\LibrenmsNetconf\Definitions\SensorMapping;
 use SafferIt\LibrenmsNetconf\Definitions\TableColumn;
 use SafferIt\LibrenmsNetconf\Definitions\TableMapping;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Support\Mac;
 
 /**
  * Applies the mappings of a definition to parsed replies. Pure PHP, no LibreNMS.
@@ -56,22 +57,9 @@ class Extractor
     public function sensors(Definition $definition, SensorMapping $mapping, XmlDocument $doc): array
     {
         $result = [];
-        $seen = [];
         $label = "$definition->name/{$mapping->id}";
 
-        foreach ($this->iterate($doc, $mapping->rows, $mapping->when, $mapping->repeat, $label) as [$row, $n]) {
-            $vars = $this->vars($doc, $row, $n);
-            $index = $this->index($doc, $row, $mapping->index, $vars, $label, Identity::SENSOR_WIDTH);
-            if ($index === null) {
-                continue;
-            }
-            if (isset($seen[$index])) {
-                $this->warn("$label: duplicate index \"$index\", keeping the first row");
-                continue;
-            }
-            $seen[$index] = true;
-            $vars['index'] = $index;
-
+        foreach ($this->indexedRows($doc, $mapping, $label, Identity::SENSOR_WIDTH) as [$row, $n, $index, $vars]) {
             $raw = null;
             foreach ($mapping->valueCandidates() as $candidate) {
                 $raw = $doc->scalar(Template::substituteN($candidate, $n), $row);
@@ -155,22 +143,9 @@ class Extractor
     public function metrics(Definition $definition, MetricMapping $mapping, XmlDocument $doc): array
     {
         $result = [];
-        $seen = [];
         $label = "$definition->name/{$mapping->id}";
 
-        foreach ($this->iterate($doc, $mapping->rows, $mapping->when, $mapping->repeat, $label) as [$row, $n]) {
-            $vars = $this->vars($doc, $row, $n);
-            $index = $this->index($doc, $row, $mapping->index, $vars, $label, Identity::METRIC_WIDTH);
-            if ($index === null) {
-                continue;
-            }
-            if (isset($seen[$index])) {
-                $this->warn("$label: duplicate index \"$index\", keeping the first row");
-                continue;
-            }
-            $seen[$index] = true;
-            $vars['index'] = $index;
-
+        foreach ($this->indexedRows($doc, $mapping, $label, Identity::METRIC_WIDTH) as [$row, $n, $index, $vars]) {
             [$values, $strings, $types] = $this->fields($mapping->fields, $doc, $row, $n, "$label [$index]", true);
             if ($values === [] && $strings === []) {
                 continue;
@@ -383,9 +358,7 @@ class Extractor
             case TableSchema::TYPE_IP:
                 return filter_var($text, FILTER_VALIDATE_IP) === false ? null : $text;
             case TableSchema::TYPE_MAC:
-                $hex = strtolower(preg_replace('/[^0-9a-f]/i', '', $text) ?? '');
-
-                return strlen($hex) === 12 ? $hex : null;
+                return Mac::hex($text);
             case TableSchema::TYPE_DATETIME:
                 if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $text)) {
                     return $text;
@@ -396,6 +369,36 @@ class Extractor
         }
 
         return $text === '' ? null : mb_substr($text, 0, 255);
+    }
+
+    /**
+     * The rows sensors() and metrics() work on: iterate(), plus the index every such row is
+     * identified by. Rows without an index and rows repeating an index already used are
+     * dropped with a warning; what is done with the row afterwards (a state or a number, one
+     * value or a field set) is the caller's business.
+     *
+     * @param  int  $width  the column the index will be stored in (Identity::fit())
+     * @return \Generator<int, array{DOMElement, string|null, string, array<string, string>}>
+     */
+    private function indexedRows(XmlDocument $doc, SensorMapping|MetricMapping $mapping, string $label, int $width): \Generator
+    {
+        $seen = [];
+
+        foreach ($this->iterate($doc, $mapping->rows, $mapping->when, $mapping->repeat, $label) as [$row, $n]) {
+            $vars = $this->vars($doc, $row, $n);
+            $index = $this->index($doc, $row, $mapping->index, $vars, $label, $width);
+            if ($index === null) {
+                continue;
+            }
+            if (isset($seen[$index])) {
+                $this->warn("$label: duplicate index \"$index\", keeping the first row");
+                continue;
+            }
+            $seen[$index] = true;
+            $vars['index'] = $index;
+
+            yield [$row, $n, $index, $vars];
+        }
     }
 
     /**

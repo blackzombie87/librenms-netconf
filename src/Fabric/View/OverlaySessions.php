@@ -53,11 +53,11 @@ final class OverlaySessions
         };
 
         // the sessions that carry EVPN (shared with the resolver), then the core BGP row of each
-        foreach (EvpnSessions::discover($deviceIds) as $s) {
+        // the same run hands out the metric rows it read, so this is not a second pair of queries
+        $evpn = EvpnSessions::discover($deviceIds);
+        foreach ($evpn->sessions as $s) {
             $set($s['device_id'], $s['peer'], ['description' => $s['description'], 'local_ip' => $s['local'], 'source' => $s['source']]);
         }
-        // the same metric rows the discovery just read, not a second pair of queries
-        $metrics = EvpnSessions::metricRows();
         if ($rows === []) {
             return [];
         }
@@ -76,7 +76,7 @@ final class OverlaySessions
         }
 
         // per-RIB counts of the plugin's routing.yaml metric
-        foreach ($metrics['bgp-peer-rib'] as $r) {
+        foreach ($evpn->ribMetrics as $r) {
             $peer = explode('/', (string) $r->metric_index, 2)[0];
             if (! isset($rows[$r->device_id . '/' . $peer])) {
                 continue;
@@ -87,7 +87,7 @@ final class OverlaySessions
             ]);
         }
         // peer metric: flaps always, state / description / AS where core has no row
-        foreach ($metrics['bgp-peer'] as $r) {
+        foreach ($evpn->peerMetrics as $r) {
             $peer = (string) $r->metric_index;
             if (! isset($rows[$r->device_id . '/' . $peer])) {
                 continue;

@@ -28,6 +28,16 @@ own place, the overview keeps a summary.
   `/plugin/netconf` redirects to `/plugin/netconf/status` instead of rendering the list a
   second time.
 
+Internal tidy-up, no behaviour change:
+
+- `Extractor::sensors()` and `::metrics()` share the indexed-row iterator they both opened
+  with (rows, index, duplicate-index warning); what happens to a row afterwards stays apart.
+- One `Support\Mac` helper for the two MAC notations (Junos writes separators, LibreNMS
+  stores 12 hex digits, the pages group them again) in place of three copies of the same
+  `preg_replace`/`str_split` pair in the extractor, the fabric checks and the MAC search.
+- `EvpnSessions::discover()` returns the sessions and the metric rows it read together
+  (`EvpnSessionSet`) instead of leaving the rows in a static property for the next caller.
+
 Development:
 
 - PHPStan runs with the Larastan extension (level 6, clean): Eloquent property access,
