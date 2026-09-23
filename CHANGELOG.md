@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-Fixes from the review of 2026-09-23 (internal plan F6); the first three are fixes to 1.1.0:
+Fixes from the review of 2026-09-23 (internal plan F6); the first, third and fourth are
+fixes to 1.1.0, the rest to material not yet released:
 
 - A poll whose collection succeeded but whose storage then failed no longer reports itself as
   the last successful run: *Last OK* moves only once the writers are through, and the failure
