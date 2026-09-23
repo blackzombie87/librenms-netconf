@@ -1,9 +1,13 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 – 2026-09-23
 
-Fixes from the review of 2026-09-23 (internal plan F6); the first, third and fourth are
-fixes to 1.1.0, the rest to material not yet released:
+Per-device NETCONF moves into the device page as its own tab, the EVPN fabric resolve stops
+costing a set of queries per monitored member, and the findings of the two reviews since
+1.1.0 are fixed. No new tables and no migration.
+
+Fixes from the review of 2026-09-23 (internal plan F6); the first, third and fourth fix
+behaviour 1.1.0 shipped, the rest material this release is the first to carry:
 
 - A poll whose collection succeeded but whose storage then failed no longer reports itself as
   the last successful run: *Last OK* moves only once the writers are through, and the failure
@@ -102,6 +106,29 @@ Documentation:
 - README *Distributed pollers*: which settings name node-local files (private key,
   `known_hosts`, definitions directory), the shared `APP_KEY`, and the fabric resolver's
   cache lock, which only serialises across nodes with a shared cache store.
+
+### Upgrade notes
+
+- Nothing to migrate: this release adds no table and no column. `lnms migrate` after the
+  upgrade is harmless and stays the habit.
+- Bookmarks to `/plugin/netconf/device/{id}` and `…/metrics` redirect to the device tab
+  (`/device/{id}/netconf[/metrics]`). The POST targets of the edit form are unchanged.
+- Only if you wrote a definition whose sensor index is longer than 128 characters (191 for
+  metric rows): the separator in the shortened index changed from `~` to `,`, so those rows
+  get a new index on the next discovery and their old RRD files are orphaned. No shipped
+  definition produces an index that long; `lnms netconf:validate --replay` says whether yours
+  does.
+
+### Known gaps
+
+- No license expiry sample yet (`junos-license` has licensed/used/needed/validity only).
+- Chunked framing (`base:1.1`) is implemented and unit-tested but has not been seen on a
+  real device: Junos 23.4R2 still advertises `base:1.0` with `rfc-compliant` set.
+- Only the RRD datastore has been observed; sensors and metrics go through LibreNMS's
+  `Datastore`, so InfluxDB and Prometheus should work but are unverified.
+- Every fabric pass so far ran with one monitored member. Role assignment across several
+  monitored leaves, a member address move and a fabric split have only been exercised
+  synthetically.
 
 ## 1.1.0 – 2026-09-22
 

@@ -9,16 +9,17 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: 1.1.0 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
+**Status: 1.2.0 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
 credentials and the settings page, the YAML definition engine and the `netconf`
 poller/discovery module are verified against an EX4650 (Junos 23.4R2); the LDP, RPKI and
 VRRP definitions against recorded replies of a Junos 22.2
 MPLS router. Extracted values are stored as native LibreNMS
 sensors (health tab, graphs, alert rules), per-port metrics and custom metrics with their
-own RRDs and graphs. The web UI has a NETCONF status page, a per-device page (credentials,
-test connection, discover/poll now), a device overview panel, metric tables with graphs, a
-port tab with the per-port counters and a "run a show command" form. Not in this version:
-EVPN multihoming peers as LibreNMS neighbours and license expiry (see `CHANGELOG.md`).
+own RRDs and graphs. The web UI has a NETCONF status page, a **NETCONF tab on the device
+page** (status, metrics, ESI-LAGs and, for admins, credentials with test connection and
+discover/poll now), a device overview panel, the EVPN fabric pages with topology map and
+MAC search, a port tab with the per-port counters and a "run a show command" form. Not in
+this version: license expiry (see `CHANGELOG.md`).
 
 ## Requirements
 
@@ -637,7 +638,7 @@ version, run `plugin:add` again, then the migrations:
 
 ```bash
 ./lnms plugin:add saffer-it/librenms-netconf            # newest release within the constraint
-./lnms plugin:add saffer-it/librenms-netconf 1.1.0      # a specific version
+./lnms plugin:add saffer-it/librenms-netconf 1.2.0      # a specific version
 ./lnms migrate
 ```
 
