@@ -13,9 +13,10 @@ use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 
 /**
  * One panel on the device overview (plan §8 U1): polling status, the device's EVPN fabric
- * membership and what the plugin stores for it, with a link to the per-device page. The
- * metric tables, the critical-sensor list and the ESI-LAG table moved to that page; Health
- * graphs the sensors and Neighbours lists the ESI links. Only shown for devices that are
+ * membership and what the plugin stores for it — the sensor count with how many of them are
+ * critical — with a link to the per-device page. The metric tables and the ESI-LAG table moved
+ * to that page, which counts the sensors per class; neither lists the sensors themselves any
+ * more, Health does that, and Neighbours lists the ESI links. Only shown for devices that are
  * enabled or have been polled before.
  */
 class DeviceOverview implements DeviceOverviewHook
