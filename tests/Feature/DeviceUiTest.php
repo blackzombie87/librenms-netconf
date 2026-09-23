@@ -151,6 +151,53 @@ final class DeviceUiTest extends LibrenmsTestCase
         $this->assertStringContainsString("/device/$id/netconf\"", $this->get('/plugin/netconf/status')->assertOk()->getContent());
     }
 
+    public function testTheMonthControlDrawsAMonthOnBothMetricPages(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        $device = $this->polledDevice();
+        $id = $device->device_id;
+
+        // the device page carries core's own graphs too, so only the plugin's graph URLs count
+        $graphUrls = function (string $html): array {
+            preg_match_all('/data-src="([^"]*netconf[^"]*)"/', $html, $m);
+
+            return $m[1];
+        };
+
+        $metrics = $this->get("/device/$id/netconf/metrics?period=-1mo")->assertOk()->getContent();
+        $this->assertStringContainsString('class="text-primary"><strong>month</strong>', $metrics);
+        $this->assertNotEmpty($graphUrls($metrics));
+        foreach ($graphUrls($metrics) as $url) {
+            $this->assertStringContainsString('from=-1mo', $url);
+        }
+
+        // and the port tab, which used to pass the query string through unchecked
+        $port = Port::factory()->create(['device_id' => $id, 'ifName' => 'et-0/0/2']);
+        NetconfPortMetric::query()->create([
+            'device_id' => $id,
+            'port_id' => $port->port_id,
+            'definition' => 'junos-interfaces',
+            'mapping' => 'ethernet',
+            'values' => ['crc_errors' => 1.0],
+            'types' => ['crc_errors' => 'COUNTER'],
+            'last_seen' => now(),
+        ]);
+        $this->get("/device/$id/port/{$port->port_id}?period=-1mo");   // the request the hook reads
+        $html = app(PortTab::class)->handle('netconf', $port->fresh(), [])->render();
+        $this->assertStringContainsString('class="text-primary"><strong>month</strong>', $html);
+        $this->assertNotEmpty($graphUrls($html));
+        foreach ($graphUrls($html) as $url) {
+            $this->assertStringContainsString('from=-1mo', $url);
+        }
+
+        // a token neither page offers falls back to the day and does not reach the graph URLs
+        $bad = $this->get("/device/$id/netconf/metrics?period=-1x%3Bzzz")->assertOk()->getContent();
+        foreach ($graphUrls($bad) as $url) {
+            $this->assertStringContainsString('from=-1d', $url);
+            $this->assertStringNotContainsString('zzz', $url);
+        }
+    }
+
     public function testThePortPluginsTabShowsNumbersAndNoGraphUntilAFoldOutOpens(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));

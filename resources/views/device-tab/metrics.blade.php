@@ -1,6 +1,5 @@
 {{-- Metrics section (plan G12): every custom metric mapping as a fold-out table, graphs rendered
      when their fold-out is opened. Variables: DevicePageData::metrics(). --}}
-@php($periods = ['-6h' => '6h', '-1d' => 'day', '-1w' => 'week', '-1mo' => 'month', '-1y' => 'year'])
 @php($graph = fn (string $route, array $params) => route($route, $params + ['from' => $period, 'width' => 600, 'height' => 220]))
     <div class="panel panel-default">
         <div class="panel-heading"><i class="fa fa-table fa-fw" aria-hidden="true"></i> <strong>Metrics</strong>

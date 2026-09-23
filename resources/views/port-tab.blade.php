@@ -1,7 +1,6 @@
 {{-- "Plugins" tab of a port: the plugin's per-port counters. The numbers are on the page,
      every graph is a fold-out and its image is created when the fold-out opens (plan §8 U3),
      the same pattern as the metrics section: one rrdtool run per graph, only when asked for. --}}
-@php($periods = ['-6h' => '6h', '-1d' => 'day', '-1w' => 'week', '-1mo' => 'month', '-1y' => 'year'])
 @php($graph = fn (array $params) => route('netconf.graph.port', $params + ['from' => $period]))
 @include('netconf::fold-style')
 <div class="panel panel-default">

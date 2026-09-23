@@ -6,6 +6,7 @@ use App\Models\Port;
 use Illuminate\Support\Facades\Gate;
 use LibreNMS\Interfaces\Plugins\Hooks\PortTabHook;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
+use SafferIt\LibrenmsNetconf\Support\GraphPeriod;
 
 /**
  * "Plugins" tab of a port: the plugin's per-port counters (values table + graphs).
@@ -30,7 +31,8 @@ class PortTab implements PortTabHook
         return view("$pluginName::port-tab", [
             'port' => $port,
             'rows' => $rows,
-            'period' => request()->query('period', '-1d'),
+            'period' => GraphPeriod::fromRequest(),
+            'periods' => GraphPeriod::OFFERED,
         ]);
     }
 }

@@ -11,6 +11,11 @@ Fixes from the review of 2026-09-23 (internal plan F6); the first three are fixe
   first step. If the fabric resolve of that run had already cleared the "member not polling"
   issue for the leaf (it reads the status row), the resolve runs again after the failure is
   recorded, so the issue comes back.
+- The *month* control of the NETCONF metrics section drew a day: the period pattern ended at
+  one-letter units, so `-1mo` fell back to `-1d` (`-1m`, which it did accept, is a *minute* in
+  LibreNMS). Both metric pages take the unit list core parses — `s m h d w mo y`, with a sign —
+  through one `Support\GraphPeriod`, and the port Plugins tab, which used to pass the query
+  string through unchecked, now reads the same token as the device tab.
 
 UI re-home (internal plan §8): NETCONF per-device detail moves from the overview into its
 own place, the overview keeps a summary.

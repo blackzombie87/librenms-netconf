@@ -12,6 +12,7 @@ use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
 use SafferIt\LibrenmsNetconf\Support\DevicePage;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
+use SafferIt\LibrenmsNetconf\Support\GraphPeriod;
 use SafferIt\LibrenmsNetconf\Transport\DeviceCredentials;
 
 /**
@@ -103,6 +104,7 @@ final class DevicePageData
             'metrics' => $metrics,
             'ports' => $ports,
             'period' => self::period(),
+            'periods' => GraphPeriod::OFFERED,
             'max_series' => GraphController::MAX_SERIES,
         ];
     }
@@ -124,8 +126,6 @@ final class DevicePageData
      */
     public static function period(): string
     {
-        $period = (string) request()->query('period', '-1d');
-
-        return preg_match('/^-\d+[hdwmy]{1,2}$/', $period) ? $period : '-1d';
+        return GraphPeriod::fromRequest();
     }
 }
