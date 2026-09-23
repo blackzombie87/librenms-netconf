@@ -16,6 +16,11 @@ Fixes from the review of 2026-09-23 (internal plan F6); the first three are fixe
   LibreNMS). Both metric pages take the unit list core parses — `s m h d w mo y`, with a sign —
   through one `Support\GraphPeriod`, and the port Plugins tab, which used to pass the query
   string through unchecked, now reads the same token as the device tab.
+- A sensor index that appears between two discoveries — a new duplicate-MAC instance, a new
+  L3 context — is stored and recorded before the fabric checks of that poll instead of after
+  them, so the issue it causes opens on the poll that first saw it and not on the next one.
+  Only the "EVPN fabric issues" sensor is still written after the resolve, which is where it
+  belongs.
 
 UI re-home (internal plan §8): NETCONF per-device detail moves from the overview into its
 own place, the overview keeps a summary.

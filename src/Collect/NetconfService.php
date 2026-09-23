@@ -287,16 +287,25 @@ class NetconfService
         $values = $result->sensors();
         $before = IssueSensor::reading($device, $fabricOn, $discovery);
         $syncing = $discovery || $definitions === [];
-        $unknown = 0;
         if ($syncing) {
             $sync = $sensors->sync(self::withIssues($values, $before), $skipped, array_keys($classes));
             $counts['sensors_synced'] = $sync['synced'];
             $counts['sensors_kept'] = $sync['kept'];
         } else {
-            $recorded = $sensors->record($values, $live ?? app('Datastore'));
+            $store = $live ?? app('Datastore');
+            $recorded = $sensors->record($values, $store);
             $counts['sensors_recorded'] = $recorded['recorded'];
             $counts['sensor_events'] = $recorded['events'];
-            $unknown = count($recorded['unknown']);
+            if ($recorded['unknown'] !== []) {
+                // an index that appeared since the last discovery (a new duplicate MAC, a new
+                // L3 context): create its row and record it now, before the fabric block, so
+                // the checks of this very poll read it from sensors.sensor_current (F6 4)
+                Log::info(sprintf('  %d new sensor(s), running sensor discovery', count($recorded['unknown'])));
+                $counts['sensors_synced'] = $sensors->sync(self::withIssues($values, $before), $skipped, array_keys($classes))['synced'];
+                $again = $sensors->record($recorded['unknown'], $store);
+                $counts['sensors_recorded'] += $again['recorded'];
+                $counts['sensor_events'] += $again['events'];
+            }
         }
 
         if ($fabricOn) {
@@ -356,16 +365,16 @@ class NetconfService
             } elseif ($after !== null && $before !== null && $after->value !== $before->value) {
                 $sensors->setCurrent($after);
             }
-        } else {
-            if ($unknown === 0 && $after !== null) {
-                $recorded = $sensors->record([$after], $live ?? app('Datastore'));
-                $counts['sensors_recorded'] += $recorded['recorded'];
-                $counts['sensor_events'] += $recorded['events'];
-                $unknown = count($recorded['unknown']);
-            }
-            if ($unknown > 0) {
-                // new rows appeared since discovery: discover them now and record on the next poll
-                Log::info(sprintf('  %d new sensor(s), running sensor discovery', $unknown));
+        } elseif ($after !== null) {
+            // only the issues sensor is left for after the resolve; the YAML sensors, new
+            // indexes included, were stored before it
+            $recorded = $sensors->record([$after], $live ?? app('Datastore'));
+            $counts['sensors_recorded'] += $recorded['recorded'];
+            $counts['sensor_events'] += $recorded['events'];
+            if ($recorded['unknown'] !== []) {
+                // the device became a member in this very resolve: its row is created now and
+                // carries a value from the next poll on
+                Log::info('  the device joined the fabric, running sensor discovery');
                 $counts['sensors_synced'] = $sensors->sync(self::withIssues($values, $after), $skipped, array_keys($classes))['synced'];
             }
         }

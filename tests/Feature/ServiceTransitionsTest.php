@@ -124,6 +124,28 @@ final class ServiceTransitionsTest extends LibrenmsTestCase
         $this->assertSame(1, DB::table('eventlog')->where('type', IssueStore::EVENT_TYPE)->where('message', 'like', 'EVPN fabric check dup-mac cleared:%')->count());
     }
 
+    public function testASensorIndexThatFirstAppearsOnAPollIsSeenByThatPollsChecks(): void
+    {
+        $leaf = $this->leaf();
+        $service = NetconfService::make();
+        $issues = fn () => DB::table(IssueStore::TABLE)->where('check', 'dup-mac')->count();
+        $sensors = fn () => Sensor::query()->where('device_id', $leaf->device_id)->where('sensor_type', 'netconf-test-evpn-dup-mac-instance');
+
+        // discovery: the command answers no instance at all, so the index does not exist yet
+        $this->transport->on('show evpn database state duplicate', '<rpc-reply><evpn-database-information/></rpc-reply>');
+        $service->run($leaf, null, true);
+        $this->assertSame(0, $sensors()->count());
+
+        // poll: the instance appears with two suppressed MACs. The row is created and its value
+        // recorded before the fabric block, so the check of this very poll counts them (F6 4)
+        $this->replies(2, 0);
+        $report = $service->run($leaf, new MemoryDatastore, false);
+        $this->assertSame([], $report->errors);
+        $this->assertSame(2.0, (float) $sensors()->value('sensor_current'));
+        $this->assertSame(1, $issues());
+        $this->assertSame(1.0, (float) Sensor::query()->where('device_id', $leaf->device_id)->where('sensor_type', IssueSensor::TYPE)->value('sensor_current'));
+    }
+
     public function testBorderRoleFollowsTheL3ContextSensorOfTheSamePoll(): void
     {
         $leaf = $this->leaf();
