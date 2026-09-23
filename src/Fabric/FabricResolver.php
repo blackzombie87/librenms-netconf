@@ -9,6 +9,7 @@ use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 use SafferIt\LibrenmsNetconf\Fabric\Checks\FabricChecks;
 use SafferIt\LibrenmsNetconf\Fabric\Checks\IssueStore;
+use SafferIt\LibrenmsNetconf\Support\IpSort;
 
 /**
  * Cross-device aggregation for the EVPN fabric view (plan §7.3 / §7.6): builds the graph of
@@ -303,12 +304,14 @@ class FabricResolver
             $result[(int) $row->device_id][] = (string) $row->ipv4_address;
         }
 
-        return $result;
+        return array_map(IpSort::sort(...), $result);
     }
 
     /**
-     * One column of a per-leaf table, grouped by device: device_id => distinct values, in a
-     * stable order so the address a device is stored under does not change between polls.
+     * One column of a per-leaf table, grouped by device: device_id => distinct values, lowest
+     * address first, so the address a device is stored under does not change between polls
+     * and every reader picks the same one (F6 5). These columns hold addresses, which do not
+     * sort as text — the order is made in PHP, see Support\IpSort.
      *
      * @return array<int, list<string>>
      */
@@ -321,7 +324,7 @@ class FabricResolver
             $result[(int) $row->device_id][] = (string) $row->{$column};
         }
 
-        return $result;
+        return array_map(IpSort::sort(...), $result);
     }
 
     /**

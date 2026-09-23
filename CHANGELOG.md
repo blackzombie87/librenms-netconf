@@ -27,6 +27,10 @@ Fixes from the review of 2026-09-23 (internal plan F6); the first three are fixe
   an index over 128 (sensors) or 191 (metric rows) characters, so no stored row changes; a
   user definition that does gets a new index on its next discovery and leaves its old RRD file
   behind.
+- A device with more than one VTEP source address or router-id is stored under the lowest
+  *address* rather than the lowest string (`10.10.0.1` sorts before `10.9.0.1` as text), and
+  the EVPN multihoming table names that same address, so the backup-DF flag and the fabric
+  member row can no longer disagree about which address is the device's.
 
 UI re-home (internal plan §8): NETCONF per-device detail moves from the overview into its
 own place, the overview keeps a summary.

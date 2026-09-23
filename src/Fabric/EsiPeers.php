@@ -6,6 +6,7 @@ use App\Models\Device;
 use App\Models\Port;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Support\IpSort;
 
 /**
  * The "EVPN multihoming" table of one device (plan §3.8): its ESI-LAGs with mode, DF/BDF
@@ -24,8 +25,7 @@ final class EsiPeers
             return ['rows' => [], 'own_vtep' => null];
         }
 
-        $ownVtep = DB::table(TableSchema::tableName('vni'))->where('device_id', $deviceId)->whereNotNull('source_vtep')->value('source_vtep')
-            ?? DB::table(TableSchema::tableName('neighbor'))->where('device_id', $deviceId)->whereNotNull('router_id')->value('router_id');
+        $ownVtep = self::ownAddress($deviceId);
 
         // every remote VTEP address -> vtep row -> device
         $remoteIps = [];
@@ -93,6 +93,31 @@ final class EsiPeers
         }
         usort($rows, fn ($a, $b) => strnatcmp($a['local_ifname'], $b['local_ifname']));
 
-        return ['rows' => $rows, 'own_vtep' => $ownVtep === null ? null : (string) $ownVtep];
+        return ['rows' => $rows, 'own_vtep' => $ownVtep];
+    }
+
+    /**
+     * The address this device is known by: the one the resolver made its fabric member, else
+     * the lowest of its VTEP source addresses or router-ids. A leaf can have several, and the
+     * BDF flag compares against this one, so it has to be the address the member row names
+     * and not whatever row the database returned first (F6 5).
+     */
+    private static function ownAddress(int $deviceId): ?string
+    {
+        $member = DB::table(TableSchema::tableName('vtep') . ' as v')
+            ->join(TableSchema::tableName('fabric_member') . ' as m', 'm.vtep_ip', '=', 'v.vtep_ip')
+            ->where('v.device_id', $deviceId)->pluck('v.vtep_ip')->map('strval')->all();
+        if ($member !== []) {
+            return IpSort::lowest(array_values($member));
+        }
+
+        $own = DB::table(TableSchema::tableName('vni'))->where('device_id', $deviceId)->whereNotNull('source_vtep')
+            ->distinct()->pluck('source_vtep')->map('strval')->all();
+        if ($own === []) {
+            $own = DB::table(TableSchema::tableName('neighbor'))->where('device_id', $deviceId)->whereNotNull('router_id')
+                ->distinct()->pluck('router_id')->map('strval')->all();
+        }
+
+        return IpSort::lowest(array_values($own));
     }
 }

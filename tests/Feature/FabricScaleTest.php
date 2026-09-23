@@ -20,11 +20,20 @@ final class FabricScaleTest extends LibrenmsTestCase
     private const VNIS = 20;
 
     /**
+     * A second VTEP source address on the first leaf (F6 5). It is the lower address, so it is
+     * the one the leaf is stored under, while as text it sorts after 198.51.100.1 — an order
+     * made in SQL gets this wrong, and reading both addresses costs no extra query.
+     */
+    private const SECOND_VTEP = '198.51.99.2';
+
+    /**
      * Queries a resolve may cost per extra monitored member. The resolver reads the tables as
      * a whole, so this is well under 1: what is left is chunking (a longer insert, a longer
      * whereIn list). A single per-device query in the hot path pushes it over 1 at once.
      */
     private const QUERIES_PER_MEMBER = 0.5;
+
+    private int $firstDeviceId = 0;
 
     public function testQueryCountDoesNotGrowPerMember(): void
     {
@@ -69,7 +78,14 @@ final class FabricScaleTest extends LibrenmsTestCase
 
         $this->assertSame($members, $result['devices'], 'every leaf is a member');
         $this->assertSame(1, $result['fabrics'], 'the mesh is one fabric');
-        $this->assertSame(count($ips), $result['nodes']);
+        $this->assertSame(count($ips) + 1, $result['nodes'], 'the leaves plus the second address of the first one');
+        $this->assertSame(
+            [self::SECOND_VTEP],
+            DB::table(TableSchema::tableName('fabric_member') . ' as m')
+                ->join(TableSchema::tableName('vtep') . ' as v', 'v.vtep_ip', '=', 'm.vtep_ip')
+                ->where('v.device_id', $this->firstDeviceId)->pluck('m.vtep_ip')->all(),
+            'the two-address leaf is a member under its lower address'
+        );
 
         return ['queries' => $queries, 'seconds' => $seconds, 'shapes' => $shapes, 'result' => $result];
     }
@@ -102,7 +118,8 @@ final class FabricScaleTest extends LibrenmsTestCase
 
     /**
      * A full mesh: every leaf has its own VTEP, the others as EVPN neighbours, a tunnel and a
-     * flood-list entry per peer, plus one ESI-LAG.
+     * flood-list entry per peer, plus one ESI-LAG. `neighbor.router_id` is the *local* router-id
+     * the instance reports, the same value on every neighbour row of a device.
      *
      * @return list<string> the VTEP address of every leaf
      */
@@ -116,25 +133,35 @@ final class FabricScaleTest extends LibrenmsTestCase
             $ips[] = '198.51.100.' . $i;
         }
 
+        $this->firstDeviceId = $devices[0];
+
         foreach ($devices as $n => $deviceId) {
             $rows = ['vni' => [], 'neighbor' => [], 'tunnel' => [], 'vni_vtep' => [], 'esi' => []];
             for ($v = 0; $v < self::VNIS; $v++) {
                 $rows['vni'][] = ['device_id' => $deviceId, 'vni' => 10000 + $v, 'instance' => "MACVRF-$v", 'source_vtep' => $ips[$n], 'last_seen' => $now];
             }
+            if ($n === 0) {
+                // the second address of the first leaf, on a VNI only that leaf carries
+                $rows['vni'][] = ['device_id' => $deviceId, 'vni' => 19999, 'instance' => 'MACVRF-second', 'source_vtep' => self::SECOND_VTEP, 'last_seen' => $now];
+            }
             foreach ($ips as $m => $peer) {
                 if ($m === $n) {
                     continue;
                 }
-                $rows['neighbor'][] = ['device_id' => $deviceId, 'instance' => 'default', 'neighbor_ip' => $peer, 'router_id' => $peer, 'last_seen' => $now];
+                $rows['neighbor'][] = ['device_id' => $deviceId, 'instance' => 'default', 'neighbor_ip' => $peer, 'router_id' => $ips[$n], 'last_seen' => $now];
                 $rows['tunnel'][] = ['device_id' => $deviceId, 'remote_vtep_ip' => $peer, 'ifname' => "vtep.327{$m}", 'last_seen' => $now];
-                $rows['vni_vtep'][] = ['device_id' => $deviceId, 'vni' => 10000, 'remote_vtep_ip' => $peer, 'instance' => 'MACVRF-0', 'last_seen' => $now];
+                for ($v = 0; $v < self::VNIS; $v++) {
+                    $rows['vni_vtep'][] = ['device_id' => $deviceId, 'vni' => 10000 + $v, 'remote_vtep_ip' => $peer, 'instance' => "MACVRF-$v", 'last_seen' => $now];
+                }
             }
             $rows['esi'][] = [
                 'device_id' => $deviceId, 'esi' => sprintf('00:11:22:33:44:55:66:77:88:%02d', $n), 'instance' => 'MACVRF-0',
                 'local_ifname' => 'ae0.0', 'remote_vtep_ips' => json_encode([$ips[($n + 1) % $members]]), 'last_seen' => $now,
             ];
             foreach ($rows as $table => $insert) {
-                DB::table(TableSchema::tableName($table))->insert($insert);
+                foreach (array_chunk($insert, 500) as $chunk) {
+                    DB::table(TableSchema::tableName($table))->insert($chunk);
+                }
             }
         }
 
