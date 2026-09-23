@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Development:
+
+- The LibreNMS-backed static analysis registers that checkout's autoloader behind its own
+  instead of in front of it. A LibreNMS installed with its dev dependencies — what CI does —
+  brings its own PHPStan and Larastan, which then served classes to the newer pair the
+  analysis runs from and ended the run with an "Internal error". Nothing in the released code
+  changes; the dev instance never showed it because its LibreNMS has no dev dependencies.
+
 ## 1.2.0 – 2026-09-23
 
 Per-device NETCONF moves into the device page as its own tab, the EVPN fabric resolve stops
