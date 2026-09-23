@@ -28,6 +28,12 @@ own place, the overview keeps a summary.
   `/plugin/netconf` redirects to `/plugin/netconf/status` instead of rendering the list a
   second time.
 
+Documentation:
+
+- README *Distributed pollers*: which settings name node-local files (private key,
+  `known_hosts`, definitions directory), the shared `APP_KEY`, and the fabric resolver's
+  cache lock, which only serialises across nodes with a shared cache store.
+
 ## 1.1.0 – 2026-09-22
 
 Fixes from the full software review of 2026-09-22 (internal plan item F5):

@@ -162,6 +162,36 @@ Hashed entries, `[host]:port` entries for non-default ports, wildcards and `@rev
 markers are understood; a key that differs from every stored key for the host is reported
 as a host key mismatch and the device goes into back-off like any other connection failure.
 
+### Distributed pollers
+
+The module runs inside the poller worker, so with `distributed_poller` every node that may
+poll a NETCONF device needs the node-local files the settings point at — the settings
+themselves live in the database and are shared, the paths in them are not:
+
+| Setting | Must exist on every poller node |
+|---|---|
+| *Private key file* (`key_file`, or the per-device `netconf_keyfile` attribute) | the key itself, same path, readable by the poller user |
+| *Host key check* (`known_hosts`) | the `known_hosts` file with an entry for every device — a node without it refuses the connection as a host key mismatch |
+| *Definitions directory* (`definitions_dir`) | the user definitions; a node that cannot see them polls with the shipped set only, silently |
+
+Two more shared-state points:
+
+- **`APP_KEY`.** Passwords and key passphrases are stored with a `crypt:` prefix and
+  decrypted on the polling node. LibreNMS already requires the same `APP_KEY` on all nodes;
+  a node with a different one raises a `DecryptException` while building the credentials —
+  before any connection — and the module aborts for that device.
+- **Cache store.** The EVPN fabric resolver (`evpn_fabric`) runs after every leaf poll and
+  serialises itself on the `netconf:fabric-resolver` cache lock. That lock spans the
+  installation only if the cache store does (Redis, Memcached, database); with the file store
+  every node holds its own lock and two nodes can resolve at the same time. Each resolve is a
+  full recompute that persists inside one transaction, so the result stays consistent — the
+  nodes just repeat each other's work.
+
+RRD needs nothing special: sensors and metrics go through LibreNMS's `Datastore`, so
+`rrdcached` applies exactly as it does for core modules. `netconf:uninstall --purge` is the
+exception — it deletes only RRD files it can see locally and lists the rest for removal on
+the rrdcached host.
+
 ## Credentials
 
 Global defaults live on the plugin settings page. Per device they can be overridden on the
