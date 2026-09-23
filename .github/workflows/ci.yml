@@ -157,6 +157,12 @@ jobs:
           printf 'DB_TEST_HOST=%s\nDB_TEST_PORT=%s\nDB_TEST_DATABASE=%s\nDB_TEST_USERNAME=%s\nDB_TEST_PASSWORD=%s\n' \
             "$DB_TEST_HOST" "$DB_TEST_PORT" "$DB_TEST_DATABASE" "$DB_TEST_USERNAME" "$DB_TEST_PASSWORD" >> .env
           DB_CONNECTION=testing php artisan migrate --force
+      # The same analysis the development container runs: the real LibreNMS classes instead of
+      # stubs/librenms.stub.php, so a stub that drifts away from core fails here. No database
+      # needed - booting the application is enough.
+      - name: Static analysis against this LibreNMS
+        working-directory: plugin
+        run: composer analyse:librenms
       - name: Run the feature suite
         working-directory: plugin
         run: vendor/bin/phpunit -c phpunit.feature.xml

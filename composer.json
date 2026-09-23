@@ -67,6 +67,7 @@
         "style": "vendor/bin/php-cs-fixer check --diff",
         "style:fix": "vendor/bin/php-cs-fixer fix",
         "analyse": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "analyse:librenms": "vendor/bin/phpstan analyse -c phpstan-librenms.neon --memory-limit=2G",
         "check": [
             "@style",
             "@analyse",

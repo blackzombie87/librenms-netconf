@@ -50,16 +50,39 @@ change shows up first. Upstreaming a `DeviceTabHook` (plan §8 U5) removes the n
 
 ## Static analysis
 
-`vendor/bin/phpstan analyse` runs at level 6 with the Larastan extension. Larastan wants to
-boot the application it analyses; the application here is LibreNMS, which is not part of the
-checkout, so `dev/phpstan-bootstrap.php` stands in for it: a bare `Illuminate\Foundation\Application`
-with the providers Larastan resolves while analysing (config, filesystem, events, view), plus
-the two view locations `NetconfPluginProvider` adds at runtime — the `netconf::` namespace and
-`resources/lnms-views`. That last part is what makes `view('netconf::status')` check out as a
-`view-string`: a Blade file that does not exist fails the analysis.
+Level 6 with the Larastan extension, in two flavours. Larastan wants to boot the application
+it analyses, and the application here is LibreNMS.
 
-What LibreNMS's own classes look like to the analysis is `stubs/librenms.stub.php`, so a
-relation or method used from core has to be declared there (`Device::attribs()` for instance).
+```bash
+composer analyse            # bare checkout: stubs/librenms.stub.php + a stand-in application
+LIBRENMS_PATH=/code/librenms_new composer analyse:librenms   # the real thing
+```
+
+**`phpstan-librenms.neon` is the authoritative one** and what CI's `feature` job runs after it
+has installed LibreNMS. `dev/phpstan-librenms-bootstrap.php` loads the checkout named by
+`LIBRENMS_PATH` (the variable the feature tests already use) and boots its console kernel — no
+database needed — so the analysis sees the real models with their relations and casts, the real
+interfaces, and every registered console command. In the container:
+
+```bash
+# the container image has no composer, so call phpstan directly
+lnms-dev 'cd /code/librenms-netconf && LIBRENMS_PATH=/code/librenms_new php vendor/bin/phpstan analyse -c phpstan-librenms.neon --memory-limit=2G'
+```
+
+`phpstan.neon` is the fallback for a checkout without LibreNMS (the `analyse` CI job, a fresh
+clone): `stubs/librenms.stub.php` describes the core classes and `dev/phpstan-bootstrap.php`
+stands in for the application with a bare `Illuminate\Foundation\Application` and the providers
+Larastan resolves (config, filesystem, events, view). It sees less — a stub is only as good as
+it is kept — but the LibreNMS run in CI is what catches a stub that has drifted.
+
+Both add the two view locations `NetconfPluginProvider` registers at runtime (the `netconf::`
+namespace and `resources/lnms-views`), which is what makes `view('netconf::status')` check out
+as a `view-string`: a Blade file that does not exist fails the analysis.
+
+`stubs/librenms-overrides.stub.php` is different from the other stub: it corrects PHPDoc that
+LibreNMS itself gets wrong, and applies only to the LibreNMS run. It currently holds one entry,
+`DataStorageInterface::put()`, whose `@param array $device` contradicts the implementation
+(`Datastore::put()` branches on `$device instanceof Device`).
 
 ## Feature tests
 
@@ -97,7 +120,8 @@ The `feature` job of `.github/workflows/ci.yml` runs steps 1–4 on every push (
 steps 5–6 only exist here because they need the fixtures directory and a real device:
 
 1. `vendor/bin/pest` — unit suite green on the bare checkout (the Feature tests skip there).
-2. `vendor/bin/phpstan analyse` and `vendor/bin/php-cs-fixer check --diff` — clean.
+2. `vendor/bin/phpstan analyse` and `vendor/bin/php-cs-fixer check --diff` — clean, and
+   the LibreNMS-backed run in the container (command above) — clean as well.
 3. `actionlint` (`brew install actionlint`) — the workflow file validates. GitHub rejects a
    workflow with an expression in the wrong place *before* any job runs, which a green local
    suite cannot show; the `workflow` job runs the same check in CI.

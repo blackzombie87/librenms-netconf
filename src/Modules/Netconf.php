@@ -37,6 +37,9 @@ use SafferIt\LibrenmsNetconf\NetconfSettings;
  */
 class Netconf implements Module
 {
+    /**
+     * @return list<string>
+     */
     public function dependencies(): array
     {
         return [];
@@ -90,6 +93,9 @@ class Netconf implements Module
         return $deleted;
     }
 
+    /**
+     * @return array<string, mixed>|null table name => its rows, for `lnms dev:check` test data
+     */
     public function dump(Device $device, string $type): ?array
     {
         $sensors = Sensor::query()->where('device_id', $device->device_id)->where('poller_type', SensorWriter::POLLER_TYPE)->get()

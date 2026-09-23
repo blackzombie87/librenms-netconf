@@ -1,0 +1,15 @@
+# Analysis against a real LibreNMS checkout (LIBRENMS_PATH), which is what CI and the
+# development container run: the real models, interfaces and views replace stubs/librenms.stub.php.
+# phpstan.neon is the bare-checkout fallback; see dev/README.md.
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - src
+    stubFiles:
+        - stubs/librenms-overrides.stub.php
+    bootstrapFiles:
+        - dev/phpstan-librenms-bootstrap.php
+    treatPhpDocTypesAsCertain: false

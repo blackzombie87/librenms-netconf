@@ -54,10 +54,17 @@ Internal tidy-up, no behaviour change:
 Development:
 
 - PHPStan runs with the Larastan extension (level 6, clean): Eloquent property access,
-  relation names and `view()` arguments are checked now. `dev/phpstan-bootstrap.php` stands in
-  for the LibreNMS application, which is not part of the checkout. Found on the way: the
-  metric row models share an abstract `NetconfMetricRow` (columns, casts and `dataSources()`
-  used to be written out twice) and `Device::attribs()` was missing from the LibreNMS stub.
+  relation names and `view()` arguments are checked now. Found on the way: the metric row
+  models share an abstract `NetconfMetricRow` (columns, casts and `dataSources()` used to be
+  written out twice) and `Device::attribs()` was missing from the LibreNMS stub.
+- The analysis can use a real LibreNMS instead of that stub: `composer analyse:librenms` with
+  `LIBRENMS_PATH` set boots the checkout and analyses against core's own models, interfaces and
+  commands. CI runs it in the feature job, which already has a LibreNMS, so a stub that drifts
+  away from core now fails the build. `composer analyse` keeps working on a bare checkout.
+- The real-LibreNMS analysis found two things the stub had hidden: `netconf:device` used the
+  credential-override trait without declaring its options (the device lookup is its own
+  `FindsDevice` trait now, and the three commands that do declare them are checked against
+  their signatures), and `Modules\Netconf::dependencies()`/`dump()` had untyped array returns.
 
 Documentation:
 

@@ -2,19 +2,23 @@
 
 namespace SafferIt\LibrenmsNetconf\Console\Concerns;
 
-use App\Models\Device;
 use SafferIt\LibrenmsNetconf\Transport\Contracts\TransportInterface;
 use SafferIt\LibrenmsNetconf\Transport\Credentials;
 use SafferIt\LibrenmsNetconf\Transport\DeviceCredentials;
 use SafferIt\LibrenmsNetconf\Transport\TransportFactory;
 
 /**
- * Shared option handling for the netconf:* commands: device lookup and credential overrides.
+ * The credential-override options of the netconf:* commands that open a session, and the
+ * Credentials they resolve to. A command using this trait must put TARGET_OPTIONS in its
+ * signature, otherwise the options read below do not exist; the device lookup alone is
+ * FindsDevice.
  *
  * @mixin \Illuminate\Console\Command
  */
 trait ResolvesTarget
 {
+    use FindsDevice;
+
     protected const TARGET_OPTIONS = '
         {--u|username= : Override the login user}
         {--p|password= : Override the password (prefer --ask-password)}
@@ -27,8 +31,6 @@ trait ResolvesTarget
         {--connect-timeout= : Seconds for TCP/SSH setup}
         {--timeout= : Seconds to wait for each command}
         {--known-hosts= : Verify the host key against this OpenSSH known_hosts file ("-" disables the configured one)}';
-
-    protected ?Device $device = null;
 
     /**
      * Resolve the "device" argument to a LibreNMS device (id, hostname, sysName or IP) or,
@@ -76,34 +78,5 @@ trait ResolvesTarget
         $factory = app(TransportFactory::class);
 
         return $factory->make($credentials);
-    }
-
-    protected function findDevice(string $target): ?Device
-    {
-        try {
-            if (ctype_digit($target)) {
-                $device = Device::find((int) $target);
-                if ($device) {
-                    return $device;
-                }
-            }
-
-            return Device::findByHostname($target)
-                ?? Device::where('sysName', $target)->first()
-                ?? Device::findByIp($target);
-        } catch (\Throwable $e) {
-            $this->warn('Device lookup failed: ' . $e->getMessage());
-
-            return null;
-        }
-    }
-
-    protected function deviceLabel(): string
-    {
-        if ($this->device) {
-            return sprintf('%s (device_id %d, %s)', $this->device->hostname, $this->device->device_id, $this->device->os ?? 'unknown os');
-        }
-
-        return (string) $this->argument('device');
     }
 }

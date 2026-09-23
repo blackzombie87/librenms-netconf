@@ -5,7 +5,7 @@ namespace SafferIt\LibrenmsNetconf\Console;
 use App\Models\Device;
 use Illuminate\Console\Command;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
-use SafferIt\LibrenmsNetconf\Console\Concerns\ResolvesTarget;
+use SafferIt\LibrenmsNetconf\Console\Concerns\FindsDevice;
 use SafferIt\LibrenmsNetconf\Support\DeviceSelection;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
@@ -16,7 +16,7 @@ use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
  */
 class NetconfDeviceCommand extends Command
 {
-    use ResolvesTarget;
+    use FindsDevice;
 
     protected $signature = 'netconf:device
         {device? : Hostname, IP, sysName or device_id; or select many with --group / --os}
