@@ -79,6 +79,12 @@ namespace App\Models {
         {
             return $this->hasMany(Port::class);
         }
+
+        /** @return \Illuminate\Database\Eloquent\Relations\HasMany<DeviceAttrib, $this> */
+        public function attribs(): \Illuminate\Database\Eloquent\Relations\HasMany
+        {
+            return $this->hasMany(DeviceAttrib::class, 'device_id');
+        }
     }
 
     /**

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
 use LibreNMS\RRD\RrdDefinition;
+use SafferIt\LibrenmsNetconf\Models\NetconfMetricRow;
 
 /**
  * The parts MetricWriter and PortMetricWriter share: one datastore update per metric row
@@ -33,7 +34,9 @@ trait WritesRrd
      * definition was edited, disabled or removed, or nothing matches the device at all):
      * the counterpart of the table orphan prune.
      *
-     * @param  callable(): Builder<*>  $query  a fresh query for this device's rows
+     * @template TRow of NetconfMetricRow
+     *
+     * @param  callable(): Builder<TRow>  $query  a fresh query for this device's rows
      * @param  list<string>  $knownMappings  "definition/mapping" pairs of the matched definitions
      */
     private function deleteOrphanRows(callable $query, array $knownMappings, string $label): int

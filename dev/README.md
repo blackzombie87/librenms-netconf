@@ -48,6 +48,19 @@ When the seam disappears, `register()` logs once and `DevicePage::url()` falls b
 standalone `/plugin/netconf/device/{id}[/section]` pages — CI's pinned core tag is where a seam
 change shows up first. Upstreaming a `DeviceTabHook` (plan §8 U5) removes the need for this.
 
+## Static analysis
+
+`vendor/bin/phpstan analyse` runs at level 6 with the Larastan extension. Larastan wants to
+boot the application it analyses; the application here is LibreNMS, which is not part of the
+checkout, so `dev/phpstan-bootstrap.php` stands in for it: a bare `Illuminate\Foundation\Application`
+with the providers Larastan resolves while analysing (config, filesystem, events, view), plus
+the two view locations `NetconfPluginProvider` adds at runtime — the `netconf::` namespace and
+`resources/lnms-views`. That last part is what makes `view('netconf::status')` check out as a
+`view-string`: a Blade file that does not exist fails the analysis.
+
+What LibreNMS's own classes look like to the analysis is `stubs/librenms.stub.php`, so a
+relation or method used from core has to be declared there (`Device::attribs()` for instance).
+
 ## Feature tests
 
 `tests/Feature/` runs against a LibreNMS installation and its **testing** database connection

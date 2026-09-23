@@ -1,7 +1,12 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
 parameters:
     level: 6
     paths:
         - src
     scanFiles:
         - stubs/librenms.stub.php
+    bootstrapFiles:
+        - dev/phpstan-bootstrap.php
     treatPhpDocTypesAsCertain: false

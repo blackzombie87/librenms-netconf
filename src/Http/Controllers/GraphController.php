@@ -107,7 +107,8 @@ class GraphController extends Controller
                 continue;
             }
             $files[] = $file = Rrd::name($device->hostname, NetconfPortMetric::rrdName((int) $row->port_id, $row->definition, $row->mapping));
-            $builder->add($file, $data['field'], (string) $row->ifName, $types[$data['field']] ?? 'GAUGE');
+            // ifName comes from the joined ports row, not from a column of this model
+            $builder->add($file, $data['field'], (string) $row->getAttribute('ifName'), $types[$data['field']] ?? 'GAUGE');
         }
 
         return $this->render($request, $builder, sprintf('%s - %s/%s %s', $device->displayName(), $data['definition'], $data['mapping'], $data['field']), $files);

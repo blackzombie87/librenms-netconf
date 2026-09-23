@@ -28,6 +28,14 @@ own place, the overview keeps a summary.
   `/plugin/netconf` redirects to `/plugin/netconf/status` instead of rendering the list a
   second time.
 
+Development:
+
+- PHPStan runs with the Larastan extension (level 6, clean): Eloquent property access,
+  relation names and `view()` arguments are checked now. `dev/phpstan-bootstrap.php` stands in
+  for the LibreNMS application, which is not part of the checkout. Found on the way: the
+  metric row models share an abstract `NetconfMetricRow` (columns, casts and `dataSources()`
+  used to be written out twice) and `Device::attribs()` was missing from the LibreNMS stub.
+
 Documentation:
 
 - README *Distributed pollers*: which settings name node-local files (private key,
