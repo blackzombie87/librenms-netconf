@@ -193,7 +193,7 @@ class FabricController extends Controller
     private function bgp(FabricNodes $nodes, array $deviceIds): array
     {
         $sessions = OverlaySessions::forDevices($deviceIds);
-        $missing = OverlaySessions::missing($sessions, $nodes->deviceNodes());
+        $missing = OverlaySessions::missing($sessions, $nodes->deviceNodes(), $nodes->collectedIds());
         $byDevice = [];
         foreach ($sessions as $s) {
             $byDevice[$s['device_id']][] = $s;

@@ -1,7 +1,7 @@
 <div class="row">
     <div class="col-md-4">
         <table class="table table-condensed">
-            <tr><th style="width: 45%;">Members</th><td>{{ $fabric['members'] }} <small class="text-muted">({{ $fabric['monitored'] }} monitored)</small><br>@include('netconf::fabric.roles', ['roles' => $fabric['roles'], 'border' => $fabric['border']])</td></tr>
+            <tr><th style="width: 45%;">Members</th><td>{{ $fabric['members'] }} <small class="text-muted">({{ $fabric['monitored'] }} NETCONF-polled{{ $fabric['devices'] > $fabric['monitored'] ? sprintf(', %d in LibreNMS without EVPN data', $fabric['devices'] - $fabric['monitored']) : '' }})</small><br>@include('netconf::fabric.roles', ['roles' => $fabric['roles'], 'border' => $fabric['border']])</td></tr>
             <tr><th>Health</th><td>@include('netconf::fabric.health', ['health' => $fabric['health'], 'fabric_id' => $fabric['id']])</td></tr>
             <tr><th>Checks</th><td>@include('netconf::fabric.checks-badge', ['checks' => $fabric['checks'], 'fabric_id' => $fabric['id']]) <small><a href="{{ route('netconf.fabric', [$fabric['id'], 'checks']) }}">all issues</a></small></td></tr>
             <tr><th>EVPN instances</th><td>{{ $fabric['totals']['instances'] }}</td></tr>

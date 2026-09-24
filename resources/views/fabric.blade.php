@@ -9,7 +9,7 @@
             <div class="panel panel-default">
                 <div class="panel-heading">
                     <i class="fa fa-sitemap fa-fw" aria-hidden="true"></i> <strong>{{ $fabric['name'] }}</strong>
-                    <small class="text-muted">key <code>{{ $fabric['key'] }}</code> &middot; {{ $fabric['members'] }} members, {{ $fabric['monitored'] }} monitored</small>
+                    <small class="text-muted">key <code>{{ $fabric['key'] }}</code> &middot; {{ $fabric['members'] }} members, {{ $fabric['monitored'] }} NETCONF-polled{{ $fabric['devices'] > $fabric['monitored'] ? sprintf(' (%d in LibreNMS without EVPN data)', $fabric['devices'] - $fabric['monitored']) : '' }}</small>
                     <span class="pull-right"><a href="{{ route('netconf.fabrics') }}">all fabrics</a></span>
                 </div>
                 <div class="panel-body">

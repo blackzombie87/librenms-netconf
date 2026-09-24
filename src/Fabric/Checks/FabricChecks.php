@@ -54,6 +54,7 @@ final class FabricChecks
         'tunnel-asymmetric' => ['Tunnel without reverse', Issue::WARNING, 'a member has a VXLAN tunnel to another member that has none back'],
         'tunnel-errors' => ['Tunnel errors', Issue::WARNING, 'the vtep.N port of a tunnel counted errors or discards in the last poll'],
         'member-not-polling' => ['Member not polling', Issue::WARNING, 'the NETCONF collection of a member is failing'],
+        'member-not-collected' => ['Member not collected', Issue::WARNING, 'a fabric member is a device in LibreNMS, but the plugin has no EVPN data from it: it cannot take part in any comparison'],
     ];
 
     public function __construct(private readonly IssueStore $store = new IssueStore)
@@ -107,12 +108,14 @@ final class FabricChecks
 
         $neighbors = DB::table(TableSchema::tableName('neighbor'))->whereIn('device_id', $deviceIds)->get(['device_id', 'instance', 'neighbor_ip', 'mac_routes', 'mac_ip_routes'])->map(fn ($r) => (array) $r)->all();
         $sessions = OverlaySessions::forDevices($deviceIds);
-        $missing = OverlaySessions::missing($sessions, $nodes->deviceNodes());
+        $missing = OverlaySessions::missing($sessions, $nodes->deviceNodes(), $nodes->collectedIds());
         $esis = EsiMatrix::forFabric($nodes);
         $vnis = VniMatrix::forFabric($nodes);
         $tunnels = TunnelMatrix::build(
             DB::table(TableSchema::tableName('tunnel'))->whereIn('device_id', $deviceIds)->get()->map(fn ($r) => (array) $r)->all(),
             $nodes->deviceNodes(),
+            null,
+            $nodes->collectedIds(),
         )['by_device'];
 
         $instances = [];
@@ -197,7 +200,9 @@ final class FabricChecks
                 $addressDevice[$ip] = $deviceId;
             }
         }
-        $monitored = array_keys($nodes->deviceNodes());
+        // only a member the plugin collects from can be compared with the others; one that is
+        // merely a device in LibreNMS has empty tables because nobody asked it (plan §10.4)
+        $collected = $nodes->collectedIds();
 
         // 1. asymmetric neighbours between monitored members
         /** @var array<int, array<int, true>> $lists device => devices it lists */
@@ -210,7 +215,7 @@ final class FabricChecks
         }
         foreach ($lists as $a => $targets) {
             foreach (array_keys($targets) as $b) {
-                if (! isset($lists[$b][$a]) && in_array($b, $monitored, true)) {
+                if (! isset($lists[$b][$a]) && in_array($b, $collected, true)) {
                     $issues[] = new Issue('neighbor-asymmetric', Issue::WARNING, "$a>$b", sprintf('%s lists %s as EVPN neighbour, %s does not list %s', $name($a), $name($b), $name($b), $name($a)), [$a, $b]);
                 }
             }
@@ -413,6 +418,16 @@ final class FabricChecks
                     $issues[] = new Issue('tunnel-errors', Issue::WARNING, "$deviceId/$remote", sprintf('tunnel %s on %s to %s: %d / %d errors in / out, %d / %d discards in the last poll', $t['ifname'] ?? 'vtep', $name($deviceId), $nodes->name($remote), $errors['in_errors'], $errors['out_errors'], $errors['in_discards'], $errors['out_discards']), $devices, $errors + ['ifname' => $t['ifname']]);
                 }
             }
+        }
+
+        // members the plugin has nothing from: not a peer that lost everything, a member nobody
+        // asked. Without this they look healthy while every check about them is a false positive
+        foreach ($nodes->uncollectedIds() as $deviceId) {
+            $polled = $nodes->isPolled($deviceId);
+            $why = $polled
+                ? sprintf('%s is NETCONF-polled but reports no EVPN data, so it is left out of the fabric comparisons', $name($deviceId))
+                : sprintf('%s is a fabric member in LibreNMS that the plugin does not poll — enable NETCONF on it to complete the fabric view', $name($deviceId));
+            $issues[] = new Issue('member-not-collected', Issue::WARNING, (string) $deviceId, $why, [$deviceId], ['polled' => $polled]);
         }
 
         // members whose collector fails: everything above about them may be stale

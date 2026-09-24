@@ -22,17 +22,19 @@ final class VniMatrix
         $vnis = DB::table(TableSchema::tableName('vni'))->whereIn('device_id', $deviceIds)->get()->map(fn ($r) => (array) $r)->all();
         $flood = DB::table(TableSchema::tableName('vni_vtep'))->whereIn('device_id', $deviceIds)->get(['device_id', 'vni', 'remote_vtep_ip'])->map(fn ($r) => (array) $r)->all();
 
-        return self::build($vnis, $flood, $nodes->deviceNodes());
+        return self::build($vnis, $flood, $nodes->deviceNodes(), $nodes->collectedIds());
     }
 
     /**
      * @param  list<array<string, mixed>>  $vniRows  netconf_evpn_vni rows
      * @param  list<array<string, mixed>>  $floodRows  netconf_evpn_vni_vtep rows (device_id, vni, remote_vtep_ip)
      * @param  array<int, list<string>>  $deviceNodes  device_id => its addresses (member address first)
+     * @param  list<int>|null  $collected  devices the plugin collects from; null = all of $deviceNodes
      * @return list<array<string, mixed>>
      */
-    public static function build(array $vniRows, array $floodRows, array $deviceNodes): array
+    public static function build(array $vniRows, array $floodRows, array $deviceNodes, ?array $collected = null): array
     {
+        $collects = $collected === null ? null : array_flip($collected);
         /** @var array<int, array<int, list<string>>> $flood device => vni => remote VTEPs */
         $flood = [];
         /** @var array<int, true> $hasFlood devices whose remote table was fetched at all */
@@ -128,10 +130,11 @@ final class VniMatrix
                         $row['gaps'][] = ['device_id' => $a, 'missing' => $b];
                     }
                 }
-                // flood entries pointing at a monitored member that does not carry the VNI
+                // flood entries pointing at a member that does not carry the VNI — only a
+                // member the plugin collects from can be said not to carry it (plan §10.4)
                 foreach ($row['flood'][$a] as $ip) {
                     $target = $addressDevice[$ip] ?? null;
-                    if ($target !== null && ! isset($row['carriers'][$target])) {
+                    if ($target !== null && ($collects === null || isset($collects[$target])) && ! isset($row['carriers'][$target])) {
                         $row['stale'][] = ['device_id' => $a, 'vtep_ip' => $ip, 'target' => $target];
                     }
                 }

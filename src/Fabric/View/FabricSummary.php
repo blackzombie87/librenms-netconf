@@ -52,6 +52,7 @@ final class FabricSummary
 
         $deviceIds = $members->flatten(1)->pluck('device_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
         $perDevice = DeviceStats::forDevices($deviceIds);
+        $collected = CollectedDevices::collected($deviceIds);
         $sessions = OverlaySessions::forDevices($deviceIds);
         // every address of a monitored device (member address and router-id aliases) -> device
         $ipDevice = DB::table(TableSchema::tableName('vtep'))->whereNotNull('device_id')->pluck('device_id', 'vtep_ip')->map(fn ($id) => (int) $id)->all();
@@ -81,7 +82,10 @@ final class FabricSummary
                 'notes' => $fabric->notes,
                 'updated_at' => $fabric->updated_at,
                 'members' => $own->count(),
-                'monitored' => count($devices),
+                // members the plugin actually has data from — a member that is a device in
+                // LibreNMS but is not polled counts as a member, not as monitored (plan §10.4)
+                'monitored' => count(array_intersect_key($collected, array_flip($devices))),
+                'devices' => count($devices),
                 'roles' => [
                     FabricGraph::ROLE_LEAF => $own->where('role', FabricGraph::ROLE_LEAF)->count(),
                     FabricGraph::ROLE_SPINE => $own->where('role', FabricGraph::ROLE_SPINE)->count(),

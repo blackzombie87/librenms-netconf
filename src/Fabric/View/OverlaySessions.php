@@ -138,13 +138,16 @@ final class OverlaySessions
      * that session to the same node on different addresses are one peer, not two half-peers.
      *
      * @param  list<array<string, mixed>>  $sessions  rows of forDevices()
+     *                                                A member the plugin does not collect from has no sessions to compare, so it is not judged
+     *                                                as lacking every peer the others have (plan §10.4); it can still be such a peer.
      * @param  array<int, list<string>>  $deviceNodes  device_id => its own addresses, member address first (never "missing" towards itself)
+     * @param  list<int>|null  $collected  devices the plugin collects from; null = all of $deviceNodes
      * @return list<array{device_id: int, peer_ip: string, have: list<int>}> peer_ip is the canonical (member) address
      */
-    public static function missing(array $sessions, array $deviceNodes): array
+    public static function missing(array $sessions, array $deviceNodes, ?array $collected = null): array
     {
-        $devices = array_keys($deviceNodes);
-        if (count($devices) < 2) {
+        $devices = $collected ?? array_keys($deviceNodes);
+        if (count(array_keys($deviceNodes)) < 2 || $devices === []) {
             return [];
         }
         /** @var array<string, string> $canonical alias address => member address */
@@ -160,7 +163,7 @@ final class OverlaySessions
             $peer = $canonical[$s['peer_ip']] ?? $s['peer_ip'];
             $have[$peer][$s['device_id']] = true;
         }
-        $threshold = count($devices) === 2 ? 1 : 2;
+        $threshold = count(array_keys($deviceNodes)) === 2 ? 1 : 2;
 
         $missing = [];
         foreach ($have as $peer => $byDevice) {

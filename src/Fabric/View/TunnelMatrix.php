@@ -24,17 +24,19 @@ final class TunnelMatrix
         /** @var \Illuminate\Support\Collection<int, Port> $ports */
         $ports = Port::query()->whereIn('port_id', array_values(array_filter(array_column($tunnels, 'port_id'))) ?: [0])->get()->keyBy('port_id');
 
-        return self::build($tunnels, $nodes->deviceNodes(), fn (int $id) => $ports->get($id));
+        return self::build($tunnels, $nodes->deviceNodes(), fn (int $id) => $ports->get($id), $nodes->collectedIds());
     }
 
     /**
      * @param  list<array<string, mixed>>  $tunnelRows
      * @param  array<int, list<string>>  $deviceNodes
      * @param  (callable(int): (Port|null))|null  $port
+     * @param  list<int>|null  $collected  devices the plugin collects from; null = all of $deviceNodes
      * @return array{by_device: array<int, list<array<string, mixed>>>, total: int, with_port: int, asymmetric: int}
      */
-    public static function build(array $tunnelRows, array $deviceNodes, ?callable $port = null): array
+    public static function build(array $tunnelRows, array $deviceNodes, ?callable $port = null, ?array $collected = null): array
     {
+        $collects = $collected === null ? null : array_flip($collected);
         $addressDevice = [];
         foreach ($deviceNodes as $deviceId => $ips) {
             foreach ($ips as $ip) {
@@ -59,7 +61,9 @@ final class TunnelMatrix
             $target = $addressDevice[$remote] ?? null;
             $portId = $r['port_id'] === null ? null : (int) $r['port_id'];
             $portModel = $portId !== null && $port !== null ? $port($portId) : null;
-            $reverse = $target === null ? null : isset($has[$target][$deviceId]);
+            // unknown (null), not "no", when the far end is a member the plugin never polled:
+            // its tunnel table is empty because nobody asked it (plan §10.4)
+            $reverse = $target === null || ($collects !== null && ! isset($collects[$target])) ? null : isset($has[$target][$deviceId]);
             if ($reverse === false) {
                 $asymmetric++;
             }

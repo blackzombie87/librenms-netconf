@@ -11,6 +11,8 @@ use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
  * Address book of a fabric: every VTEP / router-id address of its members resolved to the
  * device (when monitored), a display name (device name, else the BGP description, else the
  * address) and the role. Shared by the tabs so that a peer address is always shown the same way.
+ * It also answers which of those devices the plugin actually collects from (CollectedDevices):
+ * every symmetry check needs that on both sides, not just on its own (plan §10.4).
  */
 final class FabricNodes
 {
@@ -20,10 +22,13 @@ final class FabricNodes
     /** @var array<int, list<string>> device_id => addresses (member address first) */
     private array $deviceNodes = [];
 
+    /** @var array<int, array{rows: bool, polled: bool}> device_id => what the plugin has from it */
+    private array $collection = [];
+
     /**
      * Build from arrays (tests, replays): member rows first, aliases after their device's member.
      *
-     * @param  list<array{vtep_ip: string, device_id?: int|null, name?: string, role?: string, border?: bool, member?: bool}>  $nodes
+     * @param  list<array{vtep_ip: string, device_id?: int|null, name?: string, role?: string, border?: bool, member?: bool, collected?: bool}>  $nodes
      */
     public static function fromArray(array $nodes): self
     {
@@ -42,6 +47,8 @@ final class FabricNodes
             ];
             if ($deviceId !== null) {
                 $self->deviceNodes[$deviceId][] = $ip;
+                $collected = $n['collected'] ?? true;
+                $self->collection[$deviceId] = ['rows' => $collected, 'polled' => $collected];
             }
         }
 
@@ -75,6 +82,8 @@ final class FabricNodes
                 $self->deviceNodes[$deviceId] = [(string) $m->vtep_ip];
             }
         }
+        $self->collection = CollectedDevices::forDevices($deviceIds);
+
         // alias addresses of the member devices (router-ids that differ from the VTEP)
         foreach (DB::table(TableSchema::tableName('vtep'))->whereIn('device_id', $deviceIds ?: [0])->get(['vtep_ip', 'device_id', 'role', 'border', 'name_hint']) as $v) {
             $ip = (string) $v->vtep_ip;
@@ -137,6 +146,51 @@ final class FabricNodes
     public function deviceNodes(): array
     {
         return $this->deviceNodes;
+    }
+
+    /**
+     * Whether the plugin has EVPN rows from this device — "there is a device row in LibreNMS"
+     * is not the same thing, and only this one makes a member comparable (plan §10.4).
+     */
+    public function isCollected(int $deviceId): bool
+    {
+        return $this->collection[$deviceId]['rows'] ?? false;
+    }
+
+    /** Whether the collector ever completed a run on the device (it may still have no EVPN rows). */
+    public function isPolled(int $deviceId): bool
+    {
+        return $this->collection[$deviceId]['polled'] ?? false;
+    }
+
+    /**
+     * The devices the checks and the symmetry comparisons may judge.
+     *
+     * @return list<int>
+     */
+    public function collectedIds(): array
+    {
+        return array_values(array_filter($this->deviceIds(), fn (int $id) => $this->isCollected($id)));
+    }
+
+    /**
+     * Members that are devices in LibreNMS but deliver nothing to compare.
+     *
+     * @return list<int>
+     */
+    public function uncollectedIds(): array
+    {
+        return array_values(array_filter($this->deviceIds(), fn (int $id) => ! $this->isCollected($id)));
+    }
+
+    /**
+     * deviceNodes() of the collected devices only.
+     *
+     * @return array<int, list<string>>
+     */
+    public function collectedNodes(): array
+    {
+        return array_intersect_key($this->deviceNodes, array_flip($this->collectedIds()));
     }
 
     /**

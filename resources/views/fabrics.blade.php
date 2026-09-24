@@ -52,7 +52,7 @@
                                             @if ($f['notes'])<br><small class="text-muted">{{ \Illuminate\Support\Str::limit($f['notes'], 80) }}</small>@endif
                                         </td>
                                         <td><code>{{ $f['key'] }}</code></td>
-                                        <td class="text-right">{{ $f['members'] }} <small class="text-muted">({{ $f['monitored'] }} monitored)</small></td>
+                                        <td class="text-right">{{ $f['members'] }} <small class="text-muted">({{ $f['monitored'] }} polled)</small></td>
                                         <td>@include('netconf::fabric.roles', ['roles' => $f['roles'], 'border' => $f['border']])</td>
                                         <td class="text-right">{{ $f['totals']['instances'] }}</td>
                                         <td class="text-right">{{ $f['totals']['vnis'] }}</td>

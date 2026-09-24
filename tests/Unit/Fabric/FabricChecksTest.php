@@ -197,6 +197,85 @@ it('reports duplicate MACs, mobility, parameter skew, version skew, tunnels and 
         ->and(array_keys($issues))->toBe(['dup-mac', 'dup-mac-params', 'mac-mobility', 'member-not-polling', 'tunnel-asymmetric', 'tunnel-errors', 'unknown-vtep', 'version-skew']);   // critical first, then by check
 });
 
+/**
+ * Two leaves and a third member that is a device in LibreNMS with nothing collected from it —
+ * the MX204 shape of plan §10.4. Both leaves peer with it, flood to it and have a tunnel to it.
+ *
+ * @return array<string, list<Issue>>
+ */
+function issuesAroundAnEmptyMember(FabricNodes $nodes): array
+{
+    $vniRow = fn (int $device, int $vni) => ['device_id' => $device, 'vni' => $vni, 'instance' => 'MACVRF-A', 'vlan_id' => 100, 'vlan_name' => null, 'source_vtep' => null, 'multicast_group' => null, 'irb_ifname' => null, 'irb_status' => null, 'remote_macs' => 0];
+
+    return byCheck(FabricChecks::evaluate($nodes, new CheckInput(
+        neighbors: [
+            ['device_id' => 11, 'instance' => 'MACVRF-A', 'neighbor_ip' => '192.0.2.62', 'mac_routes' => 1, 'mac_ip_routes' => 0],
+            ['device_id' => 11, 'instance' => 'MACVRF-A', 'neighbor_ip' => '192.0.2.63', 'mac_routes' => 1, 'mac_ip_routes' => 0],
+            ['device_id' => 12, 'instance' => 'MACVRF-A', 'neighbor_ip' => '192.0.2.61', 'mac_routes' => 1, 'mac_ip_routes' => 0],
+            ['device_id' => 12, 'instance' => 'MACVRF-A', 'neighbor_ip' => '192.0.2.63', 'mac_routes' => 1, 'mac_ip_routes' => 0],
+        ],
+        missingSessions: OverlaySessions::missing([
+            ['device_id' => 11, 'peer_ip' => '192.0.2.62'], ['device_id' => 11, 'peer_ip' => '192.0.2.63'],
+            ['device_id' => 12, 'peer_ip' => '192.0.2.61'], ['device_id' => 12, 'peer_ip' => '192.0.2.63'],
+        ], $nodes->deviceNodes(), $nodes->collectedIds()),
+        vnis: VniMatrix::build(
+            [$vniRow(11, 10010), $vniRow(12, 10010)],
+            [
+                ['device_id' => 11, 'vni' => 10010, 'remote_vtep_ip' => '192.0.2.62'], ['device_id' => 11, 'vni' => 10010, 'remote_vtep_ip' => '192.0.2.63'],
+                ['device_id' => 12, 'vni' => 10010, 'remote_vtep_ip' => '192.0.2.61'], ['device_id' => 12, 'vni' => 10010, 'remote_vtep_ip' => '192.0.2.63'],
+            ],
+            $nodes->deviceNodes(),
+            $nodes->collectedIds(),
+        ),
+        tunnels: TunnelMatrix::build(
+            [
+                ['device_id' => 11, 'remote_vtep_ip' => '192.0.2.62', 'ifname' => 'vtep.32770', 'port_id' => null],
+                ['device_id' => 11, 'remote_vtep_ip' => '192.0.2.63', 'ifname' => 'vtep.32771', 'port_id' => null],
+                ['device_id' => 12, 'remote_vtep_ip' => '192.0.2.61', 'ifname' => 'vtep.32770', 'port_id' => null],
+                ['device_id' => 12, 'remote_vtep_ip' => '192.0.2.63', 'ifname' => 'vtep.32771', 'port_id' => null],
+            ],
+            $nodes->deviceNodes(),
+            null,
+            $nodes->collectedIds(),
+        )['by_device'],
+    )));
+}
+
+function fabricWithAnEmptyMember(bool $collected): FabricNodes
+{
+    return FabricNodes::fromArray([
+        ['vtep_ip' => '192.0.2.61', 'device_id' => 11, 'name' => 'leaf-a', 'role' => 'leaf'],
+        ['vtep_ip' => '192.0.2.62', 'device_id' => 12, 'name' => 'leaf-b', 'role' => 'leaf'],
+        ['vtep_ip' => '192.0.2.63', 'device_id' => 13, 'name' => 'router-x', 'role' => 'gateway', 'collected' => $collected],
+    ]);
+}
+
+/**
+ * Plan §10.4: two MX204s whose loopbacks are fabric VTEPs are devices in LibreNMS, but NETCONF
+ * was never enabled on them. Taking "there is a device row" for "the plugin polls it" made every
+ * symmetry check compare a full leaf against their empty tables — 1,442 issues on the first
+ * production fabric, while nothing said what was actually true: nobody asked them.
+ */
+it('does not judge a member the plugin has no data from, and says so once', function () {
+    $issues = issuesAroundAnEmptyMember(fabricWithAnEmptyMember(false));
+
+    expect(array_keys($issues))->toBe(['member-not-collected'])
+        ->and($issues['member-not-collected'])->toHaveCount(1)
+        ->and($issues['member-not-collected'][0]->message)->toBe('router-x is a fabric member in LibreNMS that the plugin does not poll — enable NETCONF on it to complete the fabric view')
+        ->and($issues['member-not-collected'][0]->deviceIds)->toBe([13]);
+});
+
+it('would blame that member for everything if it counted as collected', function () {
+    // the same fabric as 1.2.x saw it: one member, six issues across three checks, every one
+    // of them a false positive about a device that was never asked (the production fabric added
+    // `session-missing`, which needs two other members to have the peer this one lacks)
+    $issues = issuesAroundAnEmptyMember(fabricWithAnEmptyMember(true));
+
+    expect(array_keys($issues))->toBe(['neighbor-asymmetric', 'tunnel-asymmetric', 'vni-stale-flood'])
+        ->and(count($issues, COUNT_RECURSIVE) - count($issues))->toBe(6)
+        ->and($issues['vni-stale-flood'][0]->message)->toBe('VNI 10010: leaf-a floods to router-x, which does not carry the VNI');
+});
+
 it('has a label, default severity and description for every check it can raise', function () {
     $source = file_get_contents(__DIR__ . '/../../../src/Fabric/Checks/FabricChecks.php');
     preg_match_all("/new Issue\('([a-z-]+)'/", (string) $source, $m);
