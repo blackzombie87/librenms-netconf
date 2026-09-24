@@ -96,6 +96,47 @@ final class IssueStoreTest extends LibrenmsTestCase
         $this->assertSame('gap 1 (now on ae7)', DB::table(IssueStore::TABLE)->where('subject', '10001/1>2')->value('message'));
     }
 
+    /**
+     * Plan §10.6: onboarding twelve leaves wrote 67,335 `netconf-evpn` eventlog rows in 13
+     * minutes, 37% of the instance's whole eventlog, because every appearing issue is logged
+     * on every device it involves. A burst of one check is one row now.
+     */
+    public function testABurstOfOneCheckIsSummarisedInTheEventlog(): void
+    {
+        $fabricId = $this->fabric();
+        $a = Device::factory()->create(['hostname' => 'leaf-a.example.net'])->device_id;
+        $b = Device::factory()->create(['hostname' => 'leaf-b.example.net'])->device_id;
+        $gaps = fn (int $count) => array_map(
+            fn (int $i) => new Issue('vni-flood-gap', Issue::CRITICAL, "1000$i/1>2", "VNI 1000$i: flood list of leaf-a lacks leaf-b", [$a, $b]),
+            range(1, $count),
+        );
+        $store = new IssueStore;
+        $rows = fn () => DB::table('eventlog')->where('type', IssueStore::EVENT_TYPE)->orderBy('event_id')->get(['device_id', 'message'])->map(fn ($r) => (array) $r)->all();
+
+        // up to the limit every issue is logged on every device it involves, as before
+        $store->sync($fabricId, $gaps(IssueStore::LOG_LIMIT), '2026-09-24 10:00:00');
+        $this->assertCount(2 * IssueStore::LOG_LIMIT, $rows());
+
+        // one more, appearing at once, and the whole appearance is one fabric-level row
+        $store->sync($fabricId, [], '2026-09-24 10:02:00');
+        DB::table('eventlog')->delete();
+        $store->sync($fabricId, $gaps(IssueStore::LOG_LIMIT + 1), '2026-09-24 10:05:00');
+        $logged = $rows();
+        $this->assertCount(1, $logged);
+        $this->assertNull($logged[0]['device_id']);
+        $this->assertSame(
+            sprintf('EVPN fabric check vni-flood-gap: %d issues appeared in one resolve on 2 devices — see the fabric\'s Checks tab', IssueStore::LOG_LIMIT + 1),
+            $logged[0]['message'],
+        );
+
+        // and so is the resolve that clears them again
+        DB::table('eventlog')->delete();
+        $store->sync($fabricId, [], '2026-09-24 10:10:00');
+        $logged = $rows();
+        $this->assertCount(1, $logged);
+        $this->assertStringContainsString(sprintf('%d issues cleared in one resolve', IssueStore::LOG_LIMIT + 1), $logged[0]['message']);
+    }
+
     public function testRowsWithTheOldKeyShapeAreReKeyedWithoutAnEventlogEntry(): void
     {
         $fabricId = $this->fabric();

@@ -21,6 +21,24 @@ class IssueStore
     public const EVENT_TYPE = 'netconf-evpn';
 
     /**
+     * How many issues of one check a resolve may log one by one before the eventlog gets a
+     * single summary row instead (plan §10.6). Onboarding twelve leaves wrote 67,335
+     * `netconf-evpn` rows in 13 minutes — 37% of that instance's whole eventlog — because
+     * every appearing issue is logged on every device it involves. X1 and X2 take ~99% of
+     * that volume away but do not bound it: a fabric that really changes, or a member that
+     * comes back after an outage, produces a burst again.
+     */
+    public const LOG_LIMIT = 10;
+
+    /**
+     * Eventlog entries of the sync in progress, grouped by check and what happened, so a burst
+     * can be summarised instead of written out one by one.
+     *
+     * @var array<string, array{severity: Severity, entries: list<array{ids: list<int>, message: string}>}>
+     */
+    private array $pending = [];
+
+    /**
      * @param  list<Issue>  $issues
      * @return array{total: int, new: int, cleared: int, changed: int}
      */
@@ -73,7 +91,7 @@ class IssueStore
                     'last_seen' => $now,
                 ]);
                 $this->writeDevices($id, $ids);
-                $this->logTo($ids, self::severity($issue->severity), sprintf('EVPN fabric check %s: %s', $issue->check, $issue->message));
+                $this->queueLog($issue->check, 'appeared', $ids, self::severity($issue->severity), sprintf('EVPN fabric check %s: %s', $issue->check, $issue->message));
                 $new++;
                 continue;
             }
@@ -91,7 +109,7 @@ class IssueStore
             }
             if ((string) $row->severity !== $issue->severity) {
                 $update['severity'] = $issue->severity;
-                $this->logTo($ids, self::severity($issue->severity), sprintf('EVPN fabric check %s is now %s: %s', $issue->check, $issue->severity, $issue->message));
+                $this->queueLog($issue->check, 'changed severity', $ids, self::severity($issue->severity), sprintf('EVPN fabric check %s is now %s: %s', $issue->check, $issue->severity, $issue->message));
                 $changed++;
             }
             if ($update === []) {
@@ -119,11 +137,61 @@ class IssueStore
             $ids = $devices[(int) $row->id] ?? [];
             DB::table(self::DEVICE_TABLE)->where('issue_id', $row->id)->delete();
             DB::table(self::TABLE)->where('id', $row->id)->delete();
-            $this->logTo($ids, Severity::Ok, sprintf('EVPN fabric check %s cleared: %s', $row->check, $row->message));
+            $this->queueLog((string) $row->check, 'cleared', $ids, Severity::Ok, sprintf('EVPN fabric check %s cleared: %s', $row->check, $row->message));
             $cleared++;
         }
 
+        $this->flushLog();
+
         return ['total' => count($seen), 'new' => $new, 'cleared' => $cleared, 'changed' => $changed];
+    }
+
+    /**
+     * @param  list<int>  $ids
+     */
+    private function queueLog(string $check, string $what, array $ids, Severity $severity, string $message): void
+    {
+        $key = $check . '|' . $what;
+        $this->pending[$key] ??= ['severity' => $severity, 'entries' => []];
+        if ($severity->value > $this->pending[$key]['severity']->value) {
+            $this->pending[$key]['severity'] = $severity;
+        }
+        $this->pending[$key]['entries'][] = ['ids' => $ids, 'message' => $message];
+    }
+
+    /**
+     * Write what the sync queued: one entry per issue and device while a check stays under
+     * LOG_LIMIT, one fabric-level summary above it. An operator reading the eventlog learns the
+     * same thing from "1,945 vni-flood-gap issues appeared" as from 21,395 rows, and the
+     * Checks tab has the detail.
+     */
+    private function flushLog(): void
+    {
+        foreach ($this->pending as $key => $group) {
+            [$check, $what] = explode('|', $key, 2);
+            if (count($group['entries']) <= self::LOG_LIMIT) {
+                foreach ($group['entries'] as $entry) {
+                    $this->logTo($entry['ids'], $group['severity'], $entry['message']);
+                }
+
+                continue;
+            }
+            $devices = [];
+            foreach ($group['entries'] as $entry) {
+                foreach ($entry['ids'] as $id) {
+                    $devices[$id] = true;
+                }
+            }
+            $this->logTo([], $group['severity'], sprintf(
+                'EVPN fabric check %s: %d issues %s in one resolve on %d device%s — see the fabric\'s Checks tab',
+                $check,
+                count($group['entries']),
+                $what,
+                count($devices),
+                count($devices) === 1 ? '' : 's',
+            ));
+        }
+        $this->pending = [];
     }
 
     /**

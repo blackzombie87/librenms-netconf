@@ -555,7 +555,10 @@ Alerting hooks, in the order you will probably use them:
 
 - **Eventlog** entries of type `netconf-evpn` when an issue appears (severity error / warning /
   notice), changes severity or clears (ok), on every monitored device the issue involves; a
-  fabric-level finding (unknown VTEP, version skew) is logged without a device.
+  fabric-level finding (unknown VTEP, version skew) is logged without a device. More than ten
+  issues of one check in a single resolve are summarised in one fabric-level row instead —
+  onboarding a whole fabric, or a member coming back after an outage, would otherwise fill the
+  eventlog with thousands of rows that say the same thing.
 - A **count sensor "EVPN fabric critical issues"** (`netconf-evpn-fabric-issues`, `limit: 0`) on
   every monitored member with the number of **critical** issues that involve it, recorded by
   the member's own poll (so it reflects the resolve before that poll). Alert on it like on
