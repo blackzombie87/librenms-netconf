@@ -32,7 +32,16 @@ this version: license expiry (see `CHANGELOG.md`).
 ```bash
 cd /opt/librenms
 ./lnms plugin:add saffer-it/librenms-netconf
+./lnms route:cache
 ```
+
+`route:cache` is not optional on a production install: LibreNMS caches its routes in
+`composer install` (`artisan optimize`), `plugin:add` does not refresh that cache, and until it
+is rebuilt the plugin's pages and menu entry are missing. `lnms plugin:enable netconf` rebuilds
+it too, and `daily.sh` clears it on the next update. Since 1.2.1 the plugin notices the state,
+hides its own UI and writes a notification instead of breaking the page; older versions took the
+whole web UI down, because the plugin menu entry is rendered from LibreNMS's own menu on every
+page. `artisan cache:clear` does *not* help here — that is the application cache.
 
 The plugin is enabled automatically. Open *Overview → Plugins → Plugin Admin → netconf* to
 set the global defaults (transport, port, username, password or SSH key). The *poll budget*
@@ -40,18 +49,34 @@ there is a scheduling budget: the collector checks it between commands and stops
 ones once it is spent, so a run takes the budget plus the command in flight, extraction and
 storage; it does not abort a command.
 
-Then run the migrations and enable devices:
+Then run the migrations:
 
 ```bash
 ./lnms migrate
+```
+
+### Enabling your first device
+
+In the web UI: open the device, go to its **NETCONF** tab and press *Enable NETCONF for this
+device*, then *Test connection* and *Discover now*. The tab is offered on every device a shipped
+definition matches (Junos today) as soon as you are an admin, so this is the path for a single
+device. Credentials for that one device (if it differs from the global settings) are on the tab's
+*Edit* section.
+
+For a fleet, the *NETCONF* status page (Plugins menu) enables every device of a device group
+and/or os at once, and *Enable for all devices* on the settings page turns it on globally.
+
+The same from the command line:
+
+```bash
 ./lnms netconf:device leaf1 --enable            # uses the global credentials
 ./lnms netconf:device leaf1 --enable --set-username=librenms --set-key=/opt/librenms/.ssh/netconf_ed25519
+./lnms netconf:device --os=junos --enable       # or --group=<name>
 ./lnms device:discover leaf1 -m netconf         # creates the sensors
 ./lnms device:poll leaf1 -m netconf             # records values (the regular poller does this every cycle)
 ```
 
-Instead of enabling devices one by one, set *Enable for all devices* on the settings page;
-`--disable` then opts a device out. The module also appears in the device's *Modules* tab.
+`--disable` opts a device out again. The module also appears in the device's *Modules* tab.
 
 ## Web UI
 
@@ -638,8 +663,9 @@ version, run `plugin:add` again, then the migrations:
 
 ```bash
 ./lnms plugin:add saffer-it/librenms-netconf            # newest release within the constraint
-./lnms plugin:add saffer-it/librenms-netconf 1.2.0      # a specific version
+./lnms plugin:add saffer-it/librenms-netconf 1.2.1      # a specific version
 ./lnms migrate
+./lnms route:cache                                      # new routes reach a cached installation
 ```
 
 Read the *Upgrade notes* of the release in `CHANGELOG.md` first; nothing has to be

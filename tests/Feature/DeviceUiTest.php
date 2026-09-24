@@ -74,7 +74,9 @@ final class DeviceUiTest extends LibrenmsTestCase
 
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
         $tab = new NetconfTab;
-        $this->assertFalse($tab->visible(Device::factory()->create(['os' => 'junos'])));
+        // an os no definition matches is never offered a tab; the junos device an admin could
+        // enable is (plan §9.2 W1, DeviceOnboardingTest covers that path)
+        $this->assertFalse($tab->visible(Device::factory()->create(['os' => 'linux'])));
         $this->assertTrue($tab->visible($this->polledDevice()));
     }
 

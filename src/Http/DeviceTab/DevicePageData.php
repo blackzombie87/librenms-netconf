@@ -83,6 +83,34 @@ final class DevicePageData
             'metric_rows' => NetconfMetric::query()->where('device_id', $device->device_id)->count(),
             'port_rows' => NetconfPortMetric::query()->where('device_id', $device->device_id)->count(),
             'fabric_badge' => $fabric ? DeviceBadge::forDevice($device->device_id) : null,
+            'onboarding' => self::onboarding($device, $service),
+        ];
+    }
+
+    /**
+     * The "enable this device" call to action (plan §9.2 W2): shown to an admin on a device the
+     * plugin could collect from but is not enabled for. This is the only discoverable web path
+     * to enable a single device — the status page's bulk form selects by group or os.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function onboarding(Device $device, NetconfService $service): ?array
+    {
+        if ($service->isEnabled($device) || ! Gate::allows('admin')) {
+            return null;
+        }
+
+        try {
+            // describe() reports secrets as set/missing, never their value
+            $credentials = app(DeviceCredentials::class)->forDevice($device)->describe();
+        } catch (\Throwable $e) {
+            $credentials = ['error' => $e->getMessage()];
+        }
+
+        return [
+            'attrib' => DeviceSettings::enabledAttrib($device),   // '0' = switched off here, null = global default
+            'credentials' => $credentials,
+            'has_overrides' => DeviceSettings::current($device) !== [],
         ];
     }
 

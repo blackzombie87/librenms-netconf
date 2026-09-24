@@ -123,6 +123,9 @@
                         </select>
                         <button type="submit" class="btn btn-primary">Apply</button>
                     </form>
+                    <small class="text-muted">One device at a time: open it and use the <strong>NETCONF</strong> tab &mdash;
+                        the tab is offered on every device a definition matches, with an <em>Enable</em> button on its status section
+                        (<code>lnms netconf:device &lt;device&gt; --enable</code> does the same).</small>
                     @if ($bulk)
                         @if ($bulk['error'])
                             <div class="alert alert-danger tw:mt-2">{{ $bulk['error'] }}</div>

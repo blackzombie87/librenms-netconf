@@ -6,6 +6,10 @@
             <div class="panel-body">
                 @include('netconf::device-tab.result')
 
+                @if ($onboarding)
+                    @include('netconf::device-tab.enable')
+                @endif
+
                 <table class="table table-condensed">
                     <tr><th style="width: 30%;">Polling</th><td>
                         @if ($enabled)<span class="label label-success">enabled</span>@else<span class="label label-default">disabled</span>@endif

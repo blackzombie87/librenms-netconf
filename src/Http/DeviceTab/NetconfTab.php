@@ -17,7 +17,7 @@ final class NetconfTab implements DeviceTab
 {
     public function visible(Device $device): bool
     {
-        return DevicePage::offered($device);
+        return DevicePage::offerable($device);
     }
 
     public function slug(): string

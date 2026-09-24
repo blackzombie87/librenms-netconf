@@ -60,8 +60,21 @@ class DeviceController extends Controller
             $device->save();
         }
 
-        return redirect(DevicePage::url($device->device_id, 'edit'))
-            ->with('netconf_result', ['type' => 'success', 'title' => 'Saved', 'lines' => $changes ?: ['no changes']]);
+        // the onboarding panel (plan §9.2 W2) posts nothing but enabled=1: return to the status
+        // section, where Test connection and Discover now are the next click. The edit form
+        // posts its credential fields and returns to itself.
+        $quickEnable = ($data['enabled'] ?? null) === '1'
+            && array_diff(array_keys($request->except('_token')), ['enabled']) === [];
+
+        return redirect(DevicePage::url($device->device_id, $quickEnable ? 'status' : 'edit'))
+            ->with('netconf_result', [
+                'type' => 'success',
+                'title' => 'Saved',
+                'lines' => array_merge(
+                    $changes ?: ['no changes'],
+                    $quickEnable ? ['Test the connection, then run discovery to create the sensors.'] : [],
+                ),
+            ]);
     }
 
     public function test(Device $device, DeviceCredentials $credentials, TransportFactory $transports): RedirectResponse
