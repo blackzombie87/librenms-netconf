@@ -17,7 +17,7 @@ class Page implements SinglePageHook
 {
     public function authorize(): bool
     {
-        return PluginRoutes::available() && Gate::allows('global-read');
+        return PluginRoutes::availableOrWarn() && Gate::allows('global-read');
     }
 
     /**

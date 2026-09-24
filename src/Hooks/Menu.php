@@ -12,7 +12,7 @@ class Menu implements MenuEntryHook
     {
         // no routes, no menu entry: the entry is rendered from core's menu partial on every
         // page, so an unresolvable route() here is a site outage (plan §9.1 I1)
-        return PluginRoutes::available() && Gate::allows('global-read');
+        return PluginRoutes::availableOrWarn() && Gate::allows('global-read');
     }
 
     /**

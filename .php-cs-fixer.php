@@ -156,6 +156,7 @@ $finder = Finder::create()
     ])
     ->name('*.php')
     ->notName('*.blade.php')
+    ->notName('*.local.php')   // dev/*.local.* are git-ignored throw-away scripts
     ->ignoreDotFiles(true)
     ->ignoreVCS(true);
 

@@ -35,7 +35,7 @@ final class DevicePage
      */
     public static function offered(Device $device): bool
     {
-        if (! PluginRoutes::available()) {
+        if (! PluginRoutes::availableOrWarn()) {
             return false;   // the pages this would link to are not registered (plan §9.1)
         }
 

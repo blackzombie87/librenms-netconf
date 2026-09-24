@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## 1.2.2 – 2026-09-24
+
+One fix: the route-cache warning 1.2.1 introduced fired on healthy installations.
+
+Fixes:
+
+- The *"routes are not in the cached route file"* warning is no longer raised on installations
+  whose routes are perfectly fine. 1.2.1 decided at boot, from an `$app->booted()` callback;
+  Laravel does not load a cached route file during boot but requires it from a booted() callback
+  of its own, and that queue is FIFO and still growing while it is drained — so on some
+  installations the check ran before the routes existed and logged a warning on *every* request
+  and *every* poll, raised a LibreNMS notification that could not be made to go away, and told
+  the admin to run a command that changes nothing. The question is now asked where it is
+  answerable: the first hook render that finds the routes missing warns, once per process. A
+  poller, where nothing renders and the route cache is irrelevant, stays quiet. The real
+  missing-routes state (plan §9.1 I1) is reported exactly as before.
 
 Documentation:
 

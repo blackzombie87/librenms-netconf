@@ -17,7 +17,7 @@ class PortTab implements PortTabHook
 {
     public function authorize(Port $port): bool
     {
-        return PluginRoutes::available()
+        return PluginRoutes::availableOrWarn()
             && Gate::allows('view', $port->device)
             && NetconfPortMetric::query()->where('port_id', $port->port_id)->exists();
     }

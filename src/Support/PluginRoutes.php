@@ -15,8 +15,9 @@ use LibreNMS\Util\Notifications;
  * production poller rendered a menu entry for a route that did not exist — and because the menu
  * is core's own partial, that took every page down, not just the plugin's.
  *
- * Every hook asks here before it renders, so a missing route cache costs the plugin's UI and
- * nothing else, and the admin is told what to run.
+ * Every hook asks `availableOrWarn()` before it renders, so a missing route cache costs the
+ * plugin's UI and nothing else, and the admin is told what to run — at the point of use, which
+ * is the only moment the answer is reliable (plan §10.9).
  */
 final class PluginRoutes
 {
@@ -30,10 +31,42 @@ final class PluginRoutes
 
     private static bool $warned = false;
 
+    /** Whether the application booted with a cached route file; false until a provider says. */
+    private static bool $routesAreCached = false;
+
     /** Not memoised: the test suite boots the application more than once per process. */
     public static function available(): bool
     {
         return Route::has(self::CANARY);
+    }
+
+    /**
+     * What every hook asks before it renders: are the routes there, and if not, say so once.
+     *
+     * The answer is only reliable here. Laravel does not load a cached route file during
+     * boot() — `RouteServiceProvider::register()` queues a booted() callback which queues
+     * another one that finally requires the file — and booted() is a FIFO queue that keeps
+     * growing while it is drained, so a check queued from a provider's boot() may run on
+     * either side of that require. 1.2.1 checked there and told a healthy production poller
+     * to run `lnms route:cache` on every request and every poll (plan §10.9). A render is
+     * safely after the require, and in a poller process nothing renders, which is also where
+     * the route cache is irrelevant.
+     */
+    public static function availableOrWarn(): bool
+    {
+        if (self::available()) {
+            return true;
+        }
+
+        self::warnIfMissing();
+
+        return false;
+    }
+
+    /** Set from the plugin provider's boot(): the file either exists at that point or it does not. */
+    public static function rememberRouteCache(bool $routesAreCached): void
+    {
+        self::$routesAreCached = $routesAreCached;
     }
 
     /**
@@ -47,13 +80,13 @@ final class PluginRoutes
     }
 
     /**
-     * Tell the admin what to run, once per process and once in the notification list. Called
-     * after every provider has booted, so a cached route file that merely loads late is not
-     * mistaken for a missing one.
+     * Tell the admin what to run, once per process and once in the notification list. Only
+     * while the routes come from a cached file: that is the state the message describes, and
+     * it is the only one `lnms route:cache` fixes.
      */
-    public static function warnIfMissing(bool $routesAreCached): void
+    public static function warnIfMissing(): void
     {
-        if (self::$warned || ! $routesAreCached || self::available()) {
+        if (self::$warned || ! self::$routesAreCached || self::available()) {
             return;
         }
 

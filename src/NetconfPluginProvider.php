@@ -77,10 +77,12 @@ class NetconfPluginProvider extends ServiceProvider
         }
 
         // a no-op while LibreNMS has a cached route file that predates the plugin (plan §9.1):
-        // the hooks below ask PluginRoutes::available() before they render anything
+        // the hooks below ask PluginRoutes::availableOrWarn() before they render anything
         $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
-        $routesAreCached = $this->app instanceof CachesRoutes && $this->app->routesAreCached();
-        $this->app->booted(fn () => PluginRoutes::warnIfMissing($routesAreCached));
+        // only remembered here; whether the routes are missing is decided on the first hook
+        // render, because Laravel requires a cached route file from a booted() callback of its
+        // own and a check queued at boot lands on either side of it (plan §10.9)
+        PluginRoutes::rememberRouteCache($this->app instanceof CachesRoutes && $this->app->routesAreCached());
         // the NETCONF device tab (plan §8 U2); without the core seam the standalone pages stay
         TabRegistration::register(__DIR__ . '/../resources/lnms-views');
 
