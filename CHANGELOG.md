@@ -2,8 +2,42 @@
 
 ## Unreleased
 
+## 1.2.1 – 2026-09-24
+
+The first install on a production poller found two things: a plugin whose routes are missing
+took the whole LibreNMS web UI down, and a single device could not be enabled from the web UI
+at all. Both are fixed. No new tables and no migration.
+
+**Upgrade notes.** Run `lnms route:cache` after `lnms plugin:add` (the README installation and
+upgrade sections now say so). LibreNMS caches its routes during `composer install`; `plugin:add`
+does not refresh that cache, so without this step the plugin's pages and menu entry are missing —
+in 1.2.0 and earlier the missing menu route ended every page in a 500. If you are reading this
+because your LibreNMS is down after installing the plugin, `lnms route:cache` brings it back.
+
+Fixes:
+
+- A cached route file that predates the plugin no longer breaks LibreNMS. Every hook asks
+  whether the plugin's routes are registered before it renders, so the menu entry, the device
+  tab, the overview panel and the port tab stay away in that state instead of resolving a route
+  that does not exist — the menu entry is rendered from LibreNMS's own menu partial on every
+  page, which is why one missing route took down the UI and not just the plugin. The plugin
+  logs the cause and raises a notification naming `lnms route:cache`.
+
+New:
+
+- A single device can be enabled from the web UI. The NETCONF tab is offered to admins on every
+  device a shipped definition matches (Junos today), not only on devices that are already
+  enabled or have been polled; its status section then shows what would be collected, which
+  login would be used (never a secret) and an *Enable NETCONF for this device* button, and
+  returns to the status section afterwards, where *Test connection* and *Discover now* are the
+  next click. Until now the tab and the overview panel were both hidden until the device was
+  enabled, and the status page's bulk form only selects by device group or os, so one device
+  meant the command line. Non-admins see no change; a device no definition matches gets no tab.
+
 Development:
 
+- CI runs the feature suite against the current LibreNMS (26.9.1.1) as well as the pinned
+  26.7.0 the development container uses.
 - The LibreNMS-backed static analysis registers that checkout's autoloader behind its own
   instead of in front of it. A LibreNMS installed with its dev dependencies — what CI does —
   brings its own PHPStan and Larastan, which then served classes to the newer pair the
