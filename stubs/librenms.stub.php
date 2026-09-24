@@ -482,6 +482,19 @@ namespace LibreNMS\Data\Graphing {
 }
 
 namespace LibreNMS\Util {
+    /** Device links; the views use deviceLink(), the topology payload the URL alone. */
+    class Url
+    {
+        /**
+         * @param  \Illuminate\Database\Eloquent\Model|int  $device
+         * @param  array<string, mixed>  $vars
+         */
+        public static function deviceUrl($device, $vars = []): string
+        {
+            return '';
+        }
+    }
+
     /** Core's notification list (used for the route-cache warning, plan §9.1 I3). */
     class Notifications
     {

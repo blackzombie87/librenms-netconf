@@ -1,7 +1,8 @@
-{{-- inline SVG topology: $topology (Topology::layout()), $nodes (FabricNodes) --}}
+{{-- topology: the interactive map (vis-network) with the inline SVG as the static fallback --}}
 @php($t = $topology)
-<div class="netconf-topology">
-    <div style="margin-bottom: 6px;">
+@include('netconf::fabric.topology-net')
+<div class="netconf-topology" id="nt-static-wrap">
+    <div class="nt-bar">
         <label class="checkbox-inline"><input type="checkbox" checked onchange="document.getElementById('nt-svg').classList.toggle('nt-hide-overlay', !this.checked)"> overlay neighbours <small class="text-muted">({{ count($t['overlay']) }})</small></label>
         <label class="checkbox-inline"><input type="checkbox" checked onchange="document.getElementById('nt-svg').classList.toggle('nt-hide-esi', !this.checked)"> ESI pairs <small class="text-muted">({{ count($t['esi']) }})</small></label>
         <label class="checkbox-inline"><input type="checkbox" checked onchange="document.getElementById('nt-svg').classList.toggle('nt-hide-labels', !this.checked)"> link labels</label>
@@ -13,12 +14,16 @@
             <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#337ab7" stroke-width="1" stroke-dasharray="3 3"/></svg> overlay
             <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#f0ad4e" stroke-width="2"/></svg> ESI pair
         </span>
+        <span class="pull-right"><button type="button" class="btn btn-default btn-xs" id="nt-interactive-on">interactive map</button></span>
     </div>
     <style>
         .nt-hide-overlay .nt-overlay, .nt-hide-esi .nt-esi, .nt-hide-labels .nt-label { display: none; }
         .netconf-topology svg text { font-family: inherit; }
         .netconf-topology a { text-decoration: none; }
         .netconf-topology .nt-node:hover rect { stroke-width: 2.5; }
+        .nt-bar { margin-bottom: 6px; }
+        #nt-net { height: 62vh; min-height: 420px; border: 1px solid #ddd; border-radius: 4px; }
+        #nt-net-wrap .vis-network:focus { outline: none; }
     </style>
     <div style="overflow-x: auto;">
         <svg id="nt-svg" width="{{ $t['width'] }}" height="{{ $t['height'] }}" viewBox="0 0 {{ $t['width'] }} {{ $t['height'] }}" xmlns="http://www.w3.org/2000/svg" style="display: block; max-width: 100%; height: auto;">
@@ -88,5 +93,6 @@
     <p class="text-muted" style="margin-top: 6px;"><small>
         Underlay links come from core IPv4 subnets, BGP / OSPF sessions and LLDP between members (plan §7.6); a short stub is a session whose far end is not a fabric member yet.
         Overlay arcs are the EVPN neighbour lists of the monitored members; red when only one monitored side lists the other. Dashed boxes are VTEPs without a monitored device.
+        This picture puts every member in one row — fine for a handful, tight beyond that; the <em>interactive map</em> is the one that scales.
     </small></p>
 </div>

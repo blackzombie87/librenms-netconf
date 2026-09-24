@@ -26,6 +26,13 @@ final class Topology
     public const MARGIN = 24;
 
     /**
+     * Above this many overlay pairs the arcs are off when the tab opens: a full mesh of n
+     * members is n(n-1)/2 arcs — 91 at 14 members — and drawing them all says less than the
+     * sentence "full mesh of 14 members" does.
+     */
+    public const OVERLAY_ARC_LIMIT = 40;
+
+    /**
      * @return array<string, mixed> see layout()
      */
     public static function forFabric(int $fabricId, FabricNodes $nodes): array
@@ -113,6 +120,118 @@ final class Topology
         }
 
         return self::layout($input, $underlay, $overlay, array_values($esiPairs));
+    }
+
+    /**
+     * The same graph as a node/edge list for the interactive map (vis-network, which LibreNMS
+     * ships), with the static layout's coordinates as the starting positions so the physics
+     * begins from something sensible instead of a random cloud, and the sites stay recognisable.
+     *
+     * The static SVG puts every member in one row: at 14 members it is 1,968 px wide and the
+     * browser scales it down until the labels are unreadable, and the row cannot grow.
+     *
+     * @param  array<string, mixed>  $layout  the result of layout()
+     * @return array{nodes: list<array<string, mixed>>, edges: list<array<string, mixed>>, sites: list<array{key: string, label: string|null}>, overlay_pairs: int, overlay_default: bool, mesh: array{complete: bool, members: int, pairs: int, asymmetric: int}}
+     */
+    public static function graph(array $layout, FabricNodes $nodes): array
+    {
+        /** @var array<string, array<string, mixed>> $placed */
+        $placed = $layout['nodes'];
+        $sites = [];
+        $visNodes = [];
+        foreach ($placed as $ip => $n) {
+            $site = is_string($n['site'] ?? null) ? (string) $n['site'] : null;
+            $key = $site ?? ($n['layer'] === 'top' ? '_top' : '_other');
+            $sites[$key] ??= ['key' => $key, 'label' => $site];
+            $device = $nodes->device((string) $ip);
+            $visNodes[] = [
+                'id' => (string) $ip,
+                'name' => (string) $n['name'],
+                'ip' => (string) $ip,
+                'role' => (string) $n['role'],
+                'border' => (bool) $n['border'],
+                'site' => $key,
+                'site_label' => $site,
+                'monitored' => $n['device_id'] !== null,
+                'collected' => $n['device_id'] !== null && $nodes->isCollected((int) $n['device_id']),
+                'down' => $n['status'] === false,
+                'url' => $device === null ? null : \LibreNMS\Util\Url::deviceUrl($device),
+                'x' => (int) $n['x'],
+                'y' => (int) $n['y'],
+            ];
+        }
+
+        $edges = [];
+        foreach ($layout['underlay'] as $e) {
+            $edges[] = [
+                'kind' => $e['protocol'] === 'lldp-only' ? 'lldp' : ($e['wan'] ? 'wan' : 'underlay'),
+                'from' => (string) $e['a'],
+                'to' => (string) $e['b'],
+                'label' => trim(((string) $e['protocol']) . ' ' . ((string) ($e['state'] ?? ''))),
+                'up' => $e['up'],
+                'title' => sprintf(
+                    '%s %s ↔ %s %s: %s %s%s%s',
+                    $nodes->name((string) $e['a']), (string) ($e['a_port'] ?? ''),
+                    $nodes->name((string) $e['b']), (string) ($e['b_port'] ?? ''),
+                    (string) $e['protocol'], (string) ($e['state'] ?? ''),
+                    $e['network'] !== null ? ', ' . $e['network'] : '',
+                    $e['lldp'] ? ', LLDP confirmed' : '',
+                ),
+            ];
+        }
+        $stub = 0;
+        foreach ($layout['stubs'] as $s) {
+            $id = 'stub:' . (++$stub);
+            $visNodes[] = [
+                'id' => $id, 'name' => (string) ($s['label'] ?? 'unknown'), 'ip' => (string) ($s['label'] ?? ''),
+                'role' => 'stub', 'border' => false, 'site' => null, 'site_label' => null,
+                'monitored' => false, 'collected' => false, 'down' => false, 'url' => null,
+                'x' => (int) $s['x2'], 'y' => (int) $s['y2'],
+            ];
+            $edges[] = [
+                'kind' => $s['protocol'] === 'lldp-only' ? 'lldp' : ($s['wan'] ? 'wan' : 'underlay'),
+                'from' => (string) $s['a'], 'to' => $id,
+                'label' => trim(((string) $s['protocol']) . ' ' . ((string) ($s['state'] ?? ''))),
+                'up' => $s['up'],
+                'title' => sprintf('%s %s → %s: %s %s — far end not resolved to a fabric member', $nodes->name((string) $s['a']), (string) ($s['a_port'] ?? ''), (string) ($s['label'] ?? 'unknown'), (string) $s['protocol'], (string) ($s['state'] ?? '')),
+            ];
+        }
+        $asymmetric = 0;
+        foreach ($layout['overlay'] as $o) {
+            $odd = ! $o['symmetric'] && $o['both_monitored'];
+            $asymmetric += $odd ? 1 : 0;
+            $edges[] = [
+                'kind' => 'overlay',
+                'from' => (string) $o['a'],
+                'to' => (string) $o['b'],
+                'label' => '',
+                'up' => ! $odd,
+                'title' => sprintf('EVPN neighbours %s ↔ %s%s', $nodes->name((string) $o['a']), $nodes->name((string) $o['b']), $odd ? ' — listed by one side only' : ''),
+            ];
+        }
+        foreach ($layout['esi'] as $b) {
+            $edges[] = [
+                'kind' => 'esi',
+                'from' => (string) $b['a'],
+                'to' => (string) $b['b'],
+                'label' => sprintf('%d ESI%s', (int) $b['esis'], $b['esis'] === 1 ? '' : 's'),
+                'up' => true,
+                'title' => sprintf('%d shared ESI%s: %s ↔ %s', (int) $b['esis'], $b['esis'] === 1 ? '' : 's', $nodes->name((string) $b['a']), $nodes->name((string) $b['b'])),
+            ];
+        }
+
+        $members = count($placed);
+        $pairs = count($layout['overlay']);
+        $full = $members > 1 ? intdiv($members * ($members - 1), 2) : 0;
+
+        return [
+            'nodes' => $visNodes,
+            'edges' => $edges,
+            'sites' => array_values($sites),
+            'overlay_pairs' => $pairs,
+            'overlay_default' => $pairs <= self::OVERLAY_ARC_LIMIT,
+            'mesh' => ['complete' => $pairs > 0 && $pairs === $full && $asymmetric === 0, 'members' => $members, 'pairs' => $pairs, 'asymmetric' => $asymmetric],
+        ];
     }
 
     /**

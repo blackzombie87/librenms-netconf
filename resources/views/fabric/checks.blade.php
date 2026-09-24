@@ -58,9 +58,14 @@
                     <td><span title="{{ $i['description'] }}">{{ $i['label'] }}</span><br><small class="text-muted">{{ $i['check'] }}</small></td>
                     <td>{{ $i['message'] }}</td>
                     <td>
-                        @foreach ($i['devices'] as $device)
-                            {!! \LibreNMS\Util\Url::deviceLink($device) !!}@if (! $loop->last), @endif
+                        {{-- plain links: core's deviceLink() carries a ~2 kB tooltip per link, and
+                             an issue can involve every member (a VNI check on a 14-leaf fabric was
+                             1.9 MB of that markup for 88 rows) --}}
+                        @foreach (array_slice($i['devices'], 0, 6) as $device)
+                            @if (\Illuminate\Support\Facades\Gate::allows('view', $device))<a href="{{ \LibreNMS\Util\Url::deviceUrl($device) }}" class="list-device">{{ $device->displayName() }}</a>@else{{ $device->displayName() }}@endif
+                            @if (! $loop->last), @endif
                         @endforeach
+                        @if (count($i['devices']) > 6)<small class="text-muted"> and {{ count($i['devices']) - 6 }} more</small>@endif
                         @if ($i['devices'] === [])<small class="text-muted">fabric</small>@endif
                     </td>
                     <td><small title="{{ $i['first_seen'] }}">{{ \Carbon\Carbon::parse($i['first_seen'])->diffForHumans() }}</small></td>

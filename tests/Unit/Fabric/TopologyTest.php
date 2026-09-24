@@ -90,3 +90,72 @@ it('draws overlay arcs to a neighbour listed by its router-id alias', function (
     expect($layout['overlay'])->toHaveCount(2)
         ->and(array_column($layout['overlay'], 'symmetric', 'b'))->toBe(['192.0.2.62' => true, '192.0.2.61' => false]);
 });
+
+/**
+ * The interactive map (plan §10.11): the same graph as nodes and edges, with the static
+ * layout's coordinates as starting positions. The static picture puts every member in one row —
+ * 1,968 px at 14 members, 3,780 px at 26 — and the browser scales it down until the labels are
+ * unreadable, which is what a growing fabric does to it.
+ */
+it('hands the same graph to the interactive map, seeded from the static layout', function () {
+    $nodes = FabricNodes::fromArray([
+        ['vtep_ip' => '192.0.2.1', 'device_id' => 1, 'name' => 'gw', 'role' => 'gateway', 'border' => true],
+        ['vtep_ip' => '192.0.2.11', 'device_id' => 11, 'name' => 'leaf-a', 'role' => 'leaf'],
+        ['vtep_ip' => '192.0.2.12', 'device_id' => 12, 'name' => 'leaf-b', 'role' => 'leaf'],
+        ['vtep_ip' => '192.0.2.13', 'device_id' => 13, 'name' => 'router', 'role' => 'leaf', 'collected' => false],
+    ]);
+    $layout = Topology::layout(
+        [
+            topoNode('192.0.2.1', 'gateway', ['device_id' => 1, 'name' => 'gw', 'border' => true]),
+            topoNode('192.0.2.11', 'leaf', ['device_id' => 11, 'name' => 'leaf-a', 'site' => 'BER1', 'status' => true]),
+            topoNode('192.0.2.12', 'leaf', ['device_id' => 12, 'name' => 'leaf-b', 'site' => 'BER1', 'status' => false]),
+            topoNode('192.0.2.13', 'leaf', ['device_id' => 13, 'name' => 'router']),
+        ],
+        [
+            ['a' => '192.0.2.11', 'b' => '192.0.2.1', 'b_label' => null, 'protocol' => 'ospf', 'state' => 'Full', 'up' => true, 'lldp' => true, 'wan' => false, 'a_port' => 'et-0/0/1', 'b_port' => 'et-0/0/2', 'network' => '10.0.0.0/31'],
+            ['a' => '192.0.2.12', 'b' => null, 'b_label' => '203.0.113.9', 'protocol' => 'bgp', 'state' => 'Established', 'up' => true, 'lldp' => false, 'wan' => true, 'a_port' => 'et-0/0/3', 'b_port' => null, 'network' => null],
+        ],
+        [['192.0.2.11', '192.0.2.1'], ['192.0.2.1', '192.0.2.11'], ['192.0.2.12', '192.0.2.1']],
+        [['a' => '192.0.2.11', 'b' => '192.0.2.12', 'esis' => 2]],
+    );
+
+    $graph = Topology::graph($layout, $nodes);
+    $byId = array_column($graph['nodes'], null, 'id');
+    $kinds = array_count_values(array_column($graph['edges'], 'kind'));
+
+    expect($byId['192.0.2.11']['x'])->toBe($layout['nodes']['192.0.2.11']['x'])   // seeded, not random
+        ->and($byId['192.0.2.11']['site'])->toBe('BER1')
+        ->and($byId['192.0.2.12']['down'])->toBeTrue()
+        ->and($byId['192.0.2.13']['collected'])->toBeFalse()
+        ->and($byId['192.0.2.1']['border'])->toBeTrue()
+        ->and($kinds)->toBe(['underlay' => 1, 'wan' => 1, 'overlay' => 2, 'esi' => 1])
+        // the far end of the half link becomes a node of its own, so the session stays visible
+        ->and($byId['stub:1']['role'])->toBe('stub')
+        ->and($byId['stub:1']['name'])->toBe('203.0.113.9')
+        ->and(array_column($graph['sites'], 'label'))->toContain('BER1')
+        // one of the two overlay pairs is listed by one side only: not a full mesh
+        ->and($graph['mesh'])->toBe(['complete' => false, 'members' => 4, 'pairs' => 2, 'asymmetric' => 1])
+        ->and($graph['overlay_default'])->toBeTrue();
+});
+
+it('turns the arcs off when the overlay is a mesh of any size', function () {
+    $members = [];
+    $overlay = [];
+    for ($i = 1; $i <= 12; $i++) {
+        $members[] = topoNode('192.0.2.' . $i, 'leaf', ['device_id' => $i]);
+    }
+    foreach ($members as $a) {
+        foreach ($members as $b) {
+            if ($a['ip'] !== $b['ip']) {
+                $overlay[] = [$a['ip'], $b['ip']];
+            }
+        }
+    }
+    $nodes = FabricNodes::fromArray(array_map(fn ($m) => ['vtep_ip' => $m['ip'], 'device_id' => $m['device_id'], 'name' => $m['ip'], 'role' => 'leaf'], $members));
+
+    $graph = Topology::graph(Topology::layout($members, [], $overlay, []), $nodes);
+
+    expect($graph['mesh'])->toBe(['complete' => true, 'members' => 12, 'pairs' => 66, 'asymmetric' => 0])
+        ->and($graph['overlay_pairs'])->toBe(66)
+        ->and($graph['overlay_default'])->toBeFalse();   // 66 arcs say nothing 12 members cannot
+});

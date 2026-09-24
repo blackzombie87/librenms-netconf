@@ -110,7 +110,7 @@ class FabricController extends Controller
         $deviceIds = $nodes->deviceIds();
 
         return match ($tab) {
-            'overview' => ['topology' => Topology::forFabric($summary['id'], $nodes)],
+            'overview' => $this->overview($summary['id'], $nodes),
             'members' => ['members' => FabricMembers::forFabric($summary['id'])],
             'bgp' => $this->bgp($nodes, $deviceIds),
             'vnis' => $this->vnis($nodes, $request),
@@ -120,6 +120,19 @@ class FabricController extends Controller
             'checks' => $this->checks($summary['id'], $request),
             default => [],
         };
+    }
+
+    /**
+     * The topology, twice: the static SVG layout and the same graph as nodes and edges for the
+     * interactive map, which starts its physics from the layout's coordinates.
+     *
+     * @return array<string, mixed>
+     */
+    private function overview(int $fabricId, FabricNodes $nodes): array
+    {
+        $topology = Topology::forFabric($fabricId, $nodes);
+
+        return ['topology' => $topology, 'graph' => Topology::graph($topology, $nodes)];
     }
 
     /**

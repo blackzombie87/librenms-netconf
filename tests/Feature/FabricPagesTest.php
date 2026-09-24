@@ -62,6 +62,22 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertSame('Fabric test', DB::table(TableSchema::tableName('fabric'))->where('id', $fabric)->value('name'));
     }
 
+    public function testTheOverviewCarriesBothTopologyRenderings(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithVnis(3);
+
+        $page = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+
+        // the interactive map, from the vis-network LibreNMS itself ships (no CDN)
+        $this->assertStringContainsString('js/vis-network.min.js', $page);
+        $this->assertStringContainsString('id="nt-net"', $page);
+        $this->assertStringContainsString('"overlay_pairs"', $page);
+        // ... and the static SVG behind it, for a core without vis and for a picture to paste
+        $this->assertStringContainsString('id="nt-svg"', $page);
+        $this->assertStringContainsString('id="nt-static-wrap"', $page);
+    }
+
     public function testTheVnisTabPagesAndOpensOnTheRowsWithIssues(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));

@@ -102,6 +102,37 @@ final class FabricIssueScaleTest extends LibrenmsTestCase
     }
 
     /**
+     * An issue can involve every member of the fabric — `vni-irb-partial` names all carriers —
+     * and core's deviceLink() carries a ~2 kB tooltip per link. On the production fabric that
+     * made 88 issues a 1.9 MB page; the VNI tab had already switched to plain links for the
+     * same reason.
+     */
+    public function testAnIssueThatNamesEveryMemberDoesNotBlowUpThePage(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        $fabric = $this->fabricWithIssues(100);
+        $devices = [];
+        for ($i = 0; $i < 12; $i++) {
+            $devices[] = Device::factory()->create(['hostname' => "member-$i.example.net", 'os' => 'junos'])->device_id;
+        }
+        $links = [];
+        foreach (DB::table(IssueStore::TABLE)->where('fabric_id', $fabric)->pluck('id') as $id) {
+            foreach ($devices as $deviceId) {
+                $links[] = ['issue_id' => $id, 'device_id' => $deviceId];
+            }
+        }
+        foreach (array_chunk($links, 500) as $chunk) {
+            DB::table(IssueStore::DEVICE_TABLE)->insert($chunk);
+        }
+
+        $page = $this->get("/plugin/netconf/fabric/$fabric/checks")->assertOk()->getContent();
+
+        $this->assertLessThan(400_000, strlen($page), '100 issues × 12 devices');
+        $this->assertStringContainsString('and 6 more', $page, 'the rest of the members are counted, not linked');
+        $this->assertSame(600, substr_count($page, 'class="list-device"'), '6 links on each of the 100 rows');
+    }
+
+    /**
      * 12 leaves, every one of them carrying all 285 VNIs, three of them announcing every VNI
      * and the others only their own one — the production shape, where 3 × 285 + 9 = 864 of the
      * 3,420 (leaf, VNI) pairs are advertised and the other 2,556 are instantiated and silent.
