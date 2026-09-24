@@ -1,4 +1,4 @@
-{{-- Checks tab: $issues (filtered), $issue_total, $issue_counts, $q, $severity, $check --}}
+{{-- Checks tab: $issues (one page), $issue_pager, $issue_total, $issue_shown, $issue_counts, $q, $severity, $check --}}
 <form method="get" class="form-inline" style="margin-bottom: 10px;">
     <input type="text" name="q" class="form-control input-sm" placeholder="message, subject, device" value="{{ $q }}" style="width: 260px;">
     <select name="severity" class="form-control input-sm" onchange="this.form.submit()">
@@ -15,7 +15,7 @@
     </select>
     <button type="submit" class="btn btn-default btn-sm">Filter</button>
     @if ($q !== '' || $severity !== '' || $check !== '')<a href="{{ url()->current() }}" class="btn btn-link btn-sm">reset</a>@endif
-    <span class="text-muted" style="margin-left: 10px;">{{ count($issues) }} of {{ $issue_total }} shown &middot;
+    <span class="text-muted" style="margin-left: 10px;">{{ $issue_shown }} of {{ $issue_total }} shown &middot;
         <span class="text-danger">{{ $issue_counts['severity']['critical'] }} critical</span>,
         <span class="text-warning">{{ $issue_counts['severity']['warning'] }} warning</span>,
         {{ $issue_counts['severity']['info'] }} info</span>
@@ -37,7 +37,7 @@
 </div>
 @if ($issue_total === 0)
     <p><span class="label label-success">ok</span> No open issues on this fabric.</p>
-@elseif ($issues === [])
+@elseif ($issue_shown === 0)
     <p>No issue matches the filter.</p>
 @else
     <table class="table table-condensed table-hover">
@@ -69,4 +69,5 @@
             @endforeach
         </tbody>
     </table>
+    @include('netconf::fabric.pager', ['pager' => $issue_pager])
 @endif

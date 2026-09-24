@@ -171,15 +171,19 @@ class FabricController extends Controller
      */
     private function checks(int $fabricId, Request $request): array
     {
-        $issues = FabricIssues::forFabric($fabricId);
         $q = (string) $request->query('q', '');
         $severity = (string) $request->query('severity', '');
         $check = (string) $request->query('check', '');
+        // filtered, counted and paged in SQL: a fabric may hold thousands of issues and the
+        // unpaged page died in the Blade at 128 MB (plan §10.5)
+        $page = FabricIssues::page($fabricId, $q, $severity, $check, $request->query('page'));
 
         return [
-            'issues' => FabricIssues::filter($issues, $q, $severity, $check),
-            'issue_total' => count($issues),
-            'issue_counts' => FabricIssues::counts($issues),
+            'issues' => $page['issues'],
+            'issue_pager' => $page['pager'],
+            'issue_total' => $page['total'],
+            'issue_shown' => $page['shown'],
+            'issue_counts' => $page['counts'],
             'q' => $q,
             'severity' => $severity,
             'check' => $check,
