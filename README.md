@@ -9,7 +9,7 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: 1.2.1 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
+**Status: 1.2.2 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
 credentials and the settings page, the YAML definition engine and the `netconf`
 poller/discovery module are verified against an EX4650 (Junos 23.4R2); the LDP, RPKI and
 VRRP definitions against recorded replies of a Junos 22.2
@@ -669,7 +669,7 @@ version, run `plugin:add` again, then the migrations:
 
 ```bash
 ./lnms plugin:add saffer-it/librenms-netconf            # newest release within the constraint
-./lnms plugin:add saffer-it/librenms-netconf 1.2.1      # a specific version
+./lnms plugin:add saffer-it/librenms-netconf 1.2.2      # a specific version
 ./lnms migrate
 ./lnms route:cache                                      # new routes reach a cached installation
 ./lnms view:clear                                       # new pages replace the compiled old ones
