@@ -1,5 +1,63 @@
 # Changelog
 
+## Unreleased (1.3.0)
+
+The EVPN fabric view meets its first production fabric: 12 leaves, 285 VNIs on every one of
+them from a fleet-wide VLAN template, and **22,838 of the 22,867 open issues were the plugin's
+own false positives**. Two check defects produced them, and the page that would have explained
+them could not render. No new tables and no migration; the checks simply stop reporting things
+that are not true.
+
+**What changes on an existing installation.** On the next resolve the false issues disappear by
+themselves (and, above ten per check, their clearing is one eventlog row, not thousands). Fabric
+members that are devices in LibreNMS but are not NETCONF-polled produce one
+`member-not-collected` warning each instead of taking part in every comparison. The *EVPN fabric
+issues* sensor is now *EVPN fabric critical issues* and counts criticals only — its sensor type,
+RRD and alert rules are unchanged, but a member whose only findings are warnings now reads 0.
+
+Fixes:
+
+- **`vni-flood-gap` no longer confuses "instantiated" with "advertised"** (21,395 of the false
+  issues). `show … vxlan-tunnel-end-point source` lists the VNIs a leaf instantiates; a flood
+  list holds the VTEPs whose type-3 (IMET) route it received, and Junos sends that route for a
+  bridge domain with an up interface. A gap is now an asymmetry: the missing leaf must appear in
+  some other member's flood list for that VNI. `vni-orphan` follows the same rule — an empty
+  flood list is a finding only when somebody else does advertise the VNI. The check description,
+  the VNI tab's note and the flag legend said "carries", which was never the condition; the tab
+  now also shows how many of a VNI's carriers advertise it. Note the cost: a VNI with only two
+  carriers can no longer be judged, because the witness would have to be the flood list that is
+  missing the entry.
+- **A member the plugin never polled is no longer judged as a peer** (1,442 of the false issues).
+  Two MX204s whose loopbacks are fabric VTEPs, without NETCONF enabled, were compared against
+  full leaves by `neighbor-asymmetric`, `session-missing`, `tunnel-asymmetric` and
+  `vni-stale-flood`, while `member-not-polling` called them healthy because a device nobody
+  polls has no status row. Every comparison now asks whether the plugin has EVPN data from both
+  sides, a missing reverse tunnel is *unknown* rather than absent, and one new
+  `member-not-collected` warning per member says whether it was never polled or polled and
+  silent. The fabric header counted the same thing wrongly — "14 members, 14 monitored" — and
+  now reads "12 NETCONF-polled (2 in LibreNMS without EVPN data)".
+- **The Checks tab renders whatever the issue count.** It loaded every issue row of the fabric,
+  decoded, linked and sorted them in PHP, and rendered all that survived the filter: unfiltered
+  and `?severity=critical` ended in a 500 (128 MB exhausted in the compiled Blade), the warning
+  page took 9.4 s for 7.19 MB of HTML. Severity, check and needle are a `WHERE` now, the counts
+  one `GROUP BY`, the page a `LIMIT/OFFSET`, and the tab has the pager the VNI tab already had.
+- **A burst of one check is one eventlog row.** Onboarding the twelve leaves wrote 67,335
+  `netconf-evpn` rows in 13 minutes, 37% of that instance's whole eventlog. Above ten issues of
+  one check in a resolve, the group becomes a single fabric-level summary row.
+- **The issues sensor counts criticals.** With `limit 0` the stock *Sensor over limit* rule fires
+  on anything above zero, so counting warnings alerted all twelve leaves at once and would have
+  alerted forever on any standing warning.
+- **A resolve writes only what changed.** `IssueStore::sync()` re-wrote every open issue on every
+  resolve — 12 leaves × 22,867 rows per poll cycle, in one transaction. Rows are written when
+  their message, severity or details change; the rest get one bulk `last_seen`.
+
+Tests: the anonymised capture of one leaf of that fabric is now a fixture (285 VNIs instantiated,
+12 live, every peer's flood list exactly as long as its IMET route count). `TemplatedVniFabricTest`
+mirrors it onto all twelve leaves and asserts both directions — no issue now, exactly 21,395 under
+the old rule — and `FabricIssueScaleTest` runs the same shape through the resolver and the Checks
+tab. The existing scale test built a full mesh, where every leaf advertises everything, which is
+why 220 + 67 green tests said nothing about any of this.
+
 ## 1.2.2 – 2026-09-24
 
 One fix: the route-cache warning 1.2.1 introduced fired on healthy installations.
