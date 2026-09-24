@@ -33,6 +33,7 @@ this version: license expiry (see `CHANGELOG.md`).
 cd /opt/librenms
 ./lnms plugin:add saffer-it/librenms-netconf
 ./lnms route:cache
+./lnms view:clear
 ```
 
 `route:cache` is not optional on a production install: LibreNMS caches its routes in
@@ -42,6 +43,11 @@ it too, and `daily.sh` clears it on the next update. Since 1.2.1 the plugin noti
 hides its own UI and writes a notification instead of breaking the page; older versions took the
 whole web UI down, because the plugin menu entry is rendered from LibreNMS's own menu on every
 page. `artisan cache:clear` does *not* help here — that is the application cache.
+
+`view:clear` matters for the same reason on every install and upgrade: Composer extracts the
+package with the archive's timestamps, which can be *older* than compiled Blade views LibreNMS
+cached earlier, and Laravel then keeps the compiled copy (it recompiles only when the source is
+newer). The symptom is pages from the previous version — new code, old screens.
 
 The plugin is enabled automatically. Open *Overview → Plugins → Plugin Admin → netconf* to
 set the global defaults (transport, port, username, password or SSH key). The *poll budget*
@@ -666,6 +672,7 @@ version, run `plugin:add` again, then the migrations:
 ./lnms plugin:add saffer-it/librenms-netconf 1.2.1      # a specific version
 ./lnms migrate
 ./lnms route:cache                                      # new routes reach a cached installation
+./lnms view:clear                                       # new pages replace the compiled old ones
 ```
 
 Read the *Upgrade notes* of the release in `CHANGELOG.md` first; nothing has to be

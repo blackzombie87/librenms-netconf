@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Documentation:
+
+- The installation and upgrade steps ask for `lnms view:clear` next to `lnms route:cache`.
+  Composer extracts the package with the archive's timestamps, so a compiled Blade view that
+  LibreNMS cached earlier can be *newer* than the file that replaced its source — Laravel then
+  keeps the compiled copy and the upgraded plugin renders the previous version's pages. Seen on
+  the 1.2.0 → 1.2.1 upgrade of a production poller: the new device tab appeared (PHP), its
+  *Enable NETCONF for this device* panel did not (Blade).
+
 ## 1.2.1 – 2026-09-24
 
 The first install on a production poller found two things: a plugin whose routes are missing
