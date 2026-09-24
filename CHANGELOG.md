@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+The topology map of a fabric is interactive. The static SVG puts every member in one row —
+1,968 px wide at 14 members, 3,780 px at 26 — and a browser scales that down until the labels
+are unreadable; a healthy EVPN overlay adds one arc per pair, 91 of them at 14 members.
+
+- The overview opens a **draggable, physics-driven map** built on the vis-network LibreNMS
+  already ships (`html/js`, so no external asset and no new dependency): drag a member and its
+  neighbours follow, scroll to zoom, click through to the device page. **Collapse sites** folds
+  every location into a single node — 26 members become 8 — and opens again on click. The
+  arrangement is kept per fabric in the browser; *reset layout* forgets it.
+- The **overlay arcs are off while the overlay is a complete mesh**, with one sentence saying
+  what they would have drawn; a pair only one side lists is always drawn, in red.
+- The **static picture is still one click away** and is what a core without vis-network renders.
+- The **Checks tab links at most six devices per issue** and counts the rest. An issue can
+  involve every member of a fabric and LibreNMS's device links carry a ~2 kB tooltip each, which
+  made 88 issues a 1.9 MB page.
+
 ## 1.3.0 – 2026-09-24
 
 The EVPN fabric view meets its first production fabric: 12 leaves, 285 VNIs on every one of
