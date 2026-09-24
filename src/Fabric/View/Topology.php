@@ -131,7 +131,7 @@ final class Topology
      * browser scales it down until the labels are unreadable, and the row cannot grow.
      *
      * @param  array<string, mixed>  $layout  the result of layout()
-     * @return array{nodes: list<array<string, mixed>>, edges: list<array<string, mixed>>, sites: list<array{key: string, label: string|null}>, overlay_pairs: int, overlay_default: bool, mesh: array{complete: bool, members: int, pairs: int, asymmetric: int}}
+     * @return array{nodes: list<array<string, mixed>>, edges: list<array<string, mixed>>, sites: list<array{key: string, label: string|null}>, outside: int, overlay_pairs: int, overlay_default: bool, mesh: array{complete: bool, members: int, pairs: int, asymmetric: int}}
      */
     public static function graph(array $layout, FabricNodes $nodes): array
     {
@@ -179,22 +179,30 @@ final class Topology
                 ),
             ];
         }
+        // one node per far-end address, not per half link: the SVG has to draw a stub under
+        // every member, but here the ten leaves that peer with the same unmonitored spine
+        // should meet at one dot, which is what makes it look like the spine it is
         $stub = 0;
+        $outside = 0;
+        $stubIds = [];
         foreach ($layout['stubs'] as $s) {
-            $id = 'stub:' . (++$stub);
+            $far = (string) ($s['label'] ?? '');
+            $id = $far === '' ? 'stub:' . (++$stub) : 'far:' . $far;
+            $isOutside = (bool) ($s['outside'] ?? false);
+            $outside += $isOutside ? 1 : 0;
+            if (isset($stubIds[$id])) {
+                $edges[] = self::stubEdge($s, $id, $isOutside, $nodes);
+
+                continue;
+            }
+            $stubIds[$id] = true;
             $visNodes[] = [
                 'id' => $id, 'name' => (string) ($s['label'] ?? 'unknown'), 'ip' => (string) ($s['label'] ?? ''),
-                'role' => 'stub', 'border' => false, 'site' => null, 'site_label' => null,
+                'role' => $isOutside ? 'outside' : 'stub', 'border' => false, 'site' => null, 'site_label' => null,
                 'monitored' => false, 'collected' => false, 'down' => false, 'url' => null,
                 'x' => (int) $s['x2'], 'y' => (int) $s['y2'],
             ];
-            $edges[] = [
-                'kind' => $s['protocol'] === 'lldp-only' ? 'lldp' : ($s['wan'] ? 'wan' : 'underlay'),
-                'from' => (string) $s['a'], 'to' => $id,
-                'label' => trim(((string) $s['protocol']) . ' ' . ((string) ($s['state'] ?? ''))),
-                'up' => $s['up'],
-                'title' => sprintf('%s %s → %s: %s %s — far end not resolved to a fabric member', $nodes->name((string) $s['a']), (string) ($s['a_port'] ?? ''), (string) ($s['label'] ?? 'unknown'), (string) $s['protocol'], (string) ($s['state'] ?? '')),
-            ];
+            $edges[] = self::stubEdge($s, $id, $isOutside, $nodes);
         }
         $asymmetric = 0;
         foreach ($layout['overlay'] as $o) {
@@ -228,6 +236,7 @@ final class Topology
             'nodes' => $visNodes,
             'edges' => $edges,
             'sites' => array_values($sites),
+            'outside' => $outside,
             'overlay_pairs' => $pairs,
             'overlay_default' => $pairs <= self::OVERLAY_ARC_LIMIT,
             'mesh' => ['complete' => $pairs > 0 && $pairs === $full && $asymmetric === 0, 'members' => $members, 'pairs' => $pairs, 'asymmetric' => $asymmetric],
@@ -253,6 +262,31 @@ final class Topology
         }
 
         return $overlay;
+    }
+
+    /**
+     * One half link as an edge towards its far-end node.
+     *
+     * @param  array<string, mixed>  $stub
+     * @return array<string, mixed>
+     */
+    private static function stubEdge(array $stub, string $id, bool $outside, FabricNodes $nodes): array
+    {
+        return [
+            'kind' => $outside ? 'outside' : ($stub['protocol'] === 'lldp-only' ? 'lldp' : ($stub['wan'] ? 'wan' : 'underlay')),
+            'from' => (string) $stub['a'],
+            'to' => $id,
+            'label' => trim(((string) $stub['protocol']) . ' ' . ((string) ($stub['state'] ?? ''))),
+            'up' => $stub['up'],
+            'title' => sprintf(
+                '%s %s → %s: %s %s — %s',
+                $nodes->name((string) $stub['a']), (string) ($stub['a_port'] ?? ''), (string) ($stub['label'] ?? 'unknown'),
+                (string) $stub['protocol'], (string) ($stub['state'] ?? ''),
+                $outside
+                    ? 'a session out of the fabric: no other member peers with this address'
+                    : 'far end not resolved to a fabric member, although other members peer with it too',
+            ),
+        ];
     }
 
     /** Height of an arc between two nodes of the same row: grows with the distance, flattening out. */
@@ -400,6 +434,17 @@ final class Topology
             'y' => $side === 'top' ? $placed[$ip]['y'] : $placed[$ip]['y'] + self::NODE_H,
         ];
 
+        // how many members have a session to the same unresolved far end. One is an outside
+        // session — a transit or IX peer of a border router, which is not fabric underlay;
+        // two or more is a node that talks to the fabric like a spine and is not monitored yet,
+        // which is what the stubs were meant to show (plan §10.12)
+        $farMembers = [];
+        foreach ($underlay as $e) {
+            if ($e['b'] === null && $e['b_label'] !== null) {
+                $farMembers[(string) $e['b_label']][(string) $e['a']] = true;
+            }
+        }
+
         // underlay edges; half edges (far end unknown) become short stubs below/above the node
         $edges = [];
         $stubs = [];
@@ -426,7 +471,8 @@ final class Topology
                 $p = $centre($e['a'], $placed[$e['a']]['layer'] === 'leaf' ? 'bottom' : 'top');
                 $dir = $placed[$e['a']]['layer'] === 'leaf' ? 1 : -1;
                 $sx = $p['x'] - 24 + ($i - 1) * 16;
-                $stubs[] = $e + ['x1' => $sx, 'y1' => $p['y'], 'x2' => $sx, 'y2' => $p['y'] + $dir * 26, 'label' => $e['b_label']];
+                $shared = count($farMembers[(string) ($e['b_label'] ?? '')] ?? []);
+                $stubs[] = $e + ['x1' => $sx, 'y1' => $p['y'], 'x2' => $sx, 'y2' => $p['y'] + $dir * 26, 'label' => $e['b_label'], 'outside' => $shared < 2];
             }
         }
 

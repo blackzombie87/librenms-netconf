@@ -13,6 +13,13 @@ are unreadable; a healthy EVPN overlay adds one arc per pair, 91 of them at 14 m
   arrangement is kept per fabric in the browser; *reset layout* forgets it.
 - The **overlay arcs are off while the overlay is a complete mesh**, with one sentence saying
   what they would have drawn; a pair only one side lists is always drawn, in red.
+- **A border router's transit and IX peers are no longer drawn as fabric underlay.** Every BGP
+  session inside a member's own subnet became an underlay half link, which is right for a spine
+  nobody monitors and wrong for a peering LAN — the first production fabric drew six of them off
+  its edge router. A far end **several members** peer with is now a fabric node that is not
+  monitored yet: one dashed box with all its sessions meeting there, so it looks like the spine
+  it is. A far end **one member alone** has is a session out of the fabric, with its own toggle,
+  off by default.
 - The **static picture is still one click away** and is what a core without vis-network renders.
 - The **Checks tab links at most six devices per issue** and counts the rest. An issue can
   involve every member of a fabric and LibreNMS's device links carry a ~2 kB tooltip each, which

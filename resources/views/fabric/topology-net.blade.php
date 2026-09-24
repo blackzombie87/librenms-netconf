@@ -4,6 +4,9 @@
         <label class="checkbox-inline"><input type="checkbox" data-nt-layer="underlay" checked> underlay</label>
         <label class="checkbox-inline"><input type="checkbox" data-nt-layer="overlay" {{ $graph['overlay_default'] ? 'checked' : '' }}> overlay neighbours <small class="text-muted">({{ $graph['overlay_pairs'] }})</small></label>
         <label class="checkbox-inline"><input type="checkbox" data-nt-layer="esi" checked> ESI pairs</label>
+        @if ($graph['outside'] > 0)
+            <label class="checkbox-inline"><input type="checkbox" data-nt-layer="outside"> sessions out of the fabric <small class="text-muted">({{ $graph['outside'] }})</small></label>
+        @endif
         <label class="checkbox-inline"><input type="checkbox" id="nt-labels"> link labels</label>
         <label class="checkbox-inline"><input type="checkbox" id="nt-physics" checked> gravity</label>
         <span class="pull-right">
@@ -45,7 +48,7 @@
                 underlay_up: '#5cb85c', underlay_down: '#d9534f', underlay_unknown: '#999',
                 wan: '#8e6bbf', lldp: '#999', overlay: '#337ab7', overlay_odd: '#d9534f', esi: '#f0ad4e'
             };
-            var ROLE_FILL = { gateway: '#dbe9f6', spine: '#e3f1fa', leaf: '#e6f4e6', stub: '#f7f7f7' };
+            var ROLE_FILL = { gateway: '#dbe9f6', spine: '#e3f1fa', leaf: '#e6f4e6', stub: '#f7f7f7', outside: '#efe7f7' };
 
             var saved = {};
             try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { saved = {}; }
@@ -54,22 +57,30 @@
                 var pos = saved[n.id];
                 return {
                     id: n.id,
-                    label: n.role === 'stub' ? n.name : n.name + '\n' + n.ip,
-                    title: n.name + ' (' + n.ip + ') — ' + n.role + (n.border ? ', border' : '')
-                        + (n.monitored ? (n.collected ? '' : ' — no EVPN data') : ' — not monitored')
-                        + (n.down ? ' — device down' : ''),
+                    label: (n.role === 'stub' || n.role === 'outside') ? n.name : n.name + '\n' + n.ip,
+                    title: n.role === 'stub' ? n.ip + ' — several members peer with this address, and it is not a monitored fabric member'
+                        : n.role === 'outside' ? n.ip + ' — a session out of the fabric'
+                        : n.name + ' (' + n.ip + ') — ' + n.role + (n.border ? ', border' : '')
+                            + (n.monitored ? (n.collected ? '' : ' — no EVPN data') : ' — not monitored')
+                            + (n.down ? ' — device down' : ''),
                     site: n.site || '_stub',   // NOT vis's `group`: that hands the node vis's own
                                                // palette when a cluster is opened again, and the
                                                // colour here means the role, not the location
-                    shape: n.role === 'stub' ? 'dot' : 'box',
-                    size: n.role === 'stub' ? 6 : undefined,
-                    font: { size: n.role === 'stub' ? 10 : 12, multi: false, color: '#222' },
+                    // a far end several members peer with is a fabric node nobody monitors, and
+                    // is drawn like one (dashed box); a far end only one member has is an
+                    // outside session and stays a dot
+                    stub: n.role === 'stub' || n.role === 'outside',
+                    shape: n.role === 'outside' ? 'dot' : 'box',
+                    size: n.role === 'outside' ? 6 : undefined,
+                    font: { size: n.role === 'outside' ? 10 : 12, multi: false, color: n.role === 'stub' ? '#666' : '#222' },
+                    hidden: n.role === 'outside',   // a transit or IX peer of a border router is
+                                                    // not fabric underlay (plan §10.12)
                     color: {
                         background: ROLE_FILL[n.role] || '#f2f2f2',
                         border: n.down ? '#d9534f' : (n.monitored ? (n.collected ? '#5a5a5a' : '#f0ad4e') : '#999'),
                         highlight: { background: '#fff8dc', border: '#337ab7' }
                     },
-                    borderWidth: n.down ? 3 : 1.5,
+                    borderWidth: n.down ? 3 : (n.role === 'stub' ? 1 : 1.5),
                     shapeProperties: { borderDashes: n.monitored ? false : [4, 3] },
                     url: n.url,
                     x: pos ? pos.x : n.x, y: pos ? pos.y : n.y
@@ -78,7 +89,7 @@
 
             var edges = new vis.DataSet(data.edges.map(function (e, i) {
                 var colour = e.kind === 'overlay' ? (e.up ? COLOURS.overlay : COLOURS.overlay_odd)
-                    : e.kind === 'wan' ? COLOURS.wan
+                    : (e.kind === 'wan' || e.kind === 'outside') ? COLOURS.wan
                     : e.kind === 'lldp' ? COLOURS.lldp
                     : e.kind === 'esi' ? COLOURS.esi
                     : (e.up === false ? COLOURS.underlay_down : (e.up === true ? COLOURS.underlay_up : COLOURS.underlay_unknown));
@@ -86,10 +97,10 @@
                     id: i, from: e.from, to: e.to, kind: e.kind, title: e.title, rawLabel: e.label,
                     color: { color: colour, highlight: colour, opacity: e.kind === 'overlay' ? 0.5 : 0.9 },
                     width: e.kind === 'overlay' ? 1 : (e.kind === 'lldp' ? 1.5 : 2.5),
-                    dashes: e.kind === 'overlay' ? [3, 3] : (e.kind === 'wan' ? [6, 3] : (e.kind === 'lldp' ? [2, 3] : false)),
+                    dashes: e.kind === 'overlay' ? [3, 3] : ((e.kind === 'wan' || e.kind === 'outside') ? [6, 3] : (e.kind === 'lldp' ? [2, 3] : false)),
                     smooth: { enabled: e.kind === 'overlay', type: 'curvedCW', roundness: 0.15 },
                     font: { size: 9, color: '#666', strokeWidth: 3, strokeColor: '#fff', align: 'middle' },
-                    hidden: e.kind === 'overlay' ? !{{ $graph['overlay_default'] ? 'true' : 'false' }} : false
+                    hidden: e.kind === 'overlay' ? !{{ $graph['overlay_default'] ? 'true' : 'false' }} : e.kind === 'outside'
                 };
             }));
 
@@ -121,8 +132,17 @@
             document.querySelectorAll('[data-nt-layer]').forEach(function (box) {
                 box.addEventListener('change', function () {
                     var kinds = box.dataset.ntLayer === 'underlay' ? ['underlay', 'wan', 'lldp'] : [box.dataset.ntLayer];
-                    edges.update(edges.get().filter(function (e) { return kinds.indexOf(e.kind) !== -1; })
-                        .map(function (e) { return { id: e.id, hidden: !box.checked }; }));
+                    var shown = edges.get().filter(function (e) { return kinds.indexOf(e.kind) !== -1; });
+                    edges.update(shown.map(function (e) { return { id: e.id, hidden: !box.checked }; }));
+                    // a stub is a line plus the dot at its end: hide or show them together
+                    var ends = {};
+                    shown.forEach(function (e) {
+                        [e.from, e.to].forEach(function (id) {
+                            var node = nodes.get(id);
+                            if (node && node.stub) { ends[id] = true; }
+                        });
+                    });
+                    nodes.update(Object.keys(ends).map(function (id) { return { id: id, hidden: !box.checked }; }));
                 });
             });
             document.getElementById('nt-labels').addEventListener('change', function () {

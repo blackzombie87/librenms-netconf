@@ -128,10 +128,12 @@ it('hands the same graph to the interactive map, seeded from the static layout',
         ->and($byId['192.0.2.12']['down'])->toBeTrue()
         ->and($byId['192.0.2.13']['collected'])->toBeFalse()
         ->and($byId['192.0.2.1']['border'])->toBeTrue()
-        ->and($kinds)->toBe(['underlay' => 1, 'wan' => 1, 'overlay' => 2, 'esi' => 1])
-        // the far end of the half link becomes a node of its own, so the session stays visible
-        ->and($byId['stub:1']['role'])->toBe('stub')
-        ->and($byId['stub:1']['name'])->toBe('203.0.113.9')
+        ->and($kinds)->toBe(['underlay' => 1, 'outside' => 1, 'overlay' => 2, 'esi' => 1])
+        // the far end of the half link becomes a node of its own, so the session stays visible;
+        // one member alone peers with it, so it is a session out of the fabric
+        ->and($byId['far:203.0.113.9']['role'])->toBe('outside')
+        ->and($byId['far:203.0.113.9']['name'])->toBe('203.0.113.9')
+        ->and($graph['outside'])->toBe(1)
         ->and(array_column($graph['sites'], 'label'))->toContain('BER1')
         // one of the two overlay pairs is listed by one side only: not a full mesh
         ->and($graph['mesh'])->toBe(['complete' => false, 'members' => 4, 'pairs' => 2, 'asymmetric' => 1])
@@ -158,4 +160,35 @@ it('turns the arcs off when the overlay is a mesh of any size', function () {
     expect($graph['mesh'])->toBe(['complete' => true, 'members' => 12, 'pairs' => 66, 'asymmetric' => 0])
         ->and($graph['overlay_pairs'])->toBe(66)
         ->and($graph['overlay_default'])->toBeFalse();   // 66 arcs say nothing 12 members cannot
+});
+
+/**
+ * Plan §10.12: `UnderlayResolver` turns every routing session inside a member's own subnet into
+ * a half link. On a border router that is its transit and IX peers — six of them on the first
+ * production fabric, drawn as fabric underlay. A far end that only one member peers with is a
+ * session out of the fabric; one that several members peer with is the node that should be a
+ * member and is not monitored yet, which is what the stubs are for.
+ */
+it('tells a spine nobody monitors from a border router\'s transit peers', function () {
+    $members = [topoNode('192.0.2.11', 'leaf', ['device_id' => 11]), topoNode('192.0.2.12', 'leaf', ['device_id' => 12]), topoNode('192.0.2.13', 'leaf', ['device_id' => 13])];
+    $half = fn (string $a, string $far) => ['a' => $a, 'b' => null, 'b_label' => $far, 'protocol' => 'bgp', 'state' => 'Established', 'up' => true, 'lldp' => false, 'wan' => true, 'a_port' => 'et-0/0/1', 'b_port' => null, 'network' => null];
+    $layout = Topology::layout($members, [
+        // an unmonitored spine: every leaf peers with it
+        $half('192.0.2.11', '10.0.0.1'), $half('192.0.2.12', '10.0.0.1'), $half('192.0.2.13', '10.0.0.1'),
+        // the border leaf's own transit and IX peers
+        $half('192.0.2.13', '193.178.185.5'), $half('192.0.2.13', '193.178.185.6'),
+    ], [], []);
+    $nodes = FabricNodes::fromArray(array_map(fn ($m) => ['vtep_ip' => $m['ip'], 'device_id' => $m['device_id'], 'name' => $m['ip'], 'role' => 'leaf'], $members));
+
+    $graph = Topology::graph($layout, $nodes);
+    $kinds = array_count_values(array_column($graph['edges'], 'kind'));
+    $outside = array_values(array_filter($graph['edges'], fn ($e) => $e['kind'] === 'outside'));
+
+    expect(array_column($layout['stubs'], 'outside'))->toBe([false, false, false, true, true])
+        ->and($kinds)->toBe(['wan' => 3, 'outside' => 2])
+        ->and($graph['outside'])->toBe(2)
+        ->and($outside[0]['title'])->toContain('no other member peers with this address')
+        // the three leaves meet at one node, which is what makes it look like the spine it is
+        ->and(array_column(array_filter($graph['nodes'], fn ($n) => $n['role'] !== 'leaf'), 'id'))
+        ->toBe(['far:10.0.0.1', 'far:193.178.185.5', 'far:193.178.185.6']);
 });

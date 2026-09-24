@@ -6,6 +6,10 @@
         <label class="checkbox-inline"><input type="checkbox" checked onchange="document.getElementById('nt-svg').classList.toggle('nt-hide-overlay', !this.checked)"> overlay neighbours <small class="text-muted">({{ count($t['overlay']) }})</small></label>
         <label class="checkbox-inline"><input type="checkbox" checked onchange="document.getElementById('nt-svg').classList.toggle('nt-hide-esi', !this.checked)"> ESI pairs <small class="text-muted">({{ count($t['esi']) }})</small></label>
         <label class="checkbox-inline"><input type="checkbox" checked onchange="document.getElementById('nt-svg').classList.toggle('nt-hide-labels', !this.checked)"> link labels</label>
+        @php($outside = count(array_filter($t['stubs'], fn ($s) => $s['outside'] ?? false)))
+        @if ($outside > 0)
+            <label class="checkbox-inline"><input type="checkbox" onchange="document.getElementById('nt-svg').classList.toggle('nt-hide-outside', !this.checked)"> sessions out of the fabric <small class="text-muted">({{ $outside }})</small></label>
+        @endif
         <span class="text-muted" style="margin-left: 12px;">
             <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#5cb85c" stroke-width="3"/></svg> underlay session up
             <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#d9534f" stroke-width="3"/></svg> down
@@ -18,6 +22,8 @@
     </div>
     <style>
         .nt-hide-overlay .nt-overlay, .nt-hide-esi .nt-esi, .nt-hide-labels .nt-label { display: none; }
+        .nt-outside { display: none; }
+        #nt-svg:not(.nt-hide-outside) .nt-outside { display: inline; }
         .netconf-topology svg text { font-family: inherit; }
         .netconf-topology a { text-decoration: none; }
         .netconf-topology .nt-node:hover rect { stroke-width: 2.5; }
@@ -53,13 +59,15 @@
                 <text class="nt-label" x="{{ $e['lx'] }}" y="{{ $e['ly'] }}" font-size="9" fill="#666" text-anchor="middle">{{ $e['protocol'] }}@if ($e['state']) {{ $e['state'] }}@endif</text>
             @endforeach
 
-            {{-- half edges towards unmonitored neighbours --}}
+            {{-- half edges towards unmonitored neighbours; a far end no other member peers with
+                 is a session out of the fabric (transit, an IX), hidden until asked for --}}
             @foreach ($t['stubs'] as $s)
                 @php($color = $s['protocol'] === 'lldp-only' ? '#999' : ($s['wan'] ? '#8e6bbf' : ($s['up'] === false ? '#d9534f' : '#5cb85c')))
-                <line x1="{{ $s['x1'] }}" y1="{{ $s['y1'] }}" x2="{{ $s['x2'] }}" y2="{{ $s['y2'] }}" stroke="{{ $color }}" stroke-width="3" @if ($s['wan']) stroke-dasharray="6 3" @endif>
-                    <title>{{ $nodes->name($s['a']) }} {{ $s['a_port'] }} → {{ $s['label'] ?? 'unknown' }}: {{ $s['protocol'] }} {{ $s['state'] }}@if ($s['network']), {{ $s['network'] }}@endif — far end not resolved to a fabric member</title>
+                @php($class = ($s['outside'] ?? false) ? 'nt-outside' : '')
+                <line class="{{ $class }}" x1="{{ $s['x1'] }}" y1="{{ $s['y1'] }}" x2="{{ $s['x2'] }}" y2="{{ $s['y2'] }}" stroke="{{ $color }}" stroke-width="3" @if ($s['wan']) stroke-dasharray="6 3" @endif>
+                    <title>{{ $nodes->name($s['a']) }} {{ $s['a_port'] }} → {{ $s['label'] ?? 'unknown' }}: {{ $s['protocol'] }} {{ $s['state'] }}@if ($s['network']), {{ $s['network'] }}@endif — @if ($s['outside'] ?? false) a session out of the fabric: no other member peers with this address @else far end not resolved to a fabric member @endif</title>
                 </line>
-                <circle cx="{{ $s['x2'] }}" cy="{{ $s['y2'] }}" r="3" fill="{{ $color }}"/>
+                <circle class="{{ $class }}" cx="{{ $s['x2'] }}" cy="{{ $s['y2'] }}" r="3" fill="{{ $color }}"/>
             @endforeach
 
             {{-- ESI pair brackets --}}
