@@ -115,9 +115,10 @@ Users come from LibreNMS's factory with `enabled => 1` (the default is a disable
 
 ## Pre-tag checklist
 
-The `feature` job of `.github/workflows/ci.yml` runs steps 1–4 on every push (first green run
-2026-09-22, 40 tests against LibreNMS 26.7.0); before a tag they still run by hand here, and
-steps 5–6 only exist here because they need the fixtures directory and a real device:
+The `feature` job of `.github/workflows/ci.yml` runs steps 1–4 on every push, against every core
+in its `librenms` matrix (26.7.0 and 26.9.1.1 as of 2026-09-24; first green run 2026-09-22 with
+40 tests); before a tag they still run by hand here, and steps 5–7 only exist here because they
+need the fixtures directory, a real device, or a production-shaped installation:
 
 1. `vendor/bin/pest` — unit suite green on the bare checkout (the Feature tests skip there).
 2. `vendor/bin/phpstan analyse` and `vendor/bin/php-cs-fixer check --diff` — clean, and
@@ -133,3 +134,9 @@ steps 5–6 only exist here because they need the fixtures directory and a real 
    them — re-run `DB_CONNECTION=testing php artisan migrate --force` if the next run complains.
 5. `lnms netconf:validate` on the definitions, and `--replay` over the fixtures.
 6. One live discovery and poll against a real device.
+7. **Install smoke test with a cached route file** — the shape that broke the first production
+   install (plan §9.1): in the container, `php artisan route:cache` *before* the plugin's routes
+   exist (or simply after `plugin:add` without a refresh), then open any page. Expected since
+   1.2.1: the page renders, the NETCONF menu entry and device tab are absent, and
+   `logs/librenms.log` names `lnms route:cache`. `InstallRobustnessTest` covers the same shape
+   in the suite, so this step is a spot check of the real thing, not the only guard.

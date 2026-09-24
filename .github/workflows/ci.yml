@@ -85,7 +85,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        librenms: ['26.7.0']
+        # the oldest core the plugin is kept working on (what the development container runs)
+        # and the current release: the seams this plugin uses live in both
+        librenms: ['26.7.0', '26.9.1.1']
     env:
       LIBRENMS_PATH: ${{ github.workspace }}/librenms
     services:
@@ -141,6 +143,8 @@ jobs:
           # composer install's post-install scripts ran `artisan optimize` before the plugin
           # existed: with that route cache in place the plugin's routes never register and
           # every plugin page is a legacy 404 (which also leaves an output buffer open).
+          # The plugin survives that state since 1.2.1 (it hides its UI and warns, plan 9.1),
+          # but the suite tests the working installation - so refresh the cache here.
           # Not optimize:clear - its cache:clear needs the default database connection
           php artisan route:clear
           php artisan event:clear
