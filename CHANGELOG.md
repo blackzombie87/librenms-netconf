@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (1.3.0)
+## 1.3.0 – 2026-09-24
 
 The EVPN fabric view meets its first production fabric: 12 leaves, 285 VNIs on every one of
 them from a fleet-wide VLAN template, and **22,838 of the 22,867 open issues were the plugin's
@@ -50,6 +50,18 @@ Fixes:
 - **A resolve writes only what changed.** `IssueStore::sync()` re-wrote every open issue on every
   resolve — 12 leaves × 22,867 rows per poll cycle, in one transaction. Rows are written when
   their message, severity or details change; the rest get one bulk `last_seen`.
+
+Verified on that fabric after the upgrade: **22,867 open issues became 32** — the 30 genuine ones
+(22 `esi-lag-down`, 7 `esi-lacp-degraded`, 1 `version-skew`) plus the two MX204s as
+`member-not-collected`; not one `vni-flood-gap`, `vni-stale-flood`, `session-missing`,
+`neighbor-asymmetric` or `tunnel-asymmetric` is left. The Checks tab answers in 0.6 s with 210 kB
+where it used to end in a 500 after 6 s, `?severity=critical` in 0.5 s, the header reads "14
+members, 12 NETCONF-polled (2 in LibreNMS without EVPN data)", the VNI tab shows 5–7 of 12
+carriers advertising per VNI, and clearing those 22,837 false issues cost **7 eventlog rows**
+instead of some 45,000. The issues sensors of the twelve leaves add up to 22 — the criticals,
+nothing else. Their description changes to *EVPN fabric critical issues* with the next discovery
+run (a poll does not rewrite a sensor's description); the RRD name does not use it, so the
+history is continuous.
 
 Tests: the anonymised capture of one leaf of that fabric is now a fixture (285 VNIs instantiated,
 12 live, every peer's flood list exactly as long as its IMET route count). `TemplatedVniFabricTest`
