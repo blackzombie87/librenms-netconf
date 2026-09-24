@@ -103,23 +103,26 @@ it('turns the VNI matrix flags into issues', function () {
     $vni = fn (int $device, int $vni, array $extra = []) => $extra + ['device_id' => $device, 'vni' => $vni, 'instance' => 'MACVRF-A', 'vlan_id' => 100, 'vlan_name' => null, 'source_vtep' => null, 'multicast_group' => null, 'irb_ifname' => null, 'irb_status' => null, 'remote_macs' => 0];
     $rows = VniMatrix::build(
         [
-            $vni(11, 10010), $vni(12, 10010, ['vlan_id' => 200]),                     // vlan mismatch, leaf-b's flood list lacks leaf-a
+            // vlan mismatch, and leaf-b's flood list lacks leaf-a although leaf-c hears it
+            $vni(11, 10010), $vni(12, 10010, ['vlan_id' => 200]), $vni(13, 10010, ['vlan_id' => null]),
             $vni(11, 10011, ['irb_ifname' => 'irb.11', 'irb_status' => 'Down']), $vni(12, 10011),   // irb down on a, partial
-            $vni(11, 10012),                                                         // orphan on a, b floods to it although b does not carry it
+            $vni(11, 10012), $vni(13, 10012),                                        // leaf-a hears nothing while leaf-c is advertised
         ],
         [
             ['device_id' => 11, 'vni' => 10010, 'remote_vtep_ip' => '192.0.2.62'],
             ['device_id' => 12, 'vni' => 10010, 'remote_vtep_ip' => '192.0.2.1'],
+            ['device_id' => 13, 'vni' => 10010, 'remote_vtep_ip' => '192.0.2.61'], ['device_id' => 13, 'vni' => 10010, 'remote_vtep_ip' => '192.0.2.62'],
             ['device_id' => 11, 'vni' => 10011, 'remote_vtep_ip' => '192.0.2.62'],
             ['device_id' => 12, 'vni' => 10011, 'remote_vtep_ip' => '192.0.2.11'],
-            ['device_id' => 12, 'vni' => 10012, 'remote_vtep_ip' => '192.0.2.61'],
+            ['device_id' => 12, 'vni' => 10012, 'remote_vtep_ip' => '192.0.2.63'],
+            ['device_id' => 13, 'vni' => 10012, 'remote_vtep_ip' => '192.0.2.61'],
         ],
         $nodes->deviceNodes(),
     );
     $issues = byCheck(FabricChecks::evaluate($nodes, new CheckInput(vnis: $rows)));
 
     expect($issues['vni-flood-gap'][0]->subject)->toBe('10010/12>11')
-        ->and($issues['vni-flood-gap'][0]->message)->toBe('VNI 10010: flood list of leaf-b lacks leaf-a, which carries the VNI')
+        ->and($issues['vni-flood-gap'][0]->message)->toBe('VNI 10010: flood list of leaf-b lacks leaf-a, which advertises the VNI to the other carriers')
         ->and($issues['vni-flood-gap'][0]->severity)->toBe(Issue::CRITICAL)
         ->and($issues['vni-vlan-mismatch'][0]->message)->toBe('VNI 10010 maps to different VLAN tags: leaf-a: VLAN 100, leaf-b: VLAN 200')
         ->and($issues['vni-vlan-mismatch'][0]->severity)->toBe(Issue::INFO)

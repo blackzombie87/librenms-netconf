@@ -89,13 +89,41 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertStringContainsString('1 of 250 shown', $filtered);
         $this->assertStringNotContainsString('rows 1&ndash;', $filtered);   // one page, no pager
 
-        // one VNI without a flood list: the tab opens on it, ?issues=0 shows everything again
-        DB::table(TableSchema::tableName('vni_vtep'))->where('device_id', $device)->where('vni', 10010)->delete();
+        // two more carriers of VNI 10010, one of which does not hear the first leaf although
+        // the other does: one VNI with a flood-list gap. The tab opens on it, ?issues=0 shows
+        // everything again
+        $this->carriersWithAGap($fabric, $device, 10010);
         $default = $page();
         $this->assertSame(1, substr_count($default, '<tr class='));
         $this->assertStringContainsString('1 of 250 shown', $default);
         $this->assertStringContainsString('this tab opens on the rows with issues', $default);
         $this->assertSame(100, substr_count($page('?issues=0'), '<tr class='));
+    }
+
+    /**
+     * Two more monitored carriers of one VNI, and the flood lists that make exactly one gap:
+     * the third leaf hears both others (so the first one demonstrably advertises the VNI), the
+     * second does not hear the first. A gap needs that witness — with two carriers a flood list
+     * cannot be told apart from a VNI the other leaf simply does not announce (plan §10.3).
+     */
+    private function carriersWithAGap(int $fabric, int $firstDevice, int $vni): void
+    {
+        $now = now();
+        $devices = [1 => $firstDevice];
+        foreach ([2, 3] as $n) {
+            $devices[$n] = Device::factory()->create(['os' => 'junos'])->device_id;
+            DB::table(TableSchema::tableName('vtep'))->insert(['vtep_ip' => "192.0.2.$n", 'device_id' => $devices[$n], 'role' => 'leaf', 'last_seen' => $now]);
+            DB::table(TableSchema::tableName('fabric_member'))->insert(['fabric_id' => $fabric, 'vtep_ip' => "192.0.2.$n", 'role' => 'leaf', 'since' => $now]);
+            DB::table(TableSchema::tableName('vni'))->insert(['device_id' => $devices[$n], 'vni' => $vni, 'instance' => 'MACVRF-A', 'source_vtep' => "192.0.2.$n", 'last_seen' => $now]);
+        }
+        $flood = [
+            [1, '192.0.2.2'], [1, '192.0.2.3'],   // the first leaf hears both
+            [2, '192.0.2.3'],                     // ... the second does not hear the first: the gap
+            [3, '192.0.2.1'], [3, '192.0.2.2'],   // ... the third hears both
+        ];
+        foreach ($flood as [$n, $peer]) {
+            DB::table(TableSchema::tableName('vni_vtep'))->insert(['device_id' => $devices[$n], 'vni' => $vni, 'remote_vtep_ip' => $peer, 'last_seen' => $now]);
+        }
     }
 
     /**

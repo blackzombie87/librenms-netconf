@@ -1,7 +1,8 @@
 @include('netconf::fabric.filter', ['placeholder' => 'VNI, VLAN tag, VLAN name, instance', 'total' => $vni_total, 'shown' => $vni_shown, 'issues' => $vni_issues])
 <p class="text-muted">
     One row per VNI over the monitored members. Flood lists come from <code>show mac-vrf forwarding vxlan-tunnel-end-point remote</code> (every poll), the VLAN tag from the remote MAC table (every third poll).
-    Gaps can only be detected between monitored carriers; unknown VTEPs in a flood list are counted but not judged.
+    <em>Carried by</em> is where the VNI is instantiated, <em>advertising</em> where it is also announced (a type-3 route, which Junos sends for a bridge domain with an up interface) — a VLAN template instantiates a VNI fleet-wide and most leaves stay silent, which is normal.
+    A gap is therefore only counted against a leaf that advertises the VNI elsewhere; gaps can only be detected between monitored carriers, and unknown VTEPs in a flood list are counted but not judged.
 </p>
 <table class="table table-condensed table-hover">
     <thead>
@@ -33,6 +34,7 @@
                     @foreach ($v['carriers'] as $c)
                         @include('netconf::fabric.node', ['node' => $nodes->get($nodes->addressOf($c['device_id']) ?? ''), 'show_ip' => false, 'plain' => true])@if (! $loop->last), @endif
                     @endforeach
+                    <br><small class="text-muted">{{ count($v['advertised']) }} of {{ count($v['carriers']) }} advertising</small>
                     @if ($v['multicast_groups'] !== [])<br><small class="text-muted">mcast {{ implode(', ', $v['multicast_groups']) }}</small>@endif
                 </td>
                 <td>

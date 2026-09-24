@@ -7,8 +7,9 @@ use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 
 /**
  * VNIs tab (plan §7.4): one row per VNI over all monitored members of a fabric — the VLAN
- * tag per leaf (mismatch flagged), the leaves carrying it, their flood lists compared with
- * the other carriers (gap flagged), the anycast IRBs, and the remote MAC count.
+ * tag per leaf (mismatch flagged), the leaves carrying it, which of them advertise it, their
+ * flood lists compared with the leaves that do advertise (gap flagged), the anycast IRBs, and
+ * the remote MAC count.
  */
 final class VniMatrix
 {
@@ -34,16 +35,30 @@ final class VniMatrix
     {
         /** @var array<int, array<int, list<string>>> $flood device => vni => remote VTEPs */
         $flood = [];
-        /** @var array<int, true> $collected devices whose remote table was fetched at all */
-        $collected = [];
+        /** @var array<int, true> $hasFlood devices whose remote table was fetched at all */
+        $hasFlood = [];
         foreach ($floodRows as $r) {
             $flood[(int) $r['device_id']][(int) $r['vni']][] = (string) $r['remote_vtep_ip'];
-            $collected[(int) $r['device_id']] = true;
+            $hasFlood[(int) $r['device_id']] = true;
         }
         $addressDevice = [];
         foreach ($deviceNodes as $deviceId => $ips) {
             foreach ($ips as $ip) {
                 $addressDevice[$ip] = $deviceId;
+            }
+        }
+
+        // who actually advertises a VNI: a leaf appears in a flood list when the other leaf
+        // received its type-3 (IMET) route, which Junos sends for a bridge domain with an up
+        // interface. Carrying the VNI is not the same thing — a fleet-wide VLAN template
+        // instantiates hundreds of VNIs on every leaf and most stay silent, which is correct
+        // (plan §10.3). Evidence, not assumption, and any member's flood list is evidence.
+        /** @var array<int, array<int, true>> $advertised vni => devices that advertise it */
+        $advertised = [];
+        foreach ($floodRows as $r) {
+            $speaker = $addressDevice[(string) $r['remote_vtep_ip']] ?? null;
+            if ($speaker !== null) {
+                $advertised[(int) $r['vni']][$speaker] = true;
             }
         }
 
@@ -63,6 +78,7 @@ final class VniMatrix
                 'irbs' => [],
                 'remote_macs' => 0,
                 'flood' => [],
+                'advertised' => [],
                 'gaps' => [],
                 'stale' => [],
                 'flags' => [],
@@ -96,13 +112,15 @@ final class VniMatrix
             $row['vlan_mismatch'] = count(array_unique($row['vlan_ids'])) > 1;
             $row['flood_peers'] = array_values(array_unique(array_merge(...array_values($row['flood']) ?: [[]])));
 
-            // flood-list gaps between monitored carriers: A carries the VNI but B's flood list lacks A
+            $speakers = $advertised[$row['vni']] ?? [];
+
+            // flood-list gap: B advertises the VNI to someone, but A's flood list lacks it
             foreach ($carrierIds as $a) {
-                if (! isset($collected[$a])) {
+                if (! isset($hasFlood[$a])) {
                     continue;   // no remote table from this leaf: nothing to compare
                 }
                 foreach ($carrierIds as $b) {
-                    if ($a === $b) {
+                    if ($a === $b || ! isset($speakers[$b])) {
                         continue;
                     }
                     $bAddresses = $deviceNodes[$b] ?? [];
@@ -118,12 +136,16 @@ final class VniMatrix
                     }
                 }
             }
+            // an empty flood list is only a finding when somebody else does advertise the VNI:
+            // a VNI that is instantiated fleet-wide and announced nowhere is dormant, not broken
             $row['orphan'] = [];
             foreach ($carrierIds as $a) {
-                if (isset($collected[$a]) && $row['flood'][$a] === []) {
+                if (isset($hasFlood[$a]) && $row['flood'][$a] === [] && array_diff(array_keys($speakers), [$a]) !== []) {
                     $row['orphan'][] = $a;
                 }
             }
+            $row['advertised'] = array_keys($speakers);
+            sort($row['advertised']);
             $row['irb_down'] = array_keys(array_filter($row['irbs'], fn ($irb) => $irb['status'] !== null && strtolower($irb['status']) !== 'up'));
             $row['irb_partial'] = $row['irbs'] !== [] && count($row['irbs']) < count($carrierIds);   // legal (gateway pair vs. plain leaves), informational
 

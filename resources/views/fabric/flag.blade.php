@@ -1,7 +1,7 @@
 {{-- one issue flag: $flag --}}
 @php($map = [
     'vlan-mismatch' => ['warning', 'the VLAN tag differs between leaves (legal, informational)'],
-    'flood-gap' => ['danger', 'a monitored carrier is missing from another carrier\'s flood list'],
+    'flood-gap' => ['danger', 'a carrier that advertises the VNI is missing from another carrier\'s flood list'],
     'stale-flood' => ['warning', 'the flood list points at a monitored member that does not carry the VNI'],
     'orphan' => ['warning', 'VNI with an empty flood list on a leaf'],
     'irb-down' => ['danger', 'anycast IRB not up'],

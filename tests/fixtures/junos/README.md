@@ -56,3 +56,16 @@ ten minutes earlier: the same MAC on the *peer* ESI-LAG (`source-local-origin ae
 one `mobility-history/mobility-event` of type `local`); no shipped command polls it, it pins the element names
 for the mobility work. What the sample does not give is the second source: `state duplicate` carries only the
 current `active-source`. ESIs → `00:11:22:33:44:55:00:00:NN:00`, VTEP → `192.0.2.N`.
+
+Templated-fabric samples (2026-09-24, one leaf of a **production** 12-leaf EVPN core, Junos 23.4R2-S3.9;
+plan §10 X1/X10): `show-mac-vrf-forwarding-vxlan-tunnel-end-point-{source,remote}-templated.xml` and
+`show-evpn-instance-extensive-templated.xml`. Nothing is shortened — the point of this capture is its
+*shape*: **285 VNIs instantiated** from a fleet-wide VLAN template, of which only **12 bridge domains
+have an up interface**, and every peer's flood list is exactly as long as its
+`evpn-num-inclusive-multicast-routes` (2, 12, 15, 34, 40, 57, 57, 108, 112, 285×4). That equality is
+the evidence that a flood list holds what a peer *advertises*, not what it has configured, which is
+what `vni-flood-gap` got wrong. Anonymised bijectively per token, so the relationships survive:
+VTEPs → 192.0.2.x (the two 198.51.100.x peers are the MX204 edge routers, not NETCONF-polled at the
+time), ESIs and MACs renumbered, VNI/VLAN numbers and Junos versions original.
+`TemplatedVniFabricTest` mirrors this leaf's view onto all twelve and asserts both directions:
+zero issues here, and the 21,395 criticals the old rule produced.

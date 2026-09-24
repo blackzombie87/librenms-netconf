@@ -32,7 +32,7 @@ final class FabricChecks
         'neighbor-asymmetric' => ['Asymmetric neighbour', Issue::WARNING, 'a member lists another monitored member as EVPN neighbour, the other does not list it back'],
         'session-down' => ['EVPN session down', Issue::CRITICAL, 'an overlay BGP session of a member towards another member is not established'],
         'session-missing' => ['EVPN session missing', Issue::WARNING, 'a member lacks a session to a peer the other monitored members have'],
-        'vni-flood-gap' => ['Flood-list gap', Issue::CRITICAL, 'a leaf carries a VNI but is missing from the flood list of another carrier'],
+        'vni-flood-gap' => ['Flood-list gap', Issue::CRITICAL, 'a leaf advertises a VNI — it is in some carrier\'s flood list — but is missing from another carrier\'s flood list'],
         'vni-stale-flood' => ['Stale flood entry', Issue::WARNING, 'a flood list points at a monitored member that does not carry the VNI'],
         'vni-orphan' => ['VNI without flood list', Issue::WARNING, 'a VNI on a leaf has no remote VTEP at all'],
         'vni-vlan-mismatch' => ['VLAN tag differs', Issue::INFO, 'the same VNI maps to different VLAN tags on different leaves (legal)'],
@@ -240,7 +240,7 @@ final class FabricChecks
         foreach ($input->vnis as $v) {
             $vni = (int) $v['vni'];
             foreach ($v['gaps'] as $gap) {
-                $issues[] = new Issue('vni-flood-gap', Issue::CRITICAL, "$vni/{$gap['device_id']}>{$gap['missing']}", sprintf('VNI %d: flood list of %s lacks %s, which carries the VNI', $vni, $name((int) $gap['device_id']), $name((int) $gap['missing'])), [(int) $gap['device_id'], (int) $gap['missing']], ['vni' => $vni]);
+                $issues[] = new Issue('vni-flood-gap', Issue::CRITICAL, "$vni/{$gap['device_id']}>{$gap['missing']}", sprintf('VNI %d: flood list of %s lacks %s, which advertises the VNI to the other carriers', $vni, $name((int) $gap['device_id']), $name((int) $gap['missing'])), [(int) $gap['device_id'], (int) $gap['missing']], ['vni' => $vni]);
             }
             foreach ($v['stale'] as $stale) {
                 $issues[] = new Issue('vni-stale-flood', Issue::WARNING, "$vni/{$stale['device_id']}>{$stale['target']}", sprintf('VNI %d: %s floods to %s, which does not carry the VNI', $vni, $name((int) $stale['device_id']), $name((int) $stale['target'])), [(int) $stale['device_id'], (int) $stale['target']], ['vni' => $vni, 'vtep_ip' => $stale['vtep_ip']]);
