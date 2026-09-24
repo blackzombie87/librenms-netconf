@@ -26,7 +26,7 @@ class IssueStore
      */
     public function sync(int $fabricId, array $issues, string $now): array
     {
-        $existing = DB::table(self::TABLE)->where('fabric_id', $fabricId)->get(['id', 'issue_key', 'check', 'subject', 'severity', 'message'])->keyBy('issue_key');
+        $existing = DB::table(self::TABLE)->where('fabric_id', $fabricId)->get(['id', 'issue_key', 'check', 'subject', 'severity', 'message', 'details'])->keyBy('issue_key');
         $devices = [];
         foreach (DB::table(self::DEVICE_TABLE)->whereIn('issue_id', $existing->pluck('id')->all() ?: [0])->get() as $row) {
             $devices[(int) $row->issue_id][] = (int) $row->device_id;
@@ -35,6 +35,8 @@ class IssueStore
         $seen = [];
         $new = 0;
         $changed = 0;
+        /** @var list<int> $touch open issues whose only change is that they were seen again */
+        $touch = [];
         foreach ($issues as $issue) {
             $key = $issue->key();
             if (isset($seen[$key])) {
@@ -76,19 +78,37 @@ class IssueStore
                 continue;
             }
 
-            $update = ['last_seen' => $now, 'message' => $issue->message, 'details' => $issue->details === [] ? null : json_encode($issue->details)];
+            // an UPDATE per open issue per resolve is what made a big fabric expensive: the
+            // resolver runs on every member poll that wrote rows, inside one transaction, so
+            // 12 leaves × 22,867 open issues was ~900 writes/s of nothing (plan §10.8)
+            $details = $issue->details === [] ? null : json_encode($issue->details);
+            $update = [];
+            if ((string) $row->message !== $issue->message) {
+                $update['message'] = $issue->message;
+            }
+            if (($row->details === null ? null : (string) $row->details) !== $details) {
+                $update['details'] = $details;
+            }
             if ((string) $row->severity !== $issue->severity) {
                 $update['severity'] = $issue->severity;
                 $this->logTo($ids, self::severity($issue->severity), sprintf('EVPN fabric check %s is now %s: %s', $issue->check, $issue->severity, $issue->message));
                 $changed++;
             }
-            DB::table(self::TABLE)->where('id', $row->id)->update($update);
+            if ($update === []) {
+                $touch[] = (int) $row->id;
+            } else {
+                DB::table(self::TABLE)->where('id', $row->id)->update($update + ['last_seen' => $now]);
+            }
             $had = $devices[(int) $row->id] ?? [];
             sort($had);
             if ($had !== $ids) {
                 DB::table(self::DEVICE_TABLE)->where('issue_id', $row->id)->delete();
                 $this->writeDevices((int) $row->id, $ids);
             }
+        }
+
+        foreach (array_chunk($touch, 1000) as $chunk) {
+            DB::table(self::TABLE)->whereIn('id', $chunk)->update(['last_seen' => $now]);
         }
 
         $cleared = 0;

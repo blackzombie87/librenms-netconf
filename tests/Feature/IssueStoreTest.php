@@ -51,6 +51,51 @@ final class IssueStoreTest extends LibrenmsTestCase
         $this->assertSame('EVPN fabric check esi-lag-down cleared: second b', DB::table('eventlog')->where('type', IssueStore::EVENT_TYPE)->orderByDesc('event_id')->value('message'));
     }
 
+    /**
+     * Plan §10.8: the resolver runs on every member poll that wrote rows, inside one
+     * transaction, and re-wrote every open issue of the fabric each time — 22,867 UPDATEs per
+     * resolve × 12 leaves per cycle on the first production fabric. Only what changed is
+     * written now, and being seen again costs one statement for the whole fabric.
+     */
+    public function testASecondSyncOfUnchangedIssuesCostsOneStatement(): void
+    {
+        $fabricId = $this->fabric();
+        $device = Device::factory()->create(['hostname' => 'leaf-a.example.net']);
+        $issues = fn (string $message) => array_map(
+            fn (int $i) => new Issue('vni-flood-gap', Issue::CRITICAL, "1000$i/1>2", "$message $i", [$device->device_id]),
+            range(1, 20),
+        );
+        $store = new IssueStore;
+        $store->sync($fabricId, $issues('gap'), '2026-09-24 10:00:00');
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $result = $store->sync($fabricId, $issues('gap'), '2026-09-24 10:05:00');
+        $writes = array_values(array_filter(array_map(fn (array $q) => (string) $q['query'], DB::getQueryLog()), fn (string $q) => str_starts_with($q, 'update') || str_starts_with($q, 'insert') || str_starts_with($q, 'delete')));
+        DB::disableQueryLog();
+
+        $this->assertSame(['total' => 20, 'new' => 0, 'cleared' => 0, 'changed' => 0], $result);
+        $this->assertCount(1, $writes, "20 unchanged issues wrote:\n" . implode("\n", $writes));
+        $this->assertStringStartsWith('update `' . IssueStore::TABLE . '` set `last_seen`', $writes[0]);
+        $this->assertSame(
+            ['2026-09-24 10:05:00'],
+            DB::table(IssueStore::TABLE)->where('fabric_id', $fabricId)->distinct()->pluck('last_seen')->all(),
+            'every issue was still seen'
+        );
+
+        // a changed message is written, and only that one
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $changed = $issues('gap');
+        $changed[0] = new Issue('vni-flood-gap', Issue::CRITICAL, '10001/1>2', 'gap 1 (now on ae7)', [$device->device_id]);
+        $store->sync($fabricId, $changed, '2026-09-24 10:10:00');
+        $updates = array_values(array_filter(array_map(fn (array $q) => (string) $q['query'], DB::getQueryLog()), fn (string $q) => str_starts_with($q, 'update')));
+        DB::disableQueryLog();
+
+        $this->assertCount(2, $updates, "one row plus the bulk last_seen:\n" . implode("\n", $updates));
+        $this->assertSame('gap 1 (now on ae7)', DB::table(IssueStore::TABLE)->where('subject', '10001/1>2')->value('message'));
+    }
+
     public function testRowsWithTheOldKeyShapeAreReKeyedWithoutAnEventlogEntry(): void
     {
         $fabricId = $this->fabric();

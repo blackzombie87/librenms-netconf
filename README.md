@@ -424,7 +424,7 @@ those into NaN, while the plugin parses strings itself. Rows inside `multi-routi
 | `sensors` | native sensors with `poller_type = netconf`, `sensor_type = netconf-<definition>-<id>`; state sensors get state translations | `sensors` table, `rrd/<host>/sensor-<class>-netconf-…rrd`, any other configured datastore | standard sensor alert rules (`sensors.sensor_current > sensors.sensor_limit`, state generic value); eventlog on threshold crossing and state change |
 | `ports` | rows matched to the `ports` table by ifIndex (or ifName/ifDescr/ifAlias) | `netconf_port_metrics` (last values as JSON), `rrd/<host>/netconf-port-<port_id>-<definition>-<mapping>.rrd`, one data source per field | Advanced-SQL alert rules on `netconf_port_metrics.values` |
 | `metrics` | free-form rows | `netconf_metrics` (last values + labels as JSON), `rrd/<host>/netconf-<definition>-<mapping>-<index>.rrd` | Advanced-SQL alert rules on `netconf_metrics.values` |
-| `tables` | rows of the EVPN fabric tables, typed columns, merged on the key across mappings, pruned per device | `netconf_evpn_<table>` (neighbor, esi, vni, vni_vtep, tunnel, mac); no RRD. The fabric resolver derives `netconf_evpn_{vtep,fabric,fabric_member,underlay_link}` from them, the checks `netconf_evpn_issue{,_device}` and the *EVPN fabric issues* sensor, and, with *ESI peers as neighbours*, rows in the core `links` table (`protocol = evpn-esi`) | Advanced-SQL alert rules on the `netconf_evpn_*` tables (only with the *EVPN fabric view* setting) |
+| `tables` | rows of the EVPN fabric tables, typed columns, merged on the key across mappings, pruned per device | `netconf_evpn_<table>` (neighbor, esi, vni, vni_vtep, tunnel, mac); no RRD. The fabric resolver derives `netconf_evpn_{vtep,fabric,fabric_member,underlay_link}` from them, the checks `netconf_evpn_issue{,_device}` and the *EVPN fabric critical issues* sensor, and, with *ESI peers as neighbours*, rows in the core `links` table (`protocol = evpn-esi`) | Advanced-SQL alert rules on the `netconf_evpn_*` tables (only with the *EVPN fabric view* setting) |
 
 Per device, `netconf_device_status` keeps the transport, matched definitions, poll count,
 last success, last error and the back-off: after a failed session the device is skipped
@@ -527,9 +527,9 @@ involves in `netconf_evpn_issue_device`). An issue keeps its `first_seen` while 
 | `neighbor-asymmetric` | warning | a member lists another monitored member as EVPN neighbour, the other does not list it back |
 | `session-down` | critical | an overlay BGP session of a member towards another member is not established (state from core `bgpPeers` or `show bgp summary`) |
 | `session-missing` | warning | a member lacks a session to a peer that the other monitored members have |
-| `vni-flood-gap` | critical | a leaf carries a VNI but is missing from another carrier's flood list |
-| `vni-stale-flood` | warning | a flood list points at a monitored member that does not carry the VNI |
-| `vni-orphan` | warning | a VNI on a leaf has no remote VTEP at all |
+| `vni-flood-gap` | critical | a leaf **advertises** a VNI — it is in some member's flood list for it — but is missing from another carrier's flood list. Carrying a VNI is not the condition: a VLAN template instantiates a VNI on every leaf and a leaf announces it only where the bridge domain has an up interface. A VNI with only two carriers cannot be judged, because the witness would have to be the flood list that is missing the entry |
+| `vni-stale-flood` | warning | a flood list points at a member the plugin collects from that does not carry the VNI |
+| `vni-orphan` | warning | a VNI on a leaf has no remote VTEP at all while another member does advertise it |
 | `vni-vlan-mismatch` | info | the same VNI maps to different VLAN tags on different leaves (legal) |
 | `vni-irb-down` | critical | the anycast IRB of a VNI is not up on a gateway |
 | `vni-irb-partial` | info | some carriers of a VNI have an IRB, others do not (legal for a gateway pair) |
@@ -549,16 +549,20 @@ involves in `netconf_evpn_issue_device`). An issue keeps its `first_seen` while 
 | `tunnel-asymmetric` | warning | a member has a VXLAN tunnel to another member that has none back |
 | `tunnel-errors` | warning | the `vtep.N` port of a tunnel counted errors or discards in the last poll |
 | `member-not-polling` | warning | the NETCONF collection of a member is failing, so its data may be stale |
+| `member-not-collected` | warning | a member is a device in LibreNMS but the plugin has no EVPN data from it (not enabled, or polled and silent). It is left out of every comparison instead of being blamed for the others' asymmetries — enable NETCONF on it to complete the fabric view |
 
 Alerting hooks, in the order you will probably use them:
 
 - **Eventlog** entries of type `netconf-evpn` when an issue appears (severity error / warning /
   notice), changes severity or clears (ok), on every monitored device the issue involves; a
   fabric-level finding (unknown VTEP, version skew) is logged without a device.
-- A **count sensor "EVPN fabric issues"** (`netconf-evpn-fabric-issues`, `limit: 0`) on every
-  monitored member with the number of critical and warning issues that involve it, recorded by
+- A **count sensor "EVPN fabric critical issues"** (`netconf-evpn-fabric-issues`, `limit: 0`) on
+  every monitored member with the number of **critical** issues that involve it, recorded by
   the member's own poll (so it reflects the resolve before that poll). Alert on it like on
-  any sensor (*Alerting* below), graph it on the health tab.
+  any sensor (*Alerting* below), graph it on the health tab. Warnings are deliberately not
+  counted: with `limit: 0` the stock *Sensor over limit* rule fires on anything above zero, so
+  a standing warning would alert for as long as it stands — read them on the *Checks* tab, in
+  the eventlog, or with an Advanced-SQL rule on `netconf_evpn_issue` (below).
 - **Advanced-SQL rules** on `netconf_evpn_issue` for one alert per fabric or per check
   (examples below).
 
@@ -585,8 +589,8 @@ sensors.sensor_class = "count" AND sensors.sensor_type = "netconf-junos-evpn-dup
 Template line: `{{ $value['sensor_descr'] }}: {{ $value['sensor_current'] }} duplicate MACs`
 inside the `@foreach ($alert->faults as $key => $value)` loop.
 
-**EVPN fabric issues (count sensor).** One alert per fabric member with critical or
-warning issues involving it (the *Checks* tab of the fabric lists them):
+**EVPN fabric issues (count sensor).** One alert per fabric member with critical issues
+involving it (the *Checks* tab of the fabric lists all severities):
 
 ```
 sensors.sensor_type = "netconf-evpn-fabric-issues" AND sensors.sensor_current > 0

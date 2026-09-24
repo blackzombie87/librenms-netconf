@@ -59,6 +59,13 @@ final class FabricChecksTest extends LibrenmsTestCase
         $this->assertSame(2.0, $sensor->value);
         $this->assertSame('netconf-evpn-fabric-issues', $sensor->type());
 
+        // the sensor counts criticals only (plan §10.7): with limit 0 the stock "sensor over
+        // limit" rule alerts on anything above zero, and a standing warning would alert forever
+        DB::table(IssueStore::TABLE)->where('check', 'esi-single-pe')->update(['severity' => Issue::WARNING]);
+        $this->assertSame(['critical' => 1, 'warning' => 1, 'info' => 0], IssueStore::countForDevice($leaf->device_id));
+        $this->assertSame(1.0, IssueSensor::value($leaf)?->value);
+        DB::table(IssueStore::TABLE)->where('check', 'esi-single-pe')->update(['severity' => Issue::CRITICAL]);
+
         // nothing changed: same issues, first_seen kept, no new eventlog entry
         $firstSeen = $issues['esi-lag-down']->first_seen;
         $this->travel(5)->minutes();

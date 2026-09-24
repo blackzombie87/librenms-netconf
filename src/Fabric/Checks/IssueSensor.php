@@ -10,9 +10,14 @@ use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 use SafferIt\LibrenmsNetconf\Extract\SensorValue;
 
 /**
- * The per-leaf "EVPN fabric issues" count sensor (plan §7.5): fabrics are not devices, so
- * every monitored member carries the number of critical and warning issues that involve it
- * as a native sensor (netconf-evpn-fabric-issues, limit 0) for alert rules and graphs. The
+ * The per-leaf "EVPN fabric critical issues" count sensor (plan §7.5): fabrics are not
+ * devices, so every monitored member carries the number of *critical* issues that involve it
+ * as a native sensor (netconf-evpn-fabric-issues, limit 0) for alert rules and graphs.
+ *
+ * Criticals only since 1.3.0 (plan §10.7): with `limit 0` the stock "Sensor over limit" rule
+ * fires on anything above zero, and counting warnings meant every standing informational
+ * finding alerted forever — on the first production fabric it alerted all twelve leaves at
+ * once. The warnings are on the Checks tab and in the eventlog, where they belong. The
  * value joins the device's own run like a YAML sensor, after this run's fabric resolve, so
  * it lives and dies with the plugin's sensor sync: on discovery a device without membership
  * gets no sensor. On poll an existing sensor is never left frozen: while the fabric view is
@@ -27,9 +32,11 @@ final class IssueSensor
 
     public const TYPE = 'netconf-' . self::DEFINITION . '-' . self::ID;
 
+    public const DESCRIPTION = 'EVPN fabric critical issues';
+
     public static function mapping(): SensorMapping
     {
-        return new SensorMapping(id: self::ID, class: 'count', command: '', index: "'total'", descr: 'EVPN fabric issues', group: 'EVPN', limit: 0);
+        return new SensorMapping(id: self::ID, class: 'count', command: '', index: "'total'", descr: self::DESCRIPTION, group: 'EVPN', limit: 0);
     }
 
     /**
@@ -58,7 +65,7 @@ final class IssueSensor
         }
         $counts = IssueStore::countForDevice($device->device_id);
 
-        return self::make((float) ($counts['critical'] + $counts['warning']));
+        return self::make((float) $counts['critical']);
     }
 
     /** Whether the device has the sensor row from an earlier discovery. */
@@ -69,6 +76,6 @@ final class IssueSensor
 
     private static function make(float $count): SensorValue
     {
-        return new SensorValue(self::DEFINITION, self::mapping(), 'total', 'EVPN fabric issues', $count);
+        return new SensorValue(self::DEFINITION, self::mapping(), 'total', self::DESCRIPTION, $count);
     }
 }
