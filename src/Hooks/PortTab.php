@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Gate;
 use LibreNMS\Interfaces\Plugins\Hooks\PortTabHook;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
 use SafferIt\LibrenmsNetconf\Support\GraphPeriod;
+use SafferIt\LibrenmsNetconf\Support\PluginRoutes;
 
 /**
  * "Plugins" tab of a port: the plugin's per-port counters (values table + graphs).
@@ -16,7 +17,8 @@ class PortTab implements PortTabHook
 {
     public function authorize(Port $port): bool
     {
-        return Gate::allows('view', $port->device)
+        return PluginRoutes::available()
+            && Gate::allows('view', $port->device)
             && NetconfPortMetric::query()->where('port_id', $port->port_id)->exists();
     }
 

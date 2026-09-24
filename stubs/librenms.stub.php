@@ -480,3 +480,14 @@ namespace LibreNMS\Data\Graphing {
         }
     }
 }
+
+namespace LibreNMS\Util {
+    /** Core's notification list (used for the route-cache warning, plan §9.1 I3). */
+    class Notifications
+    {
+        public static function create(string $title, string $message, string $source, int $severity = 0, ?string $date = null): bool
+        {
+            return true;
+        }
+    }
+}

@@ -4,6 +4,7 @@ namespace SafferIt\LibrenmsNetconf;
 
 use App\Facades\LibrenmsConfig;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Foundation\Http\Middleware\TrimStrings;
 use Illuminate\Support\ServiceProvider;
 use LibreNMS\Interfaces\Plugins\Hooks\DeviceOverviewHook;
@@ -27,6 +28,7 @@ use SafferIt\LibrenmsNetconf\Hooks\Page;
 use SafferIt\LibrenmsNetconf\Hooks\PortTab;
 use SafferIt\LibrenmsNetconf\Hooks\Settings;
 use SafferIt\LibrenmsNetconf\Http\DeviceTab\TabRegistration;
+use SafferIt\LibrenmsNetconf\Support\PluginRoutes;
 use SafferIt\LibrenmsNetconf\Support\SettingsSecrets;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
 use SafferIt\LibrenmsNetconf\Transport\DeviceCredentials;
@@ -74,7 +76,11 @@ class NetconfPluginProvider extends ServiceProvider
             return;
         }
 
+        // a no-op while LibreNMS has a cached route file that predates the plugin (plan §9.1):
+        // the hooks below ask PluginRoutes::available() before they render anything
         $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+        $routesAreCached = $this->app instanceof CachesRoutes && $this->app->routesAreCached();
+        $this->app->booted(fn () => PluginRoutes::warnIfMissing($routesAreCached));
         // the NETCONF device tab (plan §8 U2); without the core seam the standalone pages stay
         TabRegistration::register(__DIR__ . '/../resources/lnms-views');
 

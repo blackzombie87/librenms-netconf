@@ -5,6 +5,7 @@ namespace SafferIt\LibrenmsNetconf\Hooks;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Gate;
 use LibreNMS\Interfaces\Plugins\Hooks\SinglePageHook;
+use SafferIt\LibrenmsNetconf\Support\PluginRoutes;
 
 /**
  * Core's generic /plugin/netconf page. The plugin's own route for that path redirects to the
@@ -16,7 +17,7 @@ class Page implements SinglePageHook
 {
     public function authorize(): bool
     {
-        return Gate::allows('global-read');
+        return PluginRoutes::available() && Gate::allows('global-read');
     }
 
     /**
