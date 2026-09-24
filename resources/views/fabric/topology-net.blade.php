@@ -97,7 +97,7 @@
                 interaction: { hover: true, tooltipDelay: 120, navigationButtons: false, multiselect: true },
                 physics: {
                     solver: 'forceAtlas2Based',
-                    forceAtlas2Based: { gravitationalConstant: -80, centralGravity: 0.008, springLength: 120, springConstant: 0.06, avoidOverlap: 0.6 },
+                    forceAtlas2Based: { gravitationalConstant: -120, centralGravity: 0.006, springLength: 170, springConstant: 0.05, damping: 0.5, avoidOverlap: 1 },
                     stabilization: { iterations: 160, fit: true },
                     minVelocity: 0.6
                 },
