@@ -86,6 +86,7 @@
                     @if ($row['flags'] !== [])
                         <p><small>@foreach ($row['flags'] as $flag)<span class="label label-{{ in_array($flag, \SafferIt\LibrenmsNetconf\Fabric\View\EsiKind::CHIP, true) ? 'danger' : 'warning' }}">{{ $flag }}</span> @endforeach</small></p>
                     @endif
+                    @include('netconf::fabric.esi-traffic', ['row' => $row])
                 @endif
             </div>
         @endforeach

@@ -146,6 +146,71 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertStringContainsString('not an ESI-LAG', $focused);
     }
 
+    public function testAnEsiGraphIsNeverRequestedBeforeItIsAskedFor(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithTwoPeLag();
+
+        foreach (["/plugin/netconf/fabric/$fabric?topo=eagle", "/plugin/netconf/fabric/$fabric/esis"] as $url) {
+            $page = $this->get($url)->assertOk()->getContent();
+            $this->assertStringContainsString('data-src=', $page);
+            // graphPopup() would put a src here, and four more in its overlib string
+            $this->assertStringNotContainsString('class="graph-image"', $page);
+            $this->assertStringNotContainsString('<img alt="ESI-LAG 01:00:00:00:00:00:00:00:01 total" src=', $page);
+            $this->assertStringContainsString('multiport_bits', $page);
+        }
+
+        // even the open panel is served without a src: the script promotes it after parse
+        $focused = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&focus=esi:01:00:00:00:00:00:00:00:01")->assertOk()->getContent();
+        $this->assertStringNotContainsString('class="graph-image"', $focused);
+        $this->assertStringNotContainsString('<img alt="ESI-LAG 01:00:00:00:00:00:00:00:01 total" src=', $focused);
+        $this->assertStringContainsString('netconfPromote', $focused);
+        $this->assertStringContainsString('<div data-focus="esi:01:00:00:00:00:00:00:00:01">', $focused);
+        // the ESI tab's disclosure is closed, so it never had a src either
+        $this->assertStringContainsString('<details class="esi-traffic">', $this->get("/plugin/netconf/fabric/$fabric/esis")->getContent());
+    }
+
+    public function testOnePeWithAPortIsAPortGraphAndNotAMultiport(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithTwoPeLag(secondPort: false);
+
+        $page = $this->get("/plugin/netconf/fabric/$fabric/esis")->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('multiport_bits', $page);
+        $this->assertStringContainsString('port_bits', $page);
+        $this->assertStringContainsString('Omitted, no', $page);
+    }
+
+    /**
+     * Two leaves sharing one ESI-LAG, each with an AE that has a core port (unless the second
+     * is left without one), so the traffic partial has something to select.
+     *
+     * @return array{int, int, int}
+     */
+    private function fabricWithTwoPeLag(bool $secondPort = true): array
+    {
+        [$fabric, $first] = $this->fabricWithVnis(1);
+        $now = now();
+        $second = Device::factory()->create(['os' => 'junos'])->device_id;
+        DB::table(TableSchema::tableName('vtep'))->insert(['vtep_ip' => '192.0.2.2', 'device_id' => $second, 'role' => 'leaf', 'last_seen' => $now]);
+        DB::table(TableSchema::tableName('fabric_member'))->insert(['fabric_id' => $fabric, 'vtep_ip' => '192.0.2.2', 'role' => 'leaf', 'since' => $now]);
+        $ports = [];
+        foreach ([$first, $second] as $device) {
+            $ports[$device] = (int) DB::table('ports')->insertGetId(['device_id' => $device, 'ifName' => 'ae2', 'ifIndex' => 700, 'deleted' => 0]);
+        }
+        foreach ([$first => '192.0.2.2', $second => '192.0.2.1'] as $device => $peer) {
+            DB::table(TableSchema::tableName('esi'))->insert([
+                'device_id' => $device, 'esi' => '01:00:00:00:00:00:00:00:01', 'local_ifname' => 'ae2.0',
+                'local_port_id' => $device === $second && ! $secondPort ? null : $ports[$device],
+                'lag_status' => 'Up/Forwarding', 'status' => 'Resolved by IFL ae2.0',
+                'remote_vtep_ips' => json_encode([$peer]), 'last_seen' => $now,
+            ]);
+        }
+
+        return [$fabric, $first, $second];
+    }
+
     public function testTheVnisTabPagesAndOpensOnTheRowsWithIssues(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));

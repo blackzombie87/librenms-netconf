@@ -61,6 +61,16 @@
                 <td class="text-right">{{ $e['remote_mac_count'] ?? '' }}</td>
                 <td>@foreach ($e['flags'] as $flag)@include('netconf::fabric.flag', ['flag' => $flag]) @endforeach</td>
             </tr>
+            @if (\SafferIt\LibrenmsNetconf\Fabric\View\EsiKind::isLag($e))
+                <tr class="{{ $severe ? 'danger' : ($e['flags'] !== [] ? 'warning' : '') }}">
+                    <td colspan="8" style="border-top: 0; padding-top: 0;">
+                        <details class="esi-traffic">
+                            <summary class="text-muted"><small>Traffic</small></summary>
+                            <div style="margin-top: 6px;">@include('netconf::fabric.esi-traffic', ['row' => $e])</div>
+                        </details>
+                    </td>
+                </tr>
+            @endif
         @endforeach
     </tbody>
 </table>
