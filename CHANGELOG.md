@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Two rendering fixes on the eagle view, found by driving the page in a browser:
+
+- **A site compound's caption is cut to its box.** A location is free text, and the two
+  gateway locations on the first production fabric are long enough
+  (`IPB/CarrierColo Rechenzentrum Berlin - RZ BER2`) to run across the neighbouring compound.
+  The full location stays in the box's tooltip.
+- **An ESI-LAG bracket stays inside the compound it belongs to.** The box reserved no room for
+  the mark drawn under the pair, so most brackets hung below their own site.
+
 ## 1.4.0 – 2026-09-25
 
 A new picture of a fabric, a tracer that answers "how does this address reach that one", and
