@@ -59,7 +59,9 @@
                     <rect x="{{ $g['x'] }}" y="{{ $g['y'] }}" width="{{ $g['w'] }}" height="{{ $g['h'] }}" rx="6" fill="rgba(0,0,0,0.03)" stroke="{{ $g['state'] === 'down' ? '#d9534f' : ($g['state'] === 'warning' ? '#f0ad4e' : '#ccc') }}" stroke-dasharray="4 3">
                         <title>{{ $g['label'] ?? 'no location' }} — {{ count($g['members']) }} member{{ count($g['members']) === 1 ? '' : 's' }}, click to {{ $g['collapsed'] ? 'expand' : 'collapse' }}</title>
                     </rect>
-                    <text x="{{ $g['x'] + 6 }}" y="{{ $g['y'] + 14 }}" font-size="11" fill="#777">{{ $g['collapsed'] ? '▸' : '▾' }} {{ $g['label'] ?? 'no location' }} <tspan fill="#aaa">({{ count($g['members']) }})</tspan></text>
+                    {{-- the caption is cut to the box: a location is free text and the ones that
+                         exist are long enough to run across the next compound --}}
+                    <text x="{{ $g['x'] + 6 }}" y="{{ $g['y'] + 14 }}" font-size="11" fill="#777">{{ $g['collapsed'] ? '▸' : '▾' }} {{ $g['caption'] }}<title>{{ $g['label'] ?? 'no location' }}</title></text>
                 </a>
             @endforeach
 

@@ -48,6 +48,12 @@ final class EagleLayout
     /** Vertical room a site box reserves for the outside stubs / attached dots it holds. */
     public const OUTSIDE_BAND = 28;
 
+    /** … and for the ESI bracket drawn under a pair whose two ends are both inside it. */
+    public const ESI_BAND = 22;
+
+    /** Roughly one character of the 11 px label font, for fitting a caption to its box. */
+    public const LABEL_CHAR_W = 5.9;
+
     public const ATTACHED_BAND = 44;
 
     /** Cards per row inside a site: roomier while there are one or two sites to place. */
@@ -170,7 +176,7 @@ final class EagleLayout
             if ($tierSites === []) {
                 continue;
             }
-            [$y, $tierGroups, $tierRows] = self::packTier($tierSites, $collapsed, $cap, $usable, $y, $outsideOn, $outsideOf, $attachedOf, $attached, count($groups));
+            [$y, $tierGroups, $tierRows] = self::packTier($tierSites, $collapsed, $cap, $usable, $y, $outsideOn, $outsideOf, $attachedOf, $attached, count($groups), $esiPairs);
             $groups = array_merge($groups, $tierGroups);
             $rows = array_merge($rows, $tierRows);
             $y += self::TIER_GAP;
@@ -217,6 +223,23 @@ final class EagleLayout
                 'cards' => count(array_filter($placed, fn ($n) => $n['kind'] === 'member')),
             ],
         ];
+    }
+
+    /**
+     * A compound's caption, cut to what its box can hold. A location is free text and the
+     * ones that exist are long — `IPB/CarrierColo Rechenzentrum Berlin - RZ BER2` is 304 px
+     * of 11 px type in a 176 px box — and an un-cut caption runs straight across the
+     * neighbouring compound. The full string stays in the box's `<title>`.
+     */
+    public static function fitLabel(?string $label, int $members, int $boxWidth): string
+    {
+        $caption = $label ?? 'no location';
+        $suffix = ' (' . $members . ')';
+        $budget = (int) floor(($boxWidth - 2 * self::SITE_PAD - 10) / self::LABEL_CHAR_W) - mb_strlen($suffix);
+
+        return ($budget >= 4 && mb_strlen($caption) > $budget
+            ? mb_substr($caption, 0, $budget - 1) . '…'
+            : $caption) . $suffix;
     }
 
     /**
@@ -311,9 +334,10 @@ final class EagleLayout
      * @param  array<string, list<array<string, mixed>>>  $attachedOf
      * @param  list<array<string, mixed>>|null  $attached
      * @param  int  $offset  index of the first of these groups in the caller's list
+     * @param  list<array{a: string, b: string, esis: int, degraded: int, id: string}>  $esiPairs
      * @return array{0: int, 1: list<array<string, mixed>>, 2: list<array{width: int, cards: list<string>, groups: list<int>}>}
      */
-    private static function packTier(array $sites, array $collapsed, int $cap, int $usable, int $y, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached, int $offset): array
+    private static function packTier(array $sites, array $collapsed, int $cap, int $usable, int $y, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached, int $offset, array $esiPairs): array
     {
         $groups = [];
         $rows = [];
@@ -322,7 +346,7 @@ final class EagleLayout
         $rowHeight = 0;
         $rowWidth = 0;
         foreach ($sites as $site) {
-            $box = self::siteBox($site, isset($collapsed[$site['key']]), $cap, $outsideOn, $outsideOf, $attachedOf, $attached);
+            $box = self::siteBox($site, isset($collapsed[$site['key']]), $cap, $outsideOn, $outsideOf, $attachedOf, $attached, $esiPairs);
             if ($rowWidth > 0 && $rowWidth + self::SITE_GAP + $box['w'] > $usable) {
                 $rows[] = ['width' => $rowWidth, 'cards' => [], 'groups' => $rowIndices];
                 $rowIndices = [];
@@ -454,9 +478,10 @@ final class EagleLayout
      * @param  array<string, list<array<string, mixed>>>  $outsideOf
      * @param  array<string, list<array<string, mixed>>>  $attachedOf
      * @param  list<array<string, mixed>>|null  $attached
+     * @param  list<array{a: string, b: string, esis: int, degraded: int, id: string}>  $esiPairs
      * @return array<string, mixed>
      */
-    private static function siteBox(array $site, bool $collapsed, int $cap, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached): array
+    private static function siteBox(array $site, bool $collapsed, int $cap, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached, array $esiPairs = []): array
     {
         $count = count($site['members']);
         $cols = $collapsed ? 1 : max(1, min($cap, $count));
@@ -466,17 +491,25 @@ final class EagleLayout
 
         $hasOutside = false;
         $hasAttached = false;
+        $hasBracket = false;
         if (! $collapsed) {
+            $inSite = array_fill_keys($site['members'], true);
             foreach ($site['members'] as $ip) {
                 $hasOutside = $hasOutside || ($outsideOn && ($outsideOf[$ip] ?? []) !== []);
                 $hasAttached = $hasAttached || ($attached !== null && ($attachedOf[$ip] ?? []) !== []);
             }
+            foreach ($esiPairs as $pair) {
+                // a bracket between two members of this site is drawn under the cards, so the
+                // box has to own that strip or the mark lands outside its own compound
+                $hasBracket = $hasBracket || (isset($inSite[$pair['a']], $inSite[$pair['b']]));
+            }
         }
-        $extra = ($hasOutside ? self::OUTSIDE_BAND : 0) + ($hasAttached ? self::ATTACHED_BAND : 0);
+        $extra = ($hasBracket ? self::ESI_BAND : 0) + ($hasOutside ? self::OUTSIDE_BAND : 0) + ($hasAttached ? self::ATTACHED_BAND : 0);
 
         return [
             'key' => $site['key'],
             'label' => $site['label'],
+            'caption' => self::fitLabel($site['label'], $count, $innerW + 2 * self::SITE_PAD),
             'members' => $site['members'],
             'collapsed' => $collapsed,
             'cols' => $cols,
@@ -485,6 +518,7 @@ final class EagleLayout
             'w' => $innerW + 2 * self::SITE_PAD,
             'h' => self::SITE_HEADER + $innerH + 2 * self::SITE_PAD + $extra,
             'header' => ['x' => 0, 'y' => 0, 'w' => $innerW + 2 * self::SITE_PAD, 'h' => self::SITE_HEADER],
+            'bracket' => $hasBracket,
             'summary' => null,
             'state' => 'ok',
             'outside' => 0,
@@ -528,7 +562,8 @@ final class EagleLayout
             $index++;
         }
 
-        $bandY = $top + (int) ceil(count($siteMembers) / (int) $group['cols']) * (self::CARD_H + self::ROW_GAP);
+        $bandY = $top + (int) ceil(count($siteMembers) / (int) $group['cols']) * (self::CARD_H + self::ROW_GAP)
+            + ((bool) ($group['bracket'] ?? false) ? self::ESI_BAND : 0);
         foreach ($siteMembers as $ip) {
             if ($outsideOn) {
                 foreach (array_values($outsideOf[$ip] ?? []) as $i => $stub) {

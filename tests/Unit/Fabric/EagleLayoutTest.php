@@ -317,6 +317,47 @@ it('strokes the nodes and edges a trace names, and nothing else', function () {
         ->and(EagleLayout::place(eagleShape($nodes), $nodes, $links, [], [], [], [])['edges'][0]['highlight'])->toBeFalse();
 });
 
+it('cuts a compound caption to its own box, and keeps the full location for the title', function () {
+    // the two real gateway locations are 204 px and 304 px of 11 px type in a 176 px box
+    $long = 'IPB/CarrierColo Rechenzentrum Berlin - RZ BER2';
+    $nodes = [eagleNode('10.0.0.1', 'leaf', ['site' => $long]), eagleNode('10.0.0.2', 'leaf', ['site' => 'BER1'])];
+    $out = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], [], []);
+    $captions = array_column($out['groups'], 'caption', 'label');
+
+    $fits = fn (string $caption, int $boxWidth) => mb_strlen($caption) * EagleLayout::LABEL_CHAR_W <= $boxWidth;
+
+    expect($captions[$long])->toEndWith('… (1)')
+        ->and($captions[$long])->not->toBe($long . ' (1)')
+        ->and($fits($captions[$long], $out['groups'][0]['w']))->toBeTrue()
+        // a caption that already fits is left alone
+        ->and($captions['BER1'])->toBe('BER1 (1)')
+        // and the untouched location is still on the group, for the title
+        ->and($out['groups'][0]['label'])->toBe($long)
+        ->and(EagleLayout::fitLabel(null, 3, 400))->toBe('no location (3)');
+});
+
+it('reserves the strip an ESI bracket is drawn in, so the mark stays inside its compound', function () {
+    $nodes = [eagleNode('10.0.0.11', 'leaf', ['site' => 'A']), eagleNode('10.0.0.12', 'leaf', ['site' => 'A'])];
+    $pairs = [['a' => '10.0.0.11', 'b' => '10.0.0.12', 'esis' => 1, 'degraded' => 0, 'id' => 'p']];
+
+    $without = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], [], [])['groups'][0];
+    $with = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], $pairs, [])['groups'][0];
+    $out = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], $pairs, []);
+    $bracket = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'esi'))[0];
+
+    expect($with['h'] - $without['h'])->toBe(EagleLayout::ESI_BAND)
+        ->and($with['bracket'])->toBeTrue()
+        ->and($without['bracket'])->toBeFalse()
+        // the bracket and its label sit inside the box the site reserved
+        ->and($bracket['ly'] + 3)->toBeLessThanOrEqual($with['y'] + $with['h'])
+        // a pair whose ends are in different sites does not widen either box
+        ->and(EagleLayout::place(
+            eagleShape([eagleNode('10.0.0.11', 'leaf', ['site' => 'A']), eagleNode('10.0.0.12', 'leaf', ['site' => 'B'])]),
+            [eagleNode('10.0.0.11', 'leaf', ['site' => 'A']), eagleNode('10.0.0.12', 'leaf', ['site' => 'B'])],
+            [], [], [], $pairs, [],
+        )['groups'][0]['bracket'])->toBeFalse();
+});
+
 it('keeps a single-member compound and a null-location compound deliberate rather than broken', function () {
     // plan §11 E-F8: the two MX204s carry verbose facility strings, so each sits alone
     $nodes = [
