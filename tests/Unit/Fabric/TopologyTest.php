@@ -64,7 +64,34 @@ it('classifies session states', function () {
         ->and(Topology::sessionUp('bgp', 'established'))->toBeTrue()
         ->and(Topology::sessionUp('bgp', 'idle'))->toBeFalse()
         ->and(Topology::sessionUp('lldp-only', null))->toBeNull()
-        ->and(Topology::sessionUp('ip', 'x'))->toBeNull();
+        ->and(Topology::sessionUp('ip', 'x'))->toBeNull()
+        ->and(Topology::sessionUp('ospf', ''))->toBeNull();
+});
+
+it('reads a multi-protocol edge per component, in either order of the joined state', function () {
+    // plan §12.7 T9: the edge carries `bgp,ospf` and `Established/Down`, and the old helper
+    // said up because the joined string contains `established`
+    expect(Topology::sessionUp('bgp,ospf', 'Established/Down'))->toBeFalse()
+        ->and(Topology::sessionUp('ospf,bgp', 'Down/Established'))->toBeFalse()
+        ->and(Topology::sessionUp('bgp,ospf', 'Established/Full'))->toBeTrue()
+        ->and(Topology::sessionUp('bgp,ospf', 'Idle/Down'))->toBeFalse()
+        // both protocols report the same word, so array_unique() left one component
+        ->and(Topology::sessionUp('bgp,ospf', 'up'))->toBeTrue();
+});
+
+it('names the protocol of each session component when the two lists line up', function () {
+    expect(Topology::sessionComponents('bgp,ospf', 'Established/Down'))->toBe([
+        ['protocol' => 'bgp', 'state' => 'Established', 'up' => true],
+        ['protocol' => 'ospf', 'state' => 'Down', 'up' => false],
+    ])
+        // three states from two protocols: the two sides disagree, so no component is named
+        ->and(Topology::sessionComponents('bgp,ospf', 'Established/Full/Idle'))->toBe([
+            ['protocol' => null, 'state' => 'Established', 'up' => true],
+            ['protocol' => null, 'state' => 'Full', 'up' => true],
+            ['protocol' => null, 'state' => 'Idle', 'up' => false],
+        ])
+        ->and(Topology::sessionComponents('ip', ''))->toBe([])
+        ->and(Topology::sessionComponents('lldp-only', null))->toBe([]);
 });
 
 it('draws overlay arcs to a neighbour listed by its router-id alias', function () {

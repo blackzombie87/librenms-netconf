@@ -295,11 +295,67 @@ final class Topology
         return (int) round($underlay ? 20 + sqrt($dx) * 2.5 : 30 + sqrt($dx) * 3);
     }
 
+    /**
+     * Whether every routing session of one underlay edge is up.
+     *
+     * An edge carries joined strings rather than one session: `UnderlayResolver` writes the
+     * protocols as `implode(',', …)` and the states as `implode('/', array_unique(…))`, so a
+     * link that runs BGP and OSPF reads `bgp,ospf` / `Established/Down` while its OSPF is
+     * down. Each state component is therefore judged on its own and one component that is
+     * not up makes the whole edge down, in either order of the joined string (plan §12.7 T9).
+     *
+     * `null` means "no session state at all" — an `ip` or `lldp-only` edge, which a renderer
+     * draws as unknown and never as down (plan §12.4a).
+     */
     public static function sessionUp(string $protocol, ?string $state): ?bool
     {
-        if ($state === null || $state === '' || $protocol === 'lldp-only' || $protocol === 'ip') {
+        $components = self::sessionComponents($protocol, $state);
+        if ($components === []) {
             return null;
         }
+        foreach ($components as $component) {
+            if (! $component['up']) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The edge's sessions one by one, so a trace hop can name the protocol that is down
+     * instead of folding `bgp,ospf` into one word (plan §12.6).
+     *
+     * The protocol is paired with the state only when the two joined lists have the same
+     * length — `UnderlayResolver` builds them in the same order, but `array_unique()` on the
+     * states can collapse or keep components independently of the protocol list. A component
+     * whose protocol cannot be named that way carries `null`, never a guess.
+     *
+     * @return list<array{protocol: string|null, state: string, up: bool}>
+     */
+    public static function sessionComponents(string $protocol, ?string $state): array
+    {
+        if ($state === null || $protocol === 'lldp-only' || $protocol === 'ip') {
+            return [];
+        }
+        $states = array_values(array_filter(array_map(trim(...), explode('/', $state)), fn ($s) => $s !== ''));
+        $protocols = array_values(array_filter(array_map(trim(...), explode(',', $protocol)), fn ($s) => $s !== '' && $s !== 'lldp-only' && $s !== 'ip'));
+        $paired = count($protocols) === count($states);
+
+        $components = [];
+        foreach ($states as $i => $s) {
+            $components[] = ['protocol' => $paired ? $protocols[$i] : null, 'state' => $s, 'up' => self::stateUp($s)];
+        }
+
+        return $components;
+    }
+
+    /**
+     * One session state, protocol-neutral by design (plan §12.4a): BGP's `Established`,
+     * OSPF's `Full` and `2Way`, or a plain `up` from any other source.
+     */
+    public static function stateUp(string $state): bool
+    {
         $s = strtolower($state);
 
         return str_contains($s, 'full') || str_contains($s, 'established') || str_contains($s, '2way') || $s === 'up';
