@@ -556,7 +556,7 @@ involves in `netconf_evpn_issue_device`). An issue keeps its `first_seen` while 
 | `esi-no-aliasing` | warning | aliasing is disabled on one PE of a segment |
 | `dup-mac` | critical | MACs are suppressed by duplicate-MAC detection on a leaf (the `dup-mac-instance` sensor) |
 | `dup-mac-params` | warning | threshold, window or recovery time of duplicate-MAC detection differ between leaves of one instance |
-| `mac-mobility` | warning | a MAC in the MAC database changed its active source more than *MAC mobility limit* times within one hour (`moves`, `moves_recent`, `moves_since` on `netconf_evpn_mac`) |
+| `mac-mobility` | warning | a MAC in the MAC database changed its active source more than *MAC mobility limit* times within one hour (`moves`, `moves_recent`, `moves_since` on `netconf_evpn_mac`). **Off by default** — *MAC mobility limit* ships at `0`; the check has never met a production fabric's MAC data, so look at the MACs tab first and then pick a number |
 | `route-count` | warning | a member receives no MAC routes from a neighbour that has local MACs in the same instance |
 | `version-skew` | info | the monitored members run different software versions |
 | `unknown-vtep` | warning | a member address does not belong to a monitored device |

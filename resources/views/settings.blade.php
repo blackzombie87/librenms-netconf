@@ -180,8 +180,9 @@
             <tr>
                 <td><label for="evpn_mac_moves">MAC mobility limit (moves / hour)</label></td>
                 <td><input class="form-control" id="evpn_mac_moves" type="number" min="0" name="settings[evpn_mac_moves]"
-                           value="{{ $settings['evpn_mac_moves'] ?? '' }}" placeholder="{{ $defaults['evpn_mac_moves'] }} — 0 turns the check off"></td>
-                <td><code>{{ $effective['evpn_mac_moves'] }}</code></td>
+                           value="{{ $settings['evpn_mac_moves'] ?? '' }}" placeholder="{{ $defaults['evpn_mac_moves'] }} — the check is off">
+                    <small class="text-muted">raises an issue when a MAC changes its active source more often than this. Off by default: the check has never met a fabric's real MAC data, and a network of migrating VMs is exactly the workload that moves. Look at the MACs tab first, then pick a number</small></td>
+                <td><code>{{ $effective['evpn_mac_moves'] ?: 'off' }}</code></td>
             </tr>
             <tr>
                 <td><label for="queues">Per-queue counters</label></td>
