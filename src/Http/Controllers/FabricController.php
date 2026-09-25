@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\Trace\TraceRunner;
 use SafferIt\LibrenmsNetconf\Fabric\View\EagleLayout;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricIssues;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricMembers;
@@ -44,6 +45,7 @@ class FabricController extends Controller
         'esis' => 'ESI / multihoming',
         'tunnels' => 'Tunnels',
         'macs' => 'MACs',
+        'trace' => 'Trace',
         'checks' => 'Checks',
     ];
 
@@ -123,6 +125,7 @@ class FabricController extends Controller
             'esis' => $this->esis($nodes, $request),
             'tunnels' => ['tunnels' => TunnelMatrix::forFabric($nodes)],
             'macs' => ['search' => MacSearch::run((string) $request->query('q', ''), $deviceIds), 'q' => (string) $request->query('q', '')],
+            'trace' => $this->trace($summary['id'], $nodes, $request),
             'checks' => $this->checks($summary['id'], $request),
             default => [],
         };
@@ -155,12 +158,16 @@ class FabricController extends Controller
             // summary card that printed "0 attached" would claim they had
             'attached' => $request->query('attached') ? FabricTopologyInput::attached($input['esi_rows'], $nodes) : null,
         ];
-        $eagle = EagleLayout::place($shape, $input['nodes'], $input['underlay'], $shape['overlay_edges'], $input['shared_far_ends'], $input['esi_pairs'], $view);
+        // a trace result is exactly a node and edge id list, which is the whole reason
+        // `place()` takes a highlight instead of there being a second picture (plan §11 E-F6)
+        $highlight = self::highlight($request);
+        $eagle = EagleLayout::place($shape, $input['nodes'], $input['underlay'], $shape['overlay_edges'], $input['shared_far_ends'], $input['esi_pairs'], $view, $highlight);
 
         return [
             'topo' => self::TOPO_EAGLE,
             'shape' => $shape,
             'eagle' => $eagle,
+            'highlight' => $highlight,
             'eagle_input' => $input,
             'focus' => (string) $request->query('focus', ''),
             'view' => $view,
@@ -182,6 +189,76 @@ class FabricController extends Controller
             fn ($v) => is_string($v) ? $v : null,
             is_array($raw) ? $raw : [$raw],
         )));
+    }
+
+    /**
+     * `highlight[]` holds the `link_key` of every hop of a trace; the nodes follow from the
+     * hops, so the link is short enough to paste.
+     *
+     * @return array{nodes: list<string>, edges: list<string>}
+     */
+    private static function highlight(Request $request): array
+    {
+        $raw = $request->query('highlight', []);
+        $keys = array_values(array_filter(array_map(fn ($v) => is_string($v) && $v !== '' ? $v : null, is_array($raw) ? $raw : [$raw])));
+        if ($keys === []) {
+            return ['nodes' => [], 'edges' => []];
+        }
+        $nodes = array_values(array_filter(array_map(fn ($v) => is_string($v) && $v !== '' ? $v : null, (array) $request->query('through', []))));
+
+        return ['nodes' => $nodes, 'edges' => array_map(fn (string $key) => 'edge:underlay:' . $key, $keys)];
+    }
+
+    /**
+     * The tracer (plan §12). Graph mode runs on this `global-read` page and reads only stored
+     * tables; a live walk opens SSH sessions to the devices on the way, so it is an admin
+     * POST and its result comes back through the session — the same shape the run-command
+     * form uses. Nothing here writes.
+     *
+     * @return array<string, mixed>
+     */
+    private function trace(int $fabricId, FabricNodes $nodes, Request $request): array
+    {
+        $from = trim((string) $request->query('from', ''));
+        $to = trim((string) $request->query('to', ''));
+        $vni = $request->query('vni');
+        $live = $request->session()->get('netconf_trace');
+
+        $result = null;
+        if ($from !== '' && $to !== '') {
+            $result = (new TraceRunner($fabricId, $nodes))->run($from, $to, is_numeric($vni) ? (int) $vni : null);
+        }
+
+        return [
+            'trace_from' => $from,
+            'trace_to' => $to,
+            'trace_vni' => is_numeric($vni) ? (string) $vni : '',
+            'trace' => $result,
+            'trace_live' => is_array($live) ? $live : null,
+        ];
+    }
+
+    /**
+     * Live mode: admin only, one POST, one result in the session, no state kept anywhere.
+     */
+    public function traceLive(Request $request, int $fabric): RedirectResponse
+    {
+        $data = $request->validate([
+            'from' => 'required|string|max:64',
+            'to' => 'required|string|max:64',
+            'vni' => 'nullable|integer|min:0',
+        ]);
+        $nodes = FabricNodes::forFabric($fabric);
+        abort_if($nodes->deviceIds() === [], 404, 'No such fabric');
+
+        $runner = new TraceRunner($fabric, $nodes);
+        $walker = TraceRunner::walker();
+        $result = $runner->run(trim($data['from']), trim($data['to']), $data['vni'] ?? null, live: true, walker: $walker);
+        $result['log'] = $walker->log;
+
+        return redirect()->route('netconf.fabric', [$fabric, 'trace'])
+            ->withInput($data)
+            ->with('netconf_trace', $result);
     }
 
     /**

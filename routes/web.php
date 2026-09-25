@@ -47,5 +47,8 @@ Route::middleware(['web', 'auth'])
             Route::post('run', [StatusController::class, 'run'])->name('run');
             Route::post('bulk', [StatusController::class, 'bulk'])->name('bulk');
             Route::post('fabric/{fabric}', [FabricController::class, 'update'])->whereNumber('fabric')->name('fabric.update');
+            // a live trace opens an SSH session to every device on the way, so it is a POST
+            // and not a link something can prefetch (plan §12.4)
+            Route::post('fabric/{fabric}/trace', [FabricController::class, 'traceLive'])->whereNumber('fabric')->name('fabric.trace');
         });
     });

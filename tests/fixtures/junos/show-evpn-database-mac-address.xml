@@ -1,0 +1,15 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S7.4/junos">
+    <evpn-database-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-evpn" junos:style="brief">
+        <evpn-database-instance>
+            <evpn-database-instance-name>MACVRF-A</evpn-database-instance-name>
+            <mac-entry>
+                <active-source>ge-0/0/38.0</active-source>
+                <ip-address>203.0.113.40</ip-address>
+                <mac-address>02:00:00:00:11:40</mac-address>
+                <mac-vni>10010</mac-vni>
+                <state/>
+                <active-source-timestamp>Sep 25 08:14:02</active-source-timestamp>
+            </mac-entry>
+        </evpn-database-instance>
+    </evpn-database-information>
+</rpc-reply>

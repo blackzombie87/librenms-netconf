@@ -22,6 +22,7 @@
                     version {{ $n['version'] ?? 'unknown' }}
                     @if ($n['site'] ?? null) &middot; site {{ $n['site'] }} @endif
                     &middot; <a href="{{ route('netconf.fabric', [$fabric['id'], 'members']) }}">Members tab</a>
+                    &middot; <a href="{{ route('netconf.fabric', [$fabric['id'], 'trace']) }}">trace from here</a>
                 </small></p>
                 @php($links = array_values(array_filter($ei['underlay'], fn ($e) => $e['a'] === $n['ip'] || $e['b'] === $n['ip'])))
                 @if ($links !== [])

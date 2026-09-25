@@ -19,6 +19,7 @@ use SafferIt\LibrenmsNetconf\Console\NetconfFabricCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfPreviewCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfRunCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfTestCommand;
+use SafferIt\LibrenmsNetconf\Console\NetconfTraceCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfUninstallCommand;
 use SafferIt\LibrenmsNetconf\Console\NetconfValidateCommand;
 use SafferIt\LibrenmsNetconf\Definitions\DefinitionLoader;
@@ -94,6 +95,7 @@ class NetconfPluginProvider extends ServiceProvider
                 NetconfPreviewCommand::class,
                 NetconfDeviceCommand::class,
                 NetconfFabricCommand::class,
+                NetconfTraceCommand::class,
             ]);
         }
 

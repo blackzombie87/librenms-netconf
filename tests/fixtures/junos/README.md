@@ -69,3 +69,14 @@ VTEPs → 192.0.2.x (the two 198.51.100.x peers are the MX204 edge routers, not 
 time), ESIs and MACs renumbered, VNI/VLAN numbers and Junos versions original.
 `TemplatedVniFabricTest` mirrors this leaf's view onto all twelve and asserts both directions:
 zero issues here, and the 21,395 criticals the old rule produced.
+
+Tracer samples (2026-09-25; plan §12 T2). `show-route-host.xml` and `show-route-host-ecmp.xml` are
+**synthetic**, built from the element names §12.4 names (`route-information/route-table/rt/{rt-destination,
+rt-entry/{active-tag, protocol-name, nh/{to, via, selected-next-hop}}}`) and the shape of the real
+`show-route-summary.xml` capture beside them: the single-path one is an OSPF next hop, the ECMP one has
+two `nh` under one active BGP entry plus a second, inactive OSPF entry, which is what makes
+"read the protocol off the reply, never assume it" testable. **They have not been taken from a device**;
+the capture from a leaf of the production fabric is the open half of T2, and the parser is written against
+these until it happens. `show-evpn-database-mac-address.xml` is the single-MAC form of
+`show evpn database`, cut from the existing `show-evpn-database.xml` capture (same element shape, one
+entry, a local IFL source with an `ip-address`).

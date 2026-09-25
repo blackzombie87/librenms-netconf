@@ -1,0 +1,46 @@
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/23.4R2-S3.9/junos">
+    <route-information xmlns="http://xml.juniper.net/junos/23.4R0/junos-routing">
+        <route-table>
+            <table-name>inet.0</table-name>
+            <destination-count>1</destination-count>
+            <total-route-count>2</total-route-count>
+            <active-route-count>1</active-route-count>
+            <holddown-route-count>0</holddown-route-count>
+            <hidden-route-count>0</hidden-route-count>
+            <rt style="brief">
+                <rt-destination>192.0.2.63</rt-destination>
+                <rt-prefix-length>32</rt-prefix-length>
+                <rt-entry-count format="2 entries">2</rt-entry-count>
+                <rt-entry>
+                    <active-tag>*</active-tag>
+                    <current-active/>
+                    <last-active/>
+                    <protocol-name>BGP</protocol-name>
+                    <preference>170</preference>
+                    <local-as>65000</local-as>
+                    <age seconds="90311">1d 01:05:11</age>
+                    <metric>0</metric>
+                    <nh>
+                        <selected-next-hop/>
+                        <to>10.1.2.1</to>
+                        <via>et-0/0/50.2261</via>
+                    </nh>
+                    <nh>
+                        <to>10.1.3.1</to>
+                        <via>et-0/0/51.2262</via>
+                    </nh>
+                </rt-entry>
+                <rt-entry>
+                    <protocol-name>OSPF</protocol-name>
+                    <preference>10</preference>
+                    <age seconds="431052">4d 23:44:12</age>
+                    <metric>4</metric>
+                    <nh>
+                        <to>10.1.2.1</to>
+                        <via>et-0/0/50.2261</via>
+                    </nh>
+                </rt-entry>
+            </rt>
+        </route-table>
+    </route-information>
+</rpc-reply>
