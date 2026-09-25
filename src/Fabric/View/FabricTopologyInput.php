@@ -9,8 +9,7 @@ use SafferIt\LibrenmsNetconf\Fabric\EsiLinks;
 use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
- * The one assembler behind both fabric pictures (design doc `docs/EVPN-FABRIC-UI.md`, plan
- * §11 E4). Every query the overview needs lives here, so the canonical neighbour addresses,
+ * The one assembler behind both fabric pictures (plan §11 E4). Every query the overview needs lives here, so the canonical neighbour addresses,
  * the `wan` rule and the "≥2 members peer with this far end" set cannot drift apart between
  * the vis map and the eagle view.
  *

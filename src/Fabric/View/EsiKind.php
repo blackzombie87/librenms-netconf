@@ -4,7 +4,7 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 
 /**
  * What kind of Ethernet segment a `netconf_evpn_esi` row describes, and which of its flags
- * mean "this segment is degraded" (design doc `docs/EVPN-FABRIC-UI.md`, plan §11 E1).
+ * mean "this segment is degraded" (plan §11 E1).
  *
  * The distinction that matters is ESI-LAG versus anycast gateway. A type-5 segment (`05:…`,
  * configured on an `irb.N` unit, no remote PE) is the same value on both gateways of a CRB

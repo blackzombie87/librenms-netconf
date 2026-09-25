@@ -6,8 +6,7 @@ use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
  * Eagle view of a fabric: the same role-coloured cards the static SVG got right, but wrapped
- * into site compounds and stacked in tiers instead of stretched into one row (design doc
- * `docs/EVPN-FABRIC-UI.md`, plan §11 E2). Fourteen members in one row are 1,968 px and 26 are
+ * into site compounds and stacked in tiers instead of stretched into one row (plan §11 E2). Fourteen members in one row are 1,968 px and 26 are
  * 3,780; the browser then scales that down until the labels are unreadable, and the row cannot
  * grow. Wrapping is what makes 26 members an eagle view; the viewport is a viewBox, not a
  * layout engine.
