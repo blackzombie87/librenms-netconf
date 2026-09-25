@@ -10,6 +10,7 @@ use SafferIt\LibrenmsNetconf\Fabric\View\DeviceBadge;
 use SafferIt\LibrenmsNetconf\Http\Controllers\GraphController;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
+use SafferIt\LibrenmsNetconf\NetconfSettings;
 use SafferIt\LibrenmsNetconf\Support\DevicePage;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 use SafferIt\LibrenmsNetconf\Support\GraphPeriod;
@@ -142,8 +143,17 @@ final class DevicePageData
      */
     private static function edit(Device $device): array
     {
+        $settings = NetconfSettings::effective();
+
         return [
             'enabled_attrib' => DeviceSettings::enabledAttrib($device),
+            'tristates' => DeviceSettings::tristates($device),
+            'tristate_defaults' => [
+                'enabled' => (bool) ($settings['enable_by_default'] ?? false),
+                'evpn_mac' => (bool) ($settings['evpn_mac'] ?? false),
+                'queues' => (bool) ($settings['queues'] ?? false),
+            ],
+            'fabric' => NetconfService::fabricEnabled(),
             'overrides' => DeviceSettings::current($device),
             'effective' => app(DeviceCredentials::class)->forDevice($device)->describe(),
         ];

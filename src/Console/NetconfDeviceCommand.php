@@ -6,6 +6,8 @@ use App\Models\Device;
 use Illuminate\Console\Command;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Console\Concerns\FindsDevice;
+use SafferIt\LibrenmsNetconf\Definitions\DeviceFacts;
+use SafferIt\LibrenmsNetconf\NetconfSettings;
 use SafferIt\LibrenmsNetconf\Support\DeviceSelection;
 use SafferIt\LibrenmsNetconf\Support\DeviceSettings;
 use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
@@ -24,6 +26,8 @@ class NetconfDeviceCommand extends Command
         {--os= : Every device with this os, e.g. junos (combines with --group)}
         {--enable : Enable NETCONF polling for this device}
         {--disable : Disable NETCONF polling for this device}
+        {--evpn-mac= : Collect the EVPN MAC database here: 1, 0 or inherit (the global evpn_mac setting)}
+        {--queues= : Collect per-port, per-queue counters here: 1, 0 or inherit (the global queues setting)}
         {--set-username= : Store a per-device login user}
         {--set-password= : Store a per-device password (encrypted)}
         {--set-ask-password : Prompt for the per-device password}
@@ -132,6 +136,8 @@ class NetconfDeviceCommand extends Command
     {
         $input = [
             'enabled' => $this->option('enable') ? '1' : ($this->option('disable') ? '0' : null),
+            'evpn_mac' => $this->option('evpn-mac'),
+            'queues' => $this->option('queues'),
             'username' => $this->option('set-username'),
             'password' => $this->option('set-password'),
             'keyfile' => $this->option('set-key'),
@@ -142,6 +148,13 @@ class NetconfDeviceCommand extends Command
         ];
         if ($this->option('set-ask-password')) {
             $input['password'] = (string) $this->secret('Password for this device');
+        }
+        foreach (['evpn_mac' => 'evpn-mac', 'queues' => 'queues'] as $field => $option) {
+            if ($input[$field] !== null && ! in_array($input[$field], ['1', '0', 'inherit'], true)) {
+                $this->error("--$option takes 1, 0 or inherit");
+
+                return null;
+            }
         }
         foreach ($input['clear'] as $suffix) {
             if ($suffix !== 'all' && ! in_array($suffix, DeviceSettings::FIELDS, true)) {
@@ -177,8 +190,15 @@ class NetconfDeviceCommand extends Command
 
     private function show(Device $device, NetconfService $service): void
     {
-        $attribs = $device->getAttribs();
-        $rows = [['netconf_enabled', $attribs[NetconfService::ATTRIB_ENABLED] ?? '(unset, global default ' . ($service->isEnabled($device) ? 'on' : 'off') . ')']];
+        $settings = NetconfSettings::effective();
+        $rows = [];
+        foreach (DeviceSettings::tristates($device) as $field => $value) {
+            $attrib = DeviceSettings::TRISTATE[$field];
+            $default = $field === 'enabled'
+                ? (bool) ($settings['enable_by_default'] ?? false)
+                : DeviceFacts::managed($attrib, null, $settings);
+            $rows[] = [$attrib, $value ?? '(unset, global default ' . ($default ? 'on' : 'off') . ')'];
+        }
         foreach (DeviceSettings::current($device) as $suffix => $value) {
             $rows[] = [CredentialResolver::ATTRIB_PREFIX . $suffix, $value];
         }

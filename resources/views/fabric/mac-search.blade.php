@@ -5,8 +5,16 @@
     <span class="text-muted" style="margin-left: 10px;">{{ $scope_note }}</span>
 </form>
 <p class="text-muted">
-    The EVPN MAC database (<code>show evpn database</code>) is opt-in per leaf (device attribute <code>netconf_evpn_mac=1</code>, collected every third poll):
-    {{ $search['opted_in']['devices'] }} device{{ $search['opted_in']['devices'] === 1 ? '' : 's' }} opted in, {{ number_format($search['opted_in']['rows']) }} MAC rows.
+    The EVPN MAC database (<code>show evpn database</code>, every third poll) is collected on
+    {{ $search['opted_in']['devices'] }} of {{ $search['opted_in']['candidates'] }} device{{ $search['opted_in']['candidates'] === 1 ? '' : 's' }} here,
+    {{ number_format($search['opted_in']['rows']) }} MAC rows.
+    @if (! $search['opted_in']['fabric'])
+        <span class="text-warning">The EVPN fabric view is switched off, so nothing is collected.</span>
+    @elseif (! $search['opted_in']['global'])
+        Collection is switched off globally on the plugin settings page; enable single devices on their NETCONF tab.
+    @else
+        It is on by default &mdash; switch it off globally on the plugin settings page, or per device on its NETCONF tab.
+    @endif
     Core bridge tables (FDB) and ARP are searched as well.
 </p>
 
@@ -15,7 +23,7 @@
         <small>{{ count($search['rows']) }}{{ $search['truncated'] ? '+' : '' }} rows for {{ $search['kind'] }} <code>{{ $search['value'] }}</code>@if ($search['truncated']), first {{ \SafferIt\LibrenmsNetconf\Fabric\View\MacSearch::LIMIT }} shown — narrow the search @endif</small>
     </h4>
     @if ($search['rows'] === [])
-        <p class="text-muted">No EVPN database row matches @if ($search['opted_in']['rows'] === 0) — no leaf has the MAC database enabled yet @endif.</p>
+        <p class="text-muted">No EVPN database row matches @if ($search['opted_in']['devices'] === 0) — no device here collects the MAC database @endif.</p>
     @else
         <table class="table table-condensed table-hover">
             <thead>

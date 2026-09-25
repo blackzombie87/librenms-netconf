@@ -40,6 +40,8 @@ class DeviceController extends Controller
     {
         $data = $request->validate([
             'enabled' => 'nullable|in:1,0,inherit',
+            'evpn_mac' => 'nullable|in:1,0,inherit',
+            'queues' => 'nullable|in:1,0,inherit',
             'username' => 'nullable|string|max:255',
             'password' => 'nullable|string|max:255',
             'keyfile' => 'nullable|string|max:255',

@@ -8,7 +8,7 @@ use SafferIt\LibrenmsNetconf\Transport\CredentialResolver;
 use SafferIt\LibrenmsNetconf\Transport\Credentials;
 
 /**
- * Per-device NETCONF settings stored as device attributes (netconf_enabled and the
+ * Per-device NETCONF settings stored as device attributes (the tri-state switches and the
  * credential overrides). Shared by the CLI command and the web form; secrets are sealed.
  */
 class DeviceSettings
@@ -16,6 +16,19 @@ class DeviceSettings
     public const FIELDS = ['username', 'password', 'keyfile', 'key_passphrase', 'port', 'transport'];
 
     public const SECRETS = ['password', 'key_passphrase'];
+
+    /**
+     * Tri-state switches: form field => device attribute. `inherit` (the attribute absent)
+     * takes the global setting, `1` and `0` decide for this device alone — `enabled` inherits
+     * *enable_by_default*, the rest their entry in `DeviceFacts::MANAGED_ATTRIBS` (plan §13.2).
+     *
+     * @var array<string, string>
+     */
+    public const TRISTATE = [
+        'enabled' => NetconfService::ATTRIB_ENABLED,
+        'evpn_mac' => 'netconf_evpn_mac',
+        'queues' => 'netconf_queues',
+    ];
 
     /**
      * Current overrides, secrets redacted.
@@ -39,9 +52,32 @@ class DeviceSettings
     /** Raw value of the netconf_enabled attribute: '1', '0' or null (inherit global default). */
     public static function enabledAttrib(Device $device): ?string
     {
-        $value = $device->getAttrib(NetconfService::ATTRIB_ENABLED);
+        return self::tristateAttrib($device, 'enabled');
+    }
+
+    /**
+     * Raw value of one tri-state attribute: '1', '0' or null for "inherit the global setting".
+     */
+    public static function tristateAttrib(Device $device, string $field): ?string
+    {
+        $value = $device->getAttrib(self::TRISTATE[$field] ?? $field);
 
         return $value === null || $value === '' ? null : (string) $value;
+    }
+
+    /**
+     * Every tri-state of a device at once, for the edit form and the CLI table.
+     *
+     * @return array<string, string|null>
+     */
+    public static function tristates(Device $device): array
+    {
+        $out = [];
+        foreach (array_keys(self::TRISTATE) as $field) {
+            $out[$field] = self::tristateAttrib($device, $field);
+        }
+
+        return $out;
     }
 
     /**
@@ -62,7 +98,7 @@ class DeviceSettings
     }
 
     /**
-     * Apply changes. $input keys: enabled ('1' | '0' | 'inherit' | null = unchanged),
+     * Apply changes. $input keys: the TRISTATE fields ('1' | '0' | 'inherit' | null = unchanged),
      * username, password, keyfile, key_passphrase, port, transport (empty string = unchanged),
      * clear (list of suffixes or 'all').
      *
@@ -73,16 +109,18 @@ class DeviceSettings
     {
         $changes = [];
 
-        $enabled = $input['enabled'] ?? null;
-        if ($enabled === 'inherit') {
-            if ($device->forgetAttrib(NetconfService::ATTRIB_ENABLED)) {
-                $changes[] = 'netconf_enabled: inherit global default';
-            }
-        } elseif ($enabled === '1' || $enabled === '0' || $enabled === 1 || $enabled === 0 || $enabled === true || $enabled === false) {
-            $value = filter_var($enabled, FILTER_VALIDATE_BOOLEAN) ? '1' : '0';
-            if (self::enabledAttrib($device) !== $value) {
-                $device->setAttrib(NetconfService::ATTRIB_ENABLED, $value);
-                $changes[] = 'netconf_enabled: ' . ($value === '1' ? 'enabled' : 'disabled');
+        foreach (self::TRISTATE as $field => $attrib) {
+            $wanted = $input[$field] ?? null;
+            if ($wanted === 'inherit') {
+                if ($device->forgetAttrib($attrib)) {
+                    $changes[] = "$attrib: inherit global default";
+                }
+            } elseif ($wanted === '1' || $wanted === '0' || $wanted === 1 || $wanted === 0 || $wanted === true || $wanted === false) {
+                $value = filter_var($wanted, FILTER_VALIDATE_BOOLEAN) ? '1' : '0';
+                if (self::tristateAttrib($device, $field) !== $value) {
+                    $device->setAttrib($attrib, $value);
+                    $changes[] = "$attrib: " . ($value === '1' ? 'enabled' : 'disabled');
+                }
             }
         }
 

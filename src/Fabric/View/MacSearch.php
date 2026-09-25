@@ -5,7 +5,11 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 use App\Models\Device;
 use App\Models\Port;
 use Illuminate\Support\Facades\DB;
+use SafferIt\LibrenmsNetconf\Collect\NetconfService;
+use SafferIt\LibrenmsNetconf\Definitions\DeviceFacts;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
+use SafferIt\LibrenmsNetconf\NetconfSettings;
 use SafferIt\LibrenmsNetconf\Support\Mac;
 
 /**
@@ -267,17 +271,37 @@ final class MacSearch
     }
 
     /**
-     * Devices whose MAC database is collected (attribute netconf_evpn_mac), in scope.
+     * Devices whose EVPN MAC database is collected, in scope — the *effective* set, not the
+     * devices carrying an attribute (plan §13.4): the global *evpn_mac* setting applies
+     * unless the device overrides it with `netconf_evpn_mac`, and nothing collects at all
+     * while the fabric view is off, because a definition with `tables:` mappings does not
+     * run then.
      *
-     * @param  list<int>|null  $deviceIds
-     * @return array{devices: int, rows: int}
+     * @param  list<int>|null  $deviceIds  a fabric's devices, or null for every device the plugin runs on
+     * @return array{devices: int, candidates: int, rows: int, global: bool, fabric: bool}
      */
     public static function optedIn(?array $deviceIds): array
     {
-        $attribs = DB::table('devices_attribs')->where('attrib_type', 'netconf_evpn_mac')->where('attrib_value', '1')
-            ->when($deviceIds !== null, fn ($b) => $b->whereIn('device_id', $deviceIds ?: [0]))->count();
+        $settings = NetconfSettings::effective();
+        $fabric = NetconfService::fabricEnabled();
+        $candidates = $deviceIds ?? NetconfDeviceStatus::query()->pluck('device_id')->map(fn ($id) => (int) $id)->all();
+
+        $attribs = $candidates === [] ? [] : DB::table('devices_attribs')->where('attrib_type', 'netconf_evpn_mac')
+            ->whereIn('device_id', $candidates)->pluck('attrib_value', 'device_id')->all();
+        $collecting = 0;
+        foreach ($candidates as $deviceId) {
+            $value = $attribs[$deviceId] ?? null;
+            $collecting += $fabric && DeviceFacts::managed('netconf_evpn_mac', $value === null ? null : (string) $value, $settings) ? 1 : 0;
+        }
+
         $rows = DB::table(TableSchema::tableName('mac'))->when($deviceIds !== null, fn ($b) => $b->whereIn('device_id', $deviceIds ?: [0]))->count();
 
-        return ['devices' => $attribs, 'rows' => $rows];
+        return [
+            'devices' => $collecting,
+            'candidates' => count($candidates),
+            'rows' => $rows,
+            'global' => (bool) ($settings['evpn_mac'] ?? false),
+            'fabric' => $fabric,
+        ];
     }
 }

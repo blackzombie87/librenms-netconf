@@ -15,16 +15,26 @@
 
                 <form method="post" action="{{ route('netconf.device.update', $device->device_id) }}" class="form-horizontal">
                     @csrf
-                    <div class="form-group">
-                        <label class="col-sm-4 control-label">Polling</label>
-                        <div class="col-sm-8">
-                            <select name="enabled" class="form-control">
-                                <option value="inherit" {{ $enabled_attrib === null ? 'selected' : '' }}>global default</option>
-                                <option value="1" {{ $enabled_attrib === '1' ? 'selected' : '' }}>enabled</option>
-                                <option value="0" {{ $enabled_attrib === '0' ? 'selected' : '' }}>disabled</option>
-                            </select>
+                    @php
+                        $switches = [
+                            'enabled' => ['label' => 'Polling', 'help' => 'collect anything over NETCONF from this device'],
+                            'evpn_mac' => ['label' => 'EVPN MAC database', 'help' => 'show evpn database, every third poll, ~1.3 MB / 2 s on a busy leaf' . ($fabric ? '' : ' — the EVPN fabric view is off, so this collects nothing')],
+                            'queues' => ['label' => 'Per-queue counters', 'help' => 'queued / transmitted / dropped packets per port and queue — 8 queues × 3 counters per port'],
+                        ];
+                    @endphp
+                    @foreach ($switches as $field => $switch)
+                        <div class="form-group">
+                            <label class="col-sm-4 control-label">{{ $switch['label'] }}</label>
+                            <div class="col-sm-8">
+                                <select name="{{ $field }}" class="form-control">
+                                    <option value="inherit" {{ $tristates[$field] === null ? 'selected' : '' }}>global default ({{ $tristate_defaults[$field] ? 'on' : 'off' }})</option>
+                                    <option value="1" {{ $tristates[$field] === '1' ? 'selected' : '' }}>enabled</option>
+                                    <option value="0" {{ $tristates[$field] === '0' ? 'selected' : '' }}>disabled</option>
+                                </select>
+                                <small class="text-muted">{{ $switch['help'] }}</small>
+                            </div>
                         </div>
-                    </div>
+                    @endforeach
                     <div class="form-group">
                         <label class="col-sm-4 control-label">Transport</label>
                         <div class="col-sm-8">

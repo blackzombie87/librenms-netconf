@@ -261,6 +261,8 @@ global settings.
 ./lnms netconf:device --group="Leaf switches" --enable
 ./lnms netconf:device --os=junos --group=12 --set-username=librenms --set-ask-password
 ./lnms netconf:device --os=junos                     # list only: enabled state and matching definitions
+# per-device tri-states: 1, 0 or inherit (the global setting)
+./lnms netconf:device leaf1 --evpn-mac=0 --queues=1
 ```
 
 ## Definitions
@@ -278,7 +280,7 @@ Shipped (Junos):
 | `junos-routing` | `show route summary`, `show bgp summary` | count sensors for active and hidden routes per table, BGP peers configured/down (`limit: 0`); metrics per table, per table/protocol, per BGP RIB, per peer (flaps, messages, uptime, state) and per peer/RIB |
 | `junos-l2` | `show ethernet-switching table summary` | MAC table size and static entries (L2NG and pre-ELS shapes) |
 | `junos-interfaces` | `show interfaces extensive` | per-port counters matched by `snmp-index` = ifIndex: CRC in/out, oversized, jabber, fragments, code violations, pause frames, framing errors, runts, MTU errors, carrier transitions, FEC corrected/uncorrected words and rates, PCS errored seconds, BPDU-block state |
-| `junos-interface-queues` | `show interfaces extensive` | per port/queue queued, transmitted and dropped packets; opt-in per device via attribute `netconf_queues=1` |
+| `junos-interface-queues` | `show interfaces extensive` | per port/queue queued, transmitted and dropped packets; off unless the *Per-queue counters* setting or the device attribute `netconf_queues` turns it on |
 | `junos-srx-cluster` | `show chassis cluster status` | state sensors per redundancy group and node (primary/secondary/…), monitor failures, failover counters; only on hardware matching `/srx/i` |
 | `junos-alarms` | `show system alarms`, `show chassis alarms` | major/minor alarm counts (`limit: 0` for major) |
 | `junos-ntp` | `show ntp status`, `show ntp associations` | state sensor synchronised/unsynchronised, stratum (`limit: 15`), reachable peers (`limit_low: 1`); metrics for offset, root delay/dispersion, jitter, frequency and per peer |
@@ -289,7 +291,7 @@ Shipped (Junos):
 | `junos-rpki` | `show validation session`, `show validation statistics` | state sensor per cache session, sessions not up (`limit: 0`), invalid origin count; metrics per session (flaps, prefixes) and the validation statistics |
 | `junos-vrrp` | `show vrrp summary` | state sensor per interface/group (master, backup, init), groups neither master nor backup (`limit: 0`) |
 | `junos-evpn-fabric` | `show evpn instance extensive`, `show mac-vrf forwarding vxlan-tunnel-end-point source` / `remote` / `esi` / `remote mac-table` (every 3rd poll), `show interfaces vtep` | rows for the EVPN fabric tables (`netconf_evpn_neighbor`, `_esi`, `_vni`, `_vni_vtep`, `_tunnel`); only with the *EVPN fabric view* setting |
-| `junos-evpn-fabric-mac` | `show evpn database` (every 3rd poll) | `netconf_evpn_mac`: the EVPN MAC database with active source (ESI / remote VTEP / local IFL) and IPs; opt-in per device via attribute `netconf_evpn_mac=1`, and only with the *EVPN fabric view* setting |
+| `junos-evpn-fabric-mac` | `show evpn database` (every 3rd poll) | `netconf_evpn_mac`: the EVPN MAC database with active source (ESI / remote VTEP / local IFL) and IPs; on by default with the *EVPN fabric view* setting, switchable globally (*EVPN MAC database*) and per device (attribute `netconf_evpn_mac`) |
 
 Commands whose subsystem is not running ("LDP instance is not running", "vrrp subsystem
 not running") are recognised and skipped without creating sensors, so every definition can
@@ -463,8 +465,20 @@ plus a `border` flag for L3 contexts. VTEPs that are not monitored devices are k
 ./lnms netconf:fabric --resolve          # recompute from the current tables
 ```
 
-The MAC database (`netconf_evpn_mac`, ~5 000 rows and 1.3 MB per busy leaf) is opt-in per
-device like the queue counters: set the device attribute `netconf_evpn_mac` to `1`.
+The MAC database (`netconf_evpn_mac`, ~5 000 rows and 1.3 MB per busy leaf, read every third
+poll) is collected on every fabric device by default. Switch it off for the whole install with
+*EVPN MAC database* on the settings page, and decide per device on the device's NETCONF tab
+(*Edit* &rarr; *EVPN MAC database*: global default, enabled, disabled) or from the command line:
+
+```bash
+./lnms netconf:device leaf1 --evpn-mac=0         # never here
+./lnms netconf:device leaf1 --evpn-mac=1         # here even when the global switch is off
+./lnms netconf:device leaf1 --evpn-mac=inherit   # back to the global setting
+```
+
+The device attribute always wins over the setting, and nothing is collected while the
+*EVPN fabric view* setting is off. The per-queue counters (`netconf_queues`) work the same
+way, with the global default the other way round: off unless asked for.
 
 ### EVPN multihoming peers as neighbours
 
@@ -542,7 +556,7 @@ involves in `netconf_evpn_issue_device`). An issue keeps its `first_seen` while 
 | `esi-no-aliasing` | warning | aliasing is disabled on one PE of a segment |
 | `dup-mac` | critical | MACs are suppressed by duplicate-MAC detection on a leaf (the `dup-mac-instance` sensor) |
 | `dup-mac-params` | warning | threshold, window or recovery time of duplicate-MAC detection differ between leaves of one instance |
-| `mac-mobility` | warning | a MAC in the MAC database changed its active source more than *MAC mobility limit* times within one hour (opted-in leaves only; `moves`, `moves_recent`, `moves_since` on `netconf_evpn_mac`) |
+| `mac-mobility` | warning | a MAC in the MAC database changed its active source more than *MAC mobility limit* times within one hour (`moves`, `moves_recent`, `moves_since` on `netconf_evpn_mac`) |
 | `route-count` | warning | a member receives no MAC routes from a neighbour that has local MACs in the same instance |
 | `version-skew` | info | the monitored members run different software versions |
 | `unknown-vtep` | warning | a member address does not belong to a monitored device |
@@ -696,7 +710,7 @@ Everything the plugin stored stays behind:
 | sensors with `poller_type = netconf` (values, state translations) | `sensors` table, `rrd/<host>/sensor-<class>-netconf-*.rrd` |
 | custom and per-port metrics | tables `netconf_metrics`, `netconf_port_metrics`, files `rrd/<host>/netconf-*.rrd` |
 | per-device status and back-off | table `netconf_device_status` |
-| per-device switches and credential overrides | `devices_attribs` rows `netconf_enabled`, `netconf_queues`, `netconf_username`, … |
+| per-device switches and credential overrides | `devices_attribs` rows `netconf_enabled`, `netconf_evpn_mac`, `netconf_queues`, `netconf_username`, … |
 | module scheduling | config keys `poller_modules.netconf`, `discovery_modules.netconf` |
 | the plugin's migrations | rows in the `migrations` table |
 | global settings including the encrypted password | row `netconf` in the `plugins` table (LibreNMS deletes it itself once the package is gone) |

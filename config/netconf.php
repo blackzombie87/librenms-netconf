@@ -22,5 +22,7 @@ return [
     'backoff_max' => 32,
     'evpn_fabric' => false,    // EVPN fabric view: run definitions with tables: mappings and the fabric resolver
     'evpn_links' => true,      // with the fabric view: ESI-LAG peers as core `links` rows (protocol evpn-esi), Neighbours tab + map
+    'evpn_mac' => true,        // with the fabric view: collect the EVPN MAC database per device (`show evpn database`, every third poll); the device attribute netconf_evpn_mac overrides it
     'evpn_mac_moves' => 5,     // fabric check "MAC mobility": active source changes per hour that raise an issue (0 = off)
+    'queues' => false,         // collect per-port, per-queue counters (8 queues x 3 counters per port); the device attribute netconf_queues overrides it
 ];

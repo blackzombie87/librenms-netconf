@@ -61,11 +61,16 @@ class NetconfService
      * Definitions matching the device. Definitions with `tables:` mappings belong to the EVPN
      * fabric view and only run while that setting is enabled (they add commands per leaf).
      *
+     * The managed device attributes are resolved against the global settings first, so a
+     * definition gated on `attrib: netconf_evpn_mac` collects wherever the *evpn_mac* setting
+     * says so and the device has not overridden it (plan §13.3).
+     *
      * @return list<Definition>
      */
     public function matchingDefinitions(Device $device): array
     {
-        $matching = (new DefinitionMatcher)->matching(DeviceFacts::fromDevice($device), $this->loader->all());
+        $facts = DeviceFacts::fromDevice($device)->withManagedAttribs(NetconfSettings::effective());
+        $matching = (new DefinitionMatcher)->matching($facts, $this->loader->all());
         if (! self::fabricEnabled()) {
             $matching = array_values(array_filter($matching, fn (Definition $d) => $d->tables === []));
         }

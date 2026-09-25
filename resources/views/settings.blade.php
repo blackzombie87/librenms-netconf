@@ -165,10 +165,36 @@
                 <td><code>{{ $effective['evpn_links'] ? 'yes' : 'no' }}</code></td>
             </tr>
             <tr>
+                <td><label for="evpn_mac">EVPN MAC database</label></td>
+                <td>
+                    <input type="hidden" name="settings[evpn_mac]" value="0">
+                    <label style="font-weight: normal;">
+                        <input type="checkbox" id="evpn_mac" name="settings[evpn_mac]" value="1"
+                               {{ filter_var($settings['evpn_mac'] ?? $defaults['evpn_mac'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+                        collect the EVPN MAC database on every fabric device (<code>show evpn database</code>, every third poll, ~1.3&nbsp;MB / 2&nbsp;s per leaf); needs the fabric view.
+                        Switch it off here and enable single devices on their NETCONF tab, or the other way round &mdash; the device attribute <code>netconf_evpn_mac</code> always wins
+                    </label>
+                </td>
+                <td><code>{{ $effective['evpn_mac'] ? 'yes' : 'no' }}</code></td>
+            </tr>
+            <tr>
                 <td><label for="evpn_mac_moves">MAC mobility limit (moves / hour)</label></td>
                 <td><input class="form-control" id="evpn_mac_moves" type="number" min="0" name="settings[evpn_mac_moves]"
                            value="{{ $settings['evpn_mac_moves'] ?? '' }}" placeholder="{{ $defaults['evpn_mac_moves'] }} — 0 turns the check off"></td>
                 <td><code>{{ $effective['evpn_mac_moves'] }}</code></td>
+            </tr>
+            <tr>
+                <td><label for="queues">Per-queue counters</label></td>
+                <td>
+                    <input type="hidden" name="settings[queues]" value="0">
+                    <label style="font-weight: normal;">
+                        <input type="checkbox" id="queues" name="settings[queues]" value="1"
+                               {{ filter_var($settings['queues'] ?? $defaults['queues'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+                        collect queued / transmitted / dropped packets per port and queue (<code>show interfaces extensive</code>) &mdash; 8 queues &times; 3 counters per port is a lot of RRDs, so this is off unless asked for.
+                        The device attribute <code>netconf_queues</code> overrides it
+                    </label>
+                </td>
+                <td><code>{{ $effective['queues'] ? 'yes' : 'no' }}</code></td>
             </tr>
             <tr>
                 <td><label for="definitions_dir">User definitions directory</label></td>
