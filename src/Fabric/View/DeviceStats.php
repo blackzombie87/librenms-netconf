@@ -14,7 +14,7 @@ use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 final class DeviceStats
 {
     /**
-     * @return array{vnis: list<int>, irbs: int, instances: list<string>, esis: list<string>, esis_local: int, esis_df: int, esis_degraded: int, tunnels: int, neighbors: int, local_macs: int|null, remote_macs: int|null, dup_macs: int, orphan_vnis: int, collector_failing: bool}
+     * @return array{vnis: list<int>, irbs: int, instances: list<string>, esis: list<string>, esis_local: int, esis_lag: int, esis_df: int, esis_degraded: int, tunnels: int, neighbors: int, local_macs: int|null, remote_macs: int|null, dup_macs: int, orphan_vnis: int, collector_failing: bool}
      */
     public static function forDevice(int $deviceId): array
     {
@@ -23,7 +23,7 @@ final class DeviceStats
 
     /**
      * @param  list<int>  $deviceIds
-     * @return array<int, array{vnis: list<int>, irbs: int, instances: list<string>, esis: list<string>, esis_local: int, esis_df: int, esis_degraded: int, tunnels: int, neighbors: int, local_macs: int|null, remote_macs: int|null, dup_macs: int, orphan_vnis: int, collector_failing: bool}>
+     * @return array<int, array{vnis: list<int>, irbs: int, instances: list<string>, esis: list<string>, esis_local: int, esis_lag: int, esis_df: int, esis_degraded: int, tunnels: int, neighbors: int, local_macs: int|null, remote_macs: int|null, dup_macs: int, orphan_vnis: int, collector_failing: bool}>
      */
     public static function forDevices(array $deviceIds): array
     {
@@ -59,6 +59,11 @@ final class DeviceStats
                 continue;
             }
             $out[$id]['esis_local']++;
+            // ESI-LAGs only: an anycast gateway segment on an irb unit is not multihoming, and
+            // the eagle view's tier rule asks "does this member also have a LAG?" (plan §11 E-F2)
+            if (! EsiKind::isGateway((string) $row->esi, (string) $row->local_ifname)) {
+                $out[$id]['esis_lag']++;
+            }
             if ((int) $row->is_df === 1) {
                 $out[$id]['esis_df']++;
             }
@@ -193,10 +198,10 @@ final class DeviceStats
     }
 
     /**
-     * @return array{vnis: list<int>, irbs: int, instances: list<string>, esis: list<string>, esis_local: int, esis_df: int, esis_degraded: int, tunnels: int, neighbors: int, local_macs: int|null, remote_macs: int|null, dup_macs: int, orphan_vnis: int, collector_failing: bool}
+     * @return array{vnis: list<int>, irbs: int, instances: list<string>, esis: list<string>, esis_local: int, esis_lag: int, esis_df: int, esis_degraded: int, tunnels: int, neighbors: int, local_macs: int|null, remote_macs: int|null, dup_macs: int, orphan_vnis: int, collector_failing: bool}
      */
     private static function empty(): array
     {
-        return ['vnis' => [], 'irbs' => 0, 'instances' => [], 'esis' => [], 'esis_local' => 0, 'esis_df' => 0, 'esis_degraded' => 0, 'tunnels' => 0, 'neighbors' => 0, 'local_macs' => null, 'remote_macs' => null, 'dup_macs' => 0, 'orphan_vnis' => 0, 'collector_failing' => false];
+        return ['vnis' => [], 'irbs' => 0, 'instances' => [], 'esis' => [], 'esis_local' => 0, 'esis_lag' => 0, 'esis_df' => 0, 'esis_degraded' => 0, 'tunnels' => 0, 'neighbors' => 0, 'local_macs' => null, 'remote_macs' => null, 'dup_macs' => 0, 'orphan_vnis' => 0, 'collector_failing' => false];
     }
 }

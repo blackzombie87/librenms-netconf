@@ -2,8 +2,6 @@
 
 namespace SafferIt\LibrenmsNetconf\Fabric\View;
 
-use Illuminate\Support\Facades\DB;
-use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
@@ -33,93 +31,16 @@ final class Topology
     public const OVERLAY_ARC_LIMIT = 40;
 
     /**
+     * Load, then lay out. Every query lives in `FabricTopologyInput` so the two pictures
+     * cannot drift apart; the arrays `layout()` receives are the ones it has always received.
+     *
      * @return array<string, mixed> see layout()
      */
     public static function forFabric(int $fabricId, FabricNodes $nodes): array
     {
-        $deviceIds = $nodes->deviceIds();
-        $locations = DB::table('locations')->pluck('location', 'id')->map(fn ($v) => (string) $v)->all();
-        $devices = DB::table('devices')->whereIn('device_id', $deviceIds ?: [0])->get(['device_id', 'status', 'location_id', 'disabled'])->keyBy('device_id');
+        $input = FabricTopologyInput::load($fabricId, $nodes);
 
-        $input = [];
-        foreach ($nodes->all() as $ip => $n) {
-            if (! $n['member']) {
-                continue;
-            }
-            $device = $n['device_id'] === null ? null : $devices->get($n['device_id']);
-            $input[] = [
-                'ip' => $ip,
-                'name' => $n['name'],
-                'role' => $n['role'],
-                'device_id' => $n['device_id'],
-                'border' => $n['border'],
-                'site' => $device === null || $device->location_id === null ? null : ($locations[(int) $device->location_id] ?? null),
-                'status' => $device === null ? null : ($device->disabled ? null : (bool) $device->status),
-            ];
-        }
-
-        // underlay edges: side a is always a member device; side b a device, a router-id or an address
-        $underlay = [];
-        $portNames = [];
-        $links = DB::table(TableSchema::tableName('underlay_link'))->where('fabric_id', $fabricId)->get();
-        $portIds = array_filter(array_merge($links->pluck('a_port_id')->all(), $links->pluck('b_port_id')->all()));
-        if ($portIds !== []) {
-            $portNames = DB::table('ports')->whereIn('port_id', $portIds)->pluck('ifName', 'port_id')->map(fn ($v) => (string) $v)->all();
-        }
-        foreach ($links as $l) {
-            $a = $nodes->addressOf((int) $l->a_device_id);
-            $b = $l->b_device_id !== null ? $nodes->addressOf((int) $l->b_device_id) : null;
-            $b ??= $l->b_vtep_ip !== null && $nodes->has((string) $l->b_vtep_ip) ? (string) $l->b_vtep_ip : null;
-            if ($a === null) {
-                continue;
-            }
-            $underlay[] = [
-                'a' => $a,
-                'b' => $b,
-                'b_label' => $b === null ? ($l->b_address ?? null) : null,
-                'protocol' => (string) $l->protocol,
-                'state' => $l->state,
-                'up' => self::sessionUp((string) $l->protocol, $l->state),
-                'lldp' => (bool) $l->lldp,
-                'wan' => (bool) $l->wan,
-                'a_port' => $l->a_port_id === null ? null : ($portNames[(int) $l->a_port_id] ?? null),
-                'b_port' => $l->b_port_id === null ? null : ($portNames[(int) $l->b_port_id] ?? null),
-                'network' => $l->network,
-            ];
-        }
-
-        $neighbours = DB::table(TableSchema::tableName('neighbor'))->whereIn('device_id', $deviceIds ?: [0])->distinct()->get(['device_id', 'neighbor_ip'])
-            ->map(fn ($r) => [(int) $r->device_id, (string) $r->neighbor_ip])->all();
-        $overlay = self::overlayPairs($nodes, $neighbours);
-
-        $esiPairs = [];
-        /** @var array<string, array<string, true>> $byEsi esi => PE addresses */
-        $byEsi = [];
-        foreach (DB::table(TableSchema::tableName('esi'))->whereIn('device_id', $deviceIds ?: [0])->get(['device_id', 'esi', 'local_ifname', 'remote_vtep_ips']) as $r) {
-            $esi = (string) $r->esi;
-            $byEsi[$esi] ??= [];
-            if ($r->local_ifname !== null) {
-                $own = $nodes->addressOf((int) $r->device_id);
-                if ($own !== null) {
-                    $byEsi[$esi][$own] = true;
-                }
-            }
-            foreach ((array) json_decode((string) ($r->remote_vtep_ips ?? '[]'), true) as $ip) {
-                $byEsi[$esi][$nodes->canonical((string) $ip)] = true;
-            }
-        }
-        foreach ($byEsi as $pes) {
-            $ips = array_keys($pes);
-            usort($ips, FabricGraph::compare(...));
-            for ($i = 0; $i < count($ips); $i++) {
-                for ($j = $i + 1; $j < count($ips); $j++) {
-                    $esiPairs[$ips[$i] . '|' . $ips[$j]] ??= ['a' => $ips[$i], 'b' => $ips[$j], 'esis' => 0];
-                    $esiPairs[$ips[$i] . '|' . $ips[$j]]['esis']++;
-                }
-            }
-        }
-
-        return self::layout($input, $underlay, $overlay, array_values($esiPairs));
+        return self::layout($input['layout_nodes'], $input['layout_underlay'], $input['overlay'], $input['layout_esi_pairs']);
     }
 
     /**

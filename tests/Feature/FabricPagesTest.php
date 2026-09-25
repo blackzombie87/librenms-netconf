@@ -78,6 +78,74 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertStringContainsString('id="nt-static-wrap"', $page);
     }
 
+    public function testTheEagleViewRendersBehindItsQueryAndCarriesNoVisPayload(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithVnis(3);
+
+        $page = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle")->assertOk()->getContent();
+
+        $this->assertStringContainsString('id="eagle-svg"', $page);
+        $this->assertStringContainsString('id="eagle-inspector"', $page);
+        // the evidence sentence is the audit of the classifier, so it is on the page
+        $this->assertStringContainsString('No spine.', $page);
+        // ... and the vis map is not: the eagle response does not embed 91 edges of JSON
+        $this->assertStringNotContainsString('js/vis-network.min.js', $page);
+        $this->assertStringNotContainsString('id="nt-net"', $page);
+        // never max-width: 100%, which is what scales an 1,120 px picture down to unreadable
+        $this->assertStringNotContainsString('max-width: 100%', $page);
+        // and no graph image is requested before one is asked for
+        $this->assertStringNotContainsString('class="graph-image"', $page);
+        // the eagle camera stores a viewBox and nothing else
+        $this->assertStringContainsString("'-eagle'", $page);
+        $this->assertStringContainsString('viewBox:', $page);
+    }
+
+    public function testTheEagleViewFocusesAMemberFromTheQueryString(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithVnis(3);
+
+        $focused = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&focus=member:192.0.2.1")->assertOk()->getContent();
+        $unfocused = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle")->assertOk()->getContent();
+
+        $this->assertStringContainsString('<div data-focus="member:192.0.2.1">', $focused);
+        $this->assertStringContainsString('<div data-focus="member:192.0.2.1" hidden>', $unfocused);
+        // a focus that matches nothing leaves every panel closed rather than erroring
+        $miss = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&focus=member:no.such.address")->assertOk()->getContent();
+        $this->assertStringContainsString('<div data-focus="member:192.0.2.1" hidden>', $miss);
+    }
+
+    public function testAnAnycastGatewaySegmentIsAPairOnTheOldPictureAndNotOnTheEagleView(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric, $first] = $this->fabricWithVnis(1);
+        $now = now();
+        $second = Device::factory()->create(['os' => 'junos'])->device_id;
+        DB::table(TableSchema::tableName('vtep'))->insert(['vtep_ip' => '192.0.2.2', 'device_id' => $second, 'role' => 'gateway', 'last_seen' => $now]);
+        DB::table(TableSchema::tableName('fabric_member'))->insert(['fabric_id' => $fabric, 'vtep_ip' => '192.0.2.2', 'role' => 'gateway', 'since' => $now]);
+        foreach ([$first => '192.0.2.2', $second => '192.0.2.1'] as $device => $peer) {
+            DB::table(TableSchema::tableName('esi'))->insert([
+                // the anycast gateway segment: same value on both, on an irb unit, no member port
+                ['device_id' => $device, 'esi' => '05:00:00:01:00:00:00:10:00', 'local_ifname' => 'irb.101', 'lag_status' => null, 'status' => null, 'remote_vtep_ips' => '[]', 'last_seen' => $now],
+                // ... and one real ESI-LAG beside it
+                ['device_id' => $device, 'esi' => '01:00:00:00:00:00:00:00:01', 'local_ifname' => 'ae2.0', 'lag_status' => 'Up/Forwarding', 'status' => 'Resolved by IFL ae2.0', 'remote_vtep_ips' => json_encode([$peer]), 'last_seen' => $now],
+            ]);
+        }
+
+        // the picture that ships today counts both, which is what plan §11 E-F1 is about
+        $old = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+        $this->assertStringContainsString('2 ESIs', $old);
+
+        // the eagle view draws the LAG and nothing for the gateway segment
+        $eagle = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle")->assertOk()->getContent();
+        $this->assertStringContainsString('>1 ESI<', $eagle);
+        $this->assertStringNotContainsString('>2 ESIs<', $eagle);
+        // and the inspector says why, rather than drawing nothing without an explanation
+        $focused = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&focus=esi:05:00:00:01:00:00:00:10:00")->assertOk()->getContent();
+        $this->assertStringContainsString('not an ESI-LAG', $focused);
+    }
+
     public function testTheVnisTabPagesAndOpensOnTheRowsWithIssues(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));

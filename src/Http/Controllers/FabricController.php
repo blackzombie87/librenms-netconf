@@ -10,11 +10,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\View\EagleLayout;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricIssues;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricMembers;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricNodes;
 use SafferIt\LibrenmsNetconf\Fabric\View\EsiMatrix;
+use SafferIt\LibrenmsNetconf\Fabric\View\FabricShape;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricSummary;
+use SafferIt\LibrenmsNetconf\Fabric\View\FabricTopologyInput;
 use SafferIt\LibrenmsNetconf\Fabric\View\MacSearch;
 use SafferIt\LibrenmsNetconf\Fabric\View\OverlaySessions;
 use SafferIt\LibrenmsNetconf\Fabric\View\Topology;
@@ -29,6 +32,9 @@ use SafferIt\LibrenmsNetconf\Fabric\View\VniMatrix;
  */
 class FabricController extends Controller
 {
+    /** The overview rendering `?topo=` selects; absent is the server default. */
+    public const TOPO_EAGLE = 'eagle';
+
     /** Tab id => label; the order is the tab bar. */
     public const TABS = [
         'overview' => 'Overview',
@@ -110,7 +116,7 @@ class FabricController extends Controller
         $deviceIds = $nodes->deviceIds();
 
         return match ($tab) {
-            'overview' => $this->overview($summary['id'], $nodes),
+            'overview' => $this->overview($summary['id'], $nodes, $request),
             'members' => ['members' => FabricMembers::forFabric($summary['id'])],
             'bgp' => $this->bgp($nodes, $deviceIds),
             'vnis' => $this->vnis($nodes, $request),
@@ -123,16 +129,57 @@ class FabricController extends Controller
     }
 
     /**
-     * The topology, twice: the static SVG layout and the same graph as nodes and edges for the
-     * interactive map, which starts its physics from the layout's coordinates.
+     * The overview picture. `?topo=eagle` renders the wrapped, server-laid-out SVG; anything
+     * else keeps today's page, which is the static layout plus the same graph as nodes and
+     * edges for the interactive map. The two branches share `FabricTopologyInput` and nothing
+     * else: the eagle response does not embed the vis JSON, and the default response does not
+     * run `EagleLayout`.
      *
      * @return array<string, mixed>
      */
-    private function overview(int $fabricId, FabricNodes $nodes): array
+    private function overview(int $fabricId, FabricNodes $nodes, Request $request): array
     {
-        $topology = Topology::forFabric($fabricId, $nodes);
+        $topo = (string) $request->query('topo', '');
+        if ($topo !== self::TOPO_EAGLE) {
+            $topology = Topology::forFabric($fabricId, $nodes);
 
-        return ['topology' => $topology, 'graph' => Topology::graph($topology, $nodes)];
+            return ['topo' => $topo === 'static' ? 'static' : 'interactive', 'topology' => $topology, 'graph' => Topology::graph($topology, $nodes)];
+        }
+
+        $input = FabricTopologyInput::load($fabricId, $nodes, eagle: true);
+        $shape = FabricShape::classify($input['members'], $input['overlay'], $input['shared_far_ends'], $input['missing']);
+        $view = [
+            'collapse' => self::collapseKeys($request),
+            'outside' => (bool) $request->query('outside'),
+            'attached' => null,
+        ];
+        $eagle = EagleLayout::place($shape, $input['nodes'], $input['underlay'], $shape['overlay_edges'], $input['shared_far_ends'], $input['esi_pairs'], $view);
+
+        return [
+            'topo' => self::TOPO_EAGLE,
+            'shape' => $shape,
+            'eagle' => $eagle,
+            'eagle_input' => $input,
+            'focus' => (string) $request->query('focus', ''),
+            'view' => $view,
+        ];
+    }
+
+    /**
+     * `collapse[]` is a repeated parameter and never a comma-separated string: a location may
+     * itself contain a comma ("BER, hall"), and splitting one would collapse a site named
+     * "BER" that the operator never asked about.
+     *
+     * @return list<string>
+     */
+    private static function collapseKeys(Request $request): array
+    {
+        $raw = $request->query('collapse', []);
+
+        return array_values(array_filter(array_map(
+            fn ($v) => is_string($v) ? $v : null,
+            is_array($raw) ? $raw : [$raw],
+        )));
     }
 
     /**
