@@ -13,6 +13,7 @@
             <button type="button" class="btn btn-default btn-xs" id="nt-cluster">collapse sites</button>
             <button type="button" class="btn btn-default btn-xs" id="nt-reset">reset layout</button>
             <button type="button" class="btn btn-default btn-xs" id="nt-static-on">static picture</button>
+            <a class="btn btn-default btn-xs" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}">eagle view</a>
         </span>
     </div>
     @if ($graph['mesh']['complete'])

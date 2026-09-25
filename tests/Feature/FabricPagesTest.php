@@ -29,7 +29,7 @@ final class FabricPagesTest extends LibrenmsTestCase
         $fabric = $this->fabric();
 
         $this->get('/plugin/netconf/fabrics')->assertOk()->assertSee('Fabric test');
-        foreach (['overview', 'members', 'bgp', 'vnis', 'esis', 'tunnels', 'macs', 'checks'] as $tab) {
+        foreach (['overview', 'members', 'bgp', 'vnis', 'esis', 'tunnels', 'macs', 'trace', 'checks'] as $tab) {
             $this->get("/plugin/netconf/fabric/$fabric/$tab")->assertOk();
         }
         $this->get("/plugin/netconf/fabric/$fabric/nope")->assertNotFound();
@@ -62,20 +62,29 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertSame('Fabric test', DB::table(TableSchema::tableName('fabric'))->where('id', $fabric)->value('name'));
     }
 
-    public function testTheOverviewCarriesBothTopologyRenderings(): void
+    public function testTheBareOverviewIsTheEagleViewAndTheOldPicturesStayBehindTopo(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
         [$fabric] = $this->fabricWithVnis(3);
 
-        $page = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+        // the bookmarked URL: the eagle view, laid out on the server, no vis payload
+        $bare = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+        $this->assertStringContainsString('id="eagle-svg"', $bare);
+        $this->assertStringContainsString('No spine.', $bare);
+        $this->assertStringNotContainsString('js/vis-network.min.js', $bare);
+        $this->assertStringNotContainsString('id="nt-net"', $bare);
 
-        // the interactive map, from the vis-network LibreNMS itself ships (no CDN)
-        $this->assertStringContainsString('js/vis-network.min.js', $page);
-        $this->assertStringContainsString('id="nt-net"', $page);
-        $this->assertStringContainsString('"overlay_pairs"', $page);
-        // ... and the static SVG behind it, for a core without vis and for a picture to paste
-        $this->assertStringContainsString('id="nt-svg"', $page);
-        $this->assertStringContainsString('id="nt-static-wrap"', $page);
+        // the interactive map is still one link away, with the vis-network LibreNMS ships
+        $interactive = $this->get("/plugin/netconf/fabric/$fabric?topo=interactive")->assertOk()->getContent();
+        $this->assertStringContainsString('js/vis-network.min.js', $interactive);
+        $this->assertStringContainsString('id="nt-net"', $interactive);
+        $this->assertStringContainsString('"overlay_pairs"', $interactive);
+        // ... and the one-row SVG with it, for a core without vis and for a picture to paste
+        $this->assertStringContainsString('id="nt-svg"', $interactive);
+        $this->assertStringContainsString('id="nt-static-wrap"', $interactive);
+        $this->assertStringNotContainsString('id="eagle-svg"', $interactive);
+
+        $this->assertStringContainsString('id="nt-svg"', $this->get("/plugin/netconf/fabric/$fabric?topo=static")->assertOk()->getContent());
     }
 
     public function testTheEagleViewRendersBehindItsQueryAndCarriesNoVisPayload(): void
@@ -133,12 +142,12 @@ final class FabricPagesTest extends LibrenmsTestCase
             ]);
         }
 
-        // the picture that ships today counts both, which is what plan §11 E-F1 is about
-        $old = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+        // the older picture counts both, which is what plan §11 E-F1 is about
+        $old = $this->get("/plugin/netconf/fabric/$fabric?topo=interactive")->assertOk()->getContent();
         $this->assertStringContainsString('2 ESIs', $old);
 
         // the eagle view draws the LAG and nothing for the gateway segment
-        $eagle = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle")->assertOk()->getContent();
+        $eagle = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
         $this->assertStringContainsString('>1 ESI<', $eagle);
         $this->assertStringNotContainsString('>2 ESIs<', $eagle);
         // and the inspector says why, rather than drawing nothing without an explanation

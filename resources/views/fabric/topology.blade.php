@@ -18,7 +18,10 @@
             <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#337ab7" stroke-width="1" stroke-dasharray="3 3"/></svg> overlay
             <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#f0ad4e" stroke-width="2"/></svg> ESI pair
         </span>
-        <span class="pull-right"><button type="button" class="btn btn-default btn-xs" id="nt-interactive-on">interactive map</button></span>
+        <span class="pull-right">
+            <button type="button" class="btn btn-default btn-xs" id="nt-interactive-on">interactive map</button>
+            <a class="btn btn-default btn-xs" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}">eagle view</a>
+        </span>
     </div>
     <style>
         .nt-hide-overlay .nt-overlay, .nt-hide-esi .nt-esi, .nt-hide-labels .nt-label { display: none; }

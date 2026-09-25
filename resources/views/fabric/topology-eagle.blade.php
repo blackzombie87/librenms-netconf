@@ -8,7 +8,7 @@
 <div class="netconf-eagle">
     <div class="nt-bar">
         <span class="btn-group btn-group-xs" role="group">
-            <a class="btn btn-default active" href="{{ request()->fullUrlWithQuery(['topo' => 'eagle']) }}">eagle view</a>
+            <a class="btn btn-default active" href="{{ request()->fullUrlWithQuery(['topo' => null]) }}">eagle view</a>
             <a class="btn btn-default" href="{{ request()->fullUrlWithQuery(['topo' => 'interactive', 'collapse' => null, 'outside' => null, 'attached' => null, 'focus' => null]) }}">interactive map</a>
         </span>
         <span class="text-muted" style="margin-left: 10px;">

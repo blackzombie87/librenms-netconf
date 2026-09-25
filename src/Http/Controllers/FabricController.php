@@ -132,21 +132,20 @@ class FabricController extends Controller
     }
 
     /**
-     * The overview picture. `?topo=eagle` renders the wrapped, server-laid-out SVG; anything
-     * else keeps today's page, which is the static layout plus the same graph as nodes and
-     * edges for the interactive map. The two branches share `FabricTopologyInput` and nothing
-     * else: the eagle response does not embed the vis JSON, and the default response does not
-     * run `EagleLayout`.
+     * The overview picture. Absent `topo` is the eagle view; `?topo=interactive` and
+     * `?topo=static` still reach the vis map and the one-row SVG, for one more release.
+     * The two branches share `FabricTopologyInput` and nothing else: the eagle response does
+     * not embed the vis JSON, and the default response does not run `EagleLayout`.
      *
      * @return array<string, mixed>
      */
     private function overview(int $fabricId, FabricNodes $nodes, Request $request): array
     {
         $topo = (string) $request->query('topo', '');
-        if ($topo !== self::TOPO_EAGLE) {
+        if ($topo === 'interactive' || $topo === 'static') {
             $topology = Topology::forFabric($fabricId, $nodes);
 
-            return ['topo' => $topo === 'static' ? 'static' : 'interactive', 'topology' => $topology, 'graph' => Topology::graph($topology, $nodes)];
+            return ['topo' => $topo, 'topology' => $topology, 'graph' => Topology::graph($topology, $nodes)];
         }
 
         $input = FabricTopologyInput::load($fabricId, $nodes, eagle: true);

@@ -1,4 +1,4 @@
-@if (($topo ?? '') === \SafferIt\LibrenmsNetconf\Http\Controllers\FabricController::TOPO_EAGLE)
+@if (($topo ?? '') !== 'interactive' && ($topo ?? '') !== 'static')
     @include('netconf::fabric.overview-eagle')
 @else
 <div class="row">
