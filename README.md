@@ -765,7 +765,7 @@ version, run `plugin:add` again, then the migrations:
 
 ```bash
 ./lnms plugin:add saffer-it/librenms-netconf            # newest release within the constraint
-./lnms plugin:add saffer-it/librenms-netconf 1.3.0      # a specific version
+./lnms plugin:add saffer-it/librenms-netconf 1.4.0      # a specific version
 ./lnms migrate
 ./lnms route:cache                                      # new routes reach a cached installation
 ./lnms view:clear                                       # new pages replace the compiled old ones
