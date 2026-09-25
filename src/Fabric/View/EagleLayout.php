@@ -157,10 +157,11 @@ final class EagleLayout
         /** @var array<string, array<string, mixed>> $placed */
         $placed = [];
         $y = self::MARGIN;
-        $rowWidths = [];
+        /** @var list<array{width: int, cards: list<string>, groups: list<int>}> $rows */
+        $rows = [];
         if ($spineRow !== []) {
-            [$y, $w] = self::placeTier($spineRow, $byIp, $tier, $usable, $y, $placed, $hlNodes);
-            $rowWidths[] = $w;
+            [$y, $tierRows] = self::placeTier($spineRow, $byIp, $tier, $usable, $y, $placed, $hlNodes);
+            $rows = array_merge($rows, $tierRows);
             $y += self::TIER_GAP;
         }
 
@@ -170,20 +171,32 @@ final class EagleLayout
             if ($tierSites === []) {
                 continue;
             }
-            [$y, $tierGroups, $tierWidths] = self::packTier($tierSites, $collapsed, $cap, $usable, $y, $outsideOn, $outsideOf, $attachedOf, $attached);
+            [$y, $tierGroups, $tierRows] = self::packTier($tierSites, $collapsed, $cap, $usable, $y, $outsideOn, $outsideOf, $attachedOf, $attached, count($groups));
             $groups = array_merge($groups, $tierGroups);
-            $rowWidths = array_merge($rowWidths, $tierWidths);
+            $rows = array_merge($rows, $tierRows);
             $y += self::TIER_GAP;
         }
-        $bottom = $groups === [] ? $y : $y - self::TIER_GAP;
+        $bottom = $groups === [] && $rows === [] ? $y : $y - self::TIER_GAP;
+
+        // one width for the picture, then every row centred inside it: centring a row against
+        // the target width instead would leave its cards outside a narrower viewBox
+        $contentW = $rows === [] ? self::CARD_W : max(array_column($rows, 'width'));
+        $width = min(self::TARGET_WIDTH, (int) $contentW + 2 * self::MARGIN);
+        foreach ($rows as $row) {
+            $shift = (int) round(($contentW - $row['width']) / 2);
+            foreach ($row['cards'] as $id) {
+                $placed[$id]['x'] += $shift;
+            }
+            foreach ($row['groups'] as $index) {
+                $groups[$index]['x'] += $shift;
+                $groups[$index]['header']['x'] += $shift;
+            }
+        }
 
         foreach ($groups as &$group) {
             self::placeSiteContents($group, $byIp, $tier, $outsideOn, $outsideOf, $attachedOf, $attached, $placed, $hlNodes);
         }
         unset($group);
-
-        $contentW = $rowWidths === [] ? self::CARD_W : max($rowWidths);
-        $width = min(self::TARGET_WIDTH, (int) $contentW + 2 * self::MARGIN);
 
         $anchorOf = self::anchors($placed, $groups, $siteOf, $collapsed);
         $edges = self::edges($underlay, $overlayEdges, $esiPairs, $placed, $groups, $anchorOf, $siteOf, $collapsed, $sharedSet, $outsideOn, $hlEdges, $tier);
@@ -290,30 +303,30 @@ final class EagleLayout
     }
 
     /**
-     * One tier of site boxes, packed greedily into rows no wider than the target and centred.
+     * One tier of site boxes, packed greedily into rows no wider than the target. Centring is
+     * a later pass, once the picture's own width is known.
      *
      * @param  list<array{key: string, label: string|null, members: list<string>}>  $sites
      * @param  array<string, true>  $collapsed
      * @param  array<string, list<array<string, mixed>>>  $outsideOf
      * @param  array<string, list<array<string, mixed>>>  $attachedOf
      * @param  list<array<string, mixed>>|null  $attached
-     * @return array{0: int, 1: list<array<string, mixed>>, 2: list<int>}
+     * @param  int  $offset  index of the first of these groups in the caller's list
+     * @return array{0: int, 1: list<array<string, mixed>>, 2: list<array{width: int, cards: list<string>, groups: list<int>}>}
      */
-    private static function packTier(array $sites, array $collapsed, int $cap, int $usable, int $y, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached): array
+    private static function packTier(array $sites, array $collapsed, int $cap, int $usable, int $y, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached, int $offset): array
     {
         $groups = [];
-        $widths = [];
-        $rowBoxes = [];
+        $rows = [];
+        $rowIndices = [];
         $rowTop = $y;
         $rowHeight = 0;
         $rowWidth = 0;
         foreach ($sites as $site) {
             $box = self::siteBox($site, isset($collapsed[$site['key']]), $cap, $outsideOn, $outsideOf, $attachedOf, $attached);
             if ($rowWidth > 0 && $rowWidth + self::SITE_GAP + $box['w'] > $usable) {
-                $widths[] = $rowWidth;
-                self::centreRow($rowBoxes, $rowWidth, $usable);
-                $groups = array_merge($groups, $rowBoxes);
-                $rowBoxes = [];
+                $rows[] = ['width' => $rowWidth, 'cards' => [], 'groups' => $rowIndices];
+                $rowIndices = [];
                 $rowTop += $rowHeight + self::SITE_GAP;
                 $rowWidth = 0;
                 $rowHeight = 0;
@@ -321,17 +334,18 @@ final class EagleLayout
             $x = $rowWidth === 0 ? 0 : $rowWidth + self::SITE_GAP;
             $box['x'] = $x + self::MARGIN;
             $box['y'] = $rowTop;
-            $rowBoxes[] = $box;
+            $box['header']['x'] = $box['x'];
+            $box['header']['y'] = $box['y'];
+            $rowIndices[] = $offset + count($groups);
+            $groups[] = $box;
             $rowWidth = $x + $box['w'];
             $rowHeight = max($rowHeight, $box['h']);
         }
-        if ($rowBoxes !== []) {
-            $widths[] = $rowWidth;
-            self::centreRow($rowBoxes, $rowWidth, $usable);
-            $groups = array_merge($groups, $rowBoxes);
+        if ($rowIndices !== []) {
+            $rows[] = ['width' => $rowWidth, 'cards' => [], 'groups' => $rowIndices];
         }
 
-        return [$rowTop + $rowHeight, $groups, $widths];
+        return [$rowTop + $rowHeight, $groups, $rows];
     }
 
     /**
@@ -411,28 +425,29 @@ final class EagleLayout
      * @param  array<string, string>  $tier
      * @param  array<string, array<string, mixed>>  $placed
      * @param  array<string, true>  $hlNodes
-     * @return array{0: int, 1: int} the y below the tier, and its width
+     * @return array{0: int, 1: list<array{width: int, cards: list<string>, groups: list<int>}>} the y below the tier, and its rows
      */
     private static function placeTier(array $row, array $byIp, array $tier, int $usable, int $y, array &$placed, array $hlNodes): array
     {
         $perRow = max(1, min(count($row), intdiv($usable + self::COL_GAP, self::CARD_W + self::COL_GAP)));
-        $width = 0;
-        $index = 0;
+        $rows = [];
         foreach (array_chunk($row, $perRow) as $chunk) {
-            $rowW = count($chunk) * self::CARD_W + (count($chunk) - 1) * self::COL_GAP;
-            $width = max($width, $rowW);
-            $x = self::MARGIN + (int) round(($usable - $rowW) / 2);
+            $x = self::MARGIN;
             foreach ($chunk as $id) {
                 $placed[$id] = str_starts_with($id, 'far:')
                     ? self::farNode($id, $x, $y, $hlNodes)
                     : self::memberNode($byIp[$id], $tier[$id] ?? FabricShape::TIER_LEAF, $x, $y, $hlNodes);
                 $x += self::CARD_W + self::COL_GAP;
-                $index++;
             }
+            $rows[] = [
+                'width' => count($chunk) * self::CARD_W + (count($chunk) - 1) * self::COL_GAP,
+                'cards' => array_values($chunk),
+                'groups' => [],
+            ];
             $y += self::CARD_H + self::ROW_GAP;
         }
 
-        return [$y - self::ROW_GAP, $width];
+        return [$y - self::ROW_GAP, $rows];
     }
 
     /**
@@ -478,19 +493,6 @@ final class EagleLayout
             'degraded' => 0,
             'highlight' => false,
         ];
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $boxes
-     */
-    private static function centreRow(array &$boxes, int $rowWidth, int $usable): void
-    {
-        $shift = (int) round(($usable - $rowWidth) / 2);
-        foreach ($boxes as &$box) {
-            $box['x'] += $shift;
-            $box['header']['x'] = $box['x'];
-        }
-        unset($box);
     }
 
     /**

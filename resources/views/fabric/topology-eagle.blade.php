@@ -1,7 +1,10 @@
 {{-- The eagle SVG and its viewport. Server-rendered geometry ($eagle = EagleLayout::place());
      the script only moves a viewBox, so there is no second layout engine and no new library. --}}
 @php($eg = $eagle)
-@php($baseQuery = collect(request()->query())->except(['focus'])->all())
+@php($collapsed = $view['collapse'])
+{{-- toolbar links keep every other parameter and are built with the query builder, so a
+     location that itself contains a comma stays one value (`collapse[]` is never split) --}}
+@php($toggleSite = fn (string $key) => request()->fullUrlWithQuery(['topo' => 'eagle', 'focus' => null, 'collapse' => array_values(in_array($key, $collapsed, true) ? array_diff($collapsed, [$key]) : [...$collapsed, $key])]))
 <div class="netconf-eagle">
     <div class="nt-bar">
         <span class="btn-group btn-group-xs" role="group">
@@ -12,15 +15,17 @@
             {{ $eg['counts']['sites'] }} site{{ $eg['counts']['sites'] === 1 ? '' : 's' }}@if ($eg['counts']['collapsed'] > 0), {{ $eg['counts']['collapsed'] }} collapsed @endif
         </span>
         <span class="btn-group btn-group-xs" style="margin-left: 10px;" role="group">
-            <button type="button" class="btn btn-default" disabled title="arrives with the collapse PR">collapse sites</button>
-            <button type="button" class="btn btn-default" disabled title="{{ $eg['counts']['outside'] }} sessions out of the fabric; arrives with the outside PR">sessions out of the fabric ({{ $eg['counts']['outside'] }})</button>
-            <button type="button" class="btn btn-default" disabled title="arrives with the attached-devices PR">attached devices</button>
+            <a class="btn btn-default" href="{{ request()->fullUrlWithQuery(['topo' => 'eagle', 'focus' => null, 'collapse' => count($collapsed) === count($eg['groups']) ? [] : array_column($eg['groups'], 'key')]) }}">{{ count($collapsed) === count($eg['groups']) && $eg['groups'] !== [] ? 'expand all sites' : 'collapse all sites' }}</a>
+            @if ($eg['counts']['outside'] > 0)
+                <a class="btn btn-default {{ $view['outside'] ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['topo' => 'eagle', 'focus' => null, 'outside' => $view['outside'] ? null : 1]) }}">sessions out of the fabric ({{ $eg['counts']['outside'] }})</a>
+            @endif
+            <a class="btn btn-default {{ $view['attached'] !== null ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['topo' => 'eagle', 'focus' => null, 'attached' => $view['attached'] !== null ? null : 1]) }}">attached devices {{ $view['attached'] === null ? '' : '(' . count($view['attached']) . ')' }}</a>
         </span>
         <span class="pull-right btn-group btn-group-xs" role="group">
             <button type="button" class="btn btn-default" id="eagle-out" title="zoom out">&minus;</button>
             <button type="button" class="btn btn-default" id="eagle-in" title="zoom in">+</button>
             <button type="button" class="btn btn-default" id="eagle-fit" title="fit the whole picture">fit</button>
-            <a class="btn btn-default" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}?topo=eagle" id="eagle-reset">reset</a>
+            <a class="btn btn-default" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}?topo=eagle" id="eagle-reset" title="forget the stored camera and every view flag">reset</a>
         </span>
     </div>
 
@@ -50,10 +55,12 @@
     <div id="eagle-view" data-fabric="{{ $fabric['id'] }}" data-w="{{ $eg['width'] }}" data-h="{{ $eg['height'] }}">
         <svg id="eagle-svg" width="{{ $eg['width'] }}" height="{{ $eg['height'] }}" viewBox="0 0 {{ $eg['width'] }} {{ $eg['height'] }}" xmlns="http://www.w3.org/2000/svg">
             @foreach ($eg['groups'] as $g)
-                <g class="eg-site">
-                    <rect x="{{ $g['x'] }}" y="{{ $g['y'] }}" width="{{ $g['w'] }}" height="{{ $g['h'] }}" rx="6" fill="rgba(0,0,0,0.03)" stroke="{{ $g['state'] === 'down' ? '#d9534f' : ($g['state'] === 'warning' ? '#f0ad4e' : '#ccc') }}" stroke-dasharray="4 3"/>
-                    <text x="{{ $g['x'] + 6 }}" y="{{ $g['y'] + 14 }}" font-size="11" fill="#777">{{ $g['label'] ?? 'no location' }} <tspan fill="#aaa">({{ count($g['members']) }})</tspan></text>
-                </g>
+                <a href="{{ $toggleSite($g['key']) }}" class="eg-site">
+                    <rect x="{{ $g['x'] }}" y="{{ $g['y'] }}" width="{{ $g['w'] }}" height="{{ $g['h'] }}" rx="6" fill="rgba(0,0,0,0.03)" stroke="{{ $g['state'] === 'down' ? '#d9534f' : ($g['state'] === 'warning' ? '#f0ad4e' : '#ccc') }}" stroke-dasharray="4 3">
+                        <title>{{ $g['label'] ?? 'no location' }} — {{ count($g['members']) }} member{{ count($g['members']) === 1 ? '' : 's' }}, click to {{ $g['collapsed'] ? 'expand' : 'collapse' }}</title>
+                    </rect>
+                    <text x="{{ $g['x'] + 6 }}" y="{{ $g['y'] + 14 }}" font-size="11" fill="#777">{{ $g['collapsed'] ? '▸' : '▾' }} {{ $g['label'] ?? 'no location' }} <tspan fill="#aaa">({{ count($g['members']) }})</tspan></text>
+                </a>
             @endforeach
 
             @foreach ($eg['edges'] as $e)

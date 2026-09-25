@@ -2,8 +2,10 @@
 
 namespace SafferIt\LibrenmsNetconf\Fabric\View;
 
+use App\Models\Device;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\EsiLinks;
 use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
@@ -118,6 +120,67 @@ final class FabricTopologyInput
         }
 
         return $out;
+    }
+
+    /**
+     * The devices hanging off this fabric's ESI-LAGs, from core discovery (plan §11 E6). Two
+     * queries on the ESI sides that were loaded already — `ports_stack` for the physical
+     * members of each AE, and `links` on either — and nothing per port. It does not read
+     * `netconf_evpn_esi` a second time and it does not run at all unless `attached=1`.
+     *
+     * @param  list<array<string, mixed>>  $esiRows  EsiMatrix rows
+     * @return list<array<string, mixed>>
+     */
+    public static function attached(array $esiRows, FabricNodes $nodes): array
+    {
+        $lagSides = [];
+        foreach ($esiRows as $row) {
+            if (! EsiKind::isLag($row)) {
+                continue;
+            }
+            /** @var array<int, array<string, mixed>> $sides */
+            $sides = (array) $row['sides'];
+            foreach ($sides as $side) {
+                if ($side['port_id'] !== null && ! EsiKind::isGateway((string) $row['esi'], $side['ifname'] === null ? null : (string) $side['ifname'])) {
+                    $lagSides[] = ['esi' => (string) $row['esi'], 'device_id' => (int) $side['device_id'], 'port_id' => (int) $side['port_id']];
+                }
+            }
+        }
+        if ($lagSides === []) {
+            return [];
+        }
+
+        $aeIds = array_values(array_unique(array_column($lagSides, 'port_id')));
+        $stack = DB::table('ports_stack')->whereIn('high_port_id', $aeIds)->whereNotNull('low_port_id')
+            ->get(['high_port_id', 'low_port_id'])
+            ->map(fn ($r) => ['high_port_id' => (int) $r->high_port_id, 'low_port_id' => (int) $r->low_port_id])->all();
+
+        $portIds = array_values(array_unique(array_merge($aeIds, array_column($stack, 'low_port_id'))));
+        $links = DB::table('links')->whereIn('local_port_id', $portIds)
+            ->where(fn ($q) => $q->whereNull('protocol')->orWhere('protocol', '!=', EsiLinks::PROTOCOL))
+            ->get(['local_port_id', 'protocol', 'remote_device_id', 'remote_hostname', 'remote_port'])
+            ->map(fn ($r) => [
+                'local_port_id' => (int) $r->local_port_id,
+                'protocol' => $r->protocol === null ? null : (string) $r->protocol,
+                'remote_device_id' => (int) $r->remote_device_id,
+                'remote_hostname' => (string) $r->remote_hostname,
+                'remote_port' => (string) $r->remote_port,
+            ])->all();
+
+        $remoteIds = array_values(array_filter(array_unique(array_column($links, 'remote_device_id'))));
+        $names = [];
+        foreach (Device::query()->whereIn('device_id', $remoteIds ?: [0])->get() as $device) {
+            $names[(int) $device->device_id] = array_values(array_unique(array_filter([$device->displayName(), $device->hostname, $device->sysName])));
+        }
+
+        $records = EsiAttached::select($lagSides, $stack, $links, array_fill_keys($nodes->deviceIds(), true), $names);
+        foreach ($records as &$record) {
+            // the card it hangs under: the PE the first attachment was seen on
+            $record['anchor'] = $nodes->addressOf((int) ($record['attachments'][0]['device_id'] ?? 0));
+        }
+        unset($record);
+
+        return array_values(array_filter($records, fn ($r) => $r['anchor'] !== null));
     }
 
     /**

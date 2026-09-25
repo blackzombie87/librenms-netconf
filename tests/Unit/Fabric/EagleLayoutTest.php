@@ -76,7 +76,11 @@ it('draws the production shape: 7 compounds of 4/2/2/2/2/1/1 and the gateways on
     $gatewayY = $out['nodes']['10.0.0.1']['y'];
     $leafY = $out['nodes']['10.0.0.11']['y'];
 
+    // every card sits inside the picture's own viewBox, not inside the target width
+    $rightmost = max(array_map(fn ($n) => $n['x'] + $n['w'], $out['nodes']));
+
     expect($out['width'])->toBeLessThanOrEqual(EagleLayout::TARGET_WIDTH)
+        ->and($rightmost)->toBeLessThanOrEqual($out['width'])
         ->and($sizes)->toBe([4, 2, 2, 2, 2, 1, 1])
         ->and($out['nodes']['10.0.0.1']['tier'])->toBe(FabricShape::TIER_GATEWAY)
         ->and($gatewayY)->toBeLessThan($leafY)
@@ -97,6 +101,7 @@ it('wraps 26 members in 6 sites into more than one site row and stays inside the
     $rows = array_unique(array_map(fn ($g) => $g['y'], $out['groups']));
 
     expect($out['width'])->toBeLessThanOrEqual(EagleLayout::TARGET_WIDTH)
+        ->and(max(array_map(fn ($n) => $n['x'] + $n['w'], $out['nodes'])))->toBeLessThanOrEqual($out['width'])
         ->and(count($out['groups']))->toBe(6)
         ->and(count($rows))->toBeGreaterThan(1)
         ->and($out['counts']['cards'])->toBe(26);

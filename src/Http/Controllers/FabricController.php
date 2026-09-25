@@ -151,7 +151,9 @@ class FabricController extends Controller
         $view = [
             'collapse' => self::collapseKeys($request),
             'outside' => (bool) $request->query('outside'),
-            'attached' => null,
+            // null, not [], while the layer is off: the two extra queries have not run, and a
+            // summary card that printed "0 attached" would claim they had
+            'attached' => $request->query('attached') ? FabricTopologyInput::attached($input['esi_rows'], $nodes) : null,
         ];
         $eagle = EagleLayout::place($shape, $input['nodes'], $input['underlay'], $shape['overlay_edges'], $input['shared_far_ends'], $input['esi_pairs'], $view);
 

@@ -86,6 +86,15 @@
                     @if ($row['flags'] !== [])
                         <p><small>@foreach ($row['flags'] as $flag)<span class="label label-{{ in_array($flag, \SafferIt\LibrenmsNetconf\Fabric\View\EsiKind::CHIP, true) ? 'danger' : 'warning' }}">{{ $flag }}</span> @endforeach</small></p>
                     @endif
+                    @php($records = array_values(array_filter($view['attached'] ?? [], fn ($a) => $a['esi'] === $row['esi'])))
+                    @if ($records !== [])
+                        <p><small>Attached:
+                            @foreach ($records as $record)
+                                @if ($record['device_id'])<a href="{{ \LibreNMS\Util\Url::deviceUrl(\App\Models\Device::find($record['device_id'])) }}">{{ $record['label'] }}</a>@else {{ $record['label'] }} @endif
+                                <span class="text-muted">seen on @foreach ($record['attachments'] as $a){{ $nodes->name($nodes->addressOf($a['device_id']) ?? '') }} port {{ $a['port_id'] }} ({{ $a['remote_port'] }})@if (! $loop->last) and @endif @endforeach</span>@if (! $loop->last); @endif
+                            @endforeach
+                        </small></p>
+                    @endif
                     @include('netconf::fabric.esi-traffic', ['row' => $row])
                 @endif
             </div>

@@ -211,6 +211,53 @@ final class FabricPagesTest extends LibrenmsTestCase
         return [$fabric, $first, $second];
     }
 
+    public function testAttachedDevicesAreOptInAndLeaveOutTheFabricsOwnPeers(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric, $first, $second] = $this->fabricWithTwoPeLag();
+        $ae = (int) DB::table(TableSchema::tableName('esi'))->where('device_id', $first)->value('local_port_id');
+        $member = (int) DB::table('ports')->insertGetId(['device_id' => $first, 'ifName' => 'et-0/0/49', 'ifIndex' => 49, 'deleted' => 0]);
+        DB::table('ports_stack')->insert(['device_id' => $first, 'high_ifIndex' => 700, 'high_port_id' => $ae, 'low_ifIndex' => 49, 'low_port_id' => $member, 'ifStackStatus' => 'active']);
+        $server = Device::factory()->create(['os' => 'linux', 'hostname' => 'server-a']);
+        DB::table('links')->insert([
+            ['local_port_id' => $ae, 'local_device_id' => $first, 'protocol' => 'lldp', 'remote_device_id' => $server->device_id, 'remote_hostname' => 'server-a', 'remote_port' => 'eno1', 'remote_version' => ''],
+            ['local_port_id' => $member, 'local_device_id' => $first, 'protocol' => 'lldp', 'remote_device_id' => $server->device_id, 'remote_hostname' => 'server-a', 'remote_port' => 'eno2', 'remote_version' => ''],
+            // the plugin's own multihoming link to the peer leaf: never an attached device
+            ['local_port_id' => $ae, 'local_device_id' => $first, 'protocol' => 'evpn-esi', 'remote_device_id' => $second, 'remote_hostname' => 'leaf-2', 'remote_port' => 'ae2', 'remote_version' => ''],
+        ]);
+
+        $off = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle")->assertOk()->getContent();
+        $this->assertStringNotContainsString('server-a', $off);
+        $this->assertStringContainsString('attached devices', $off);
+
+        $on = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&attached=1&focus=esi:01:00:00:00:00:00:00:00:01")->assertOk()->getContent();
+        $this->assertStringContainsString('server-a', $on);
+        // one record with two attachments, not two servers, and no card for the peer leaf
+        $this->assertSame(1, substr_count($on, 'data-focus="attached:'));
+        $this->assertStringContainsString('attached devices (1)', $on);
+        $this->assertStringNotContainsString('leaf-2', $on);
+    }
+
+    public function testCollapseTakesOneSiteKeyPerValueAndOutsideIsOptIn(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric, $device] = $this->fabricWithVnis(1);
+        $location = (int) DB::table('locations')->insertGetId(['location' => 'BER, hall', 'timestamp' => now()]);
+        DB::table('devices')->where('device_id', $device)->update(['location_id' => $location]);
+
+        $expanded = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle")->assertOk()->getContent();
+        $this->assertStringContainsString('192.0.2.1', $expanded);
+        $this->assertStringContainsString('BER, hall', $expanded);
+
+        // one repeated parameter, never a comma split: "BER" must not be collapsed by it
+        $wrong = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&collapse[]=site:BER")->assertOk()->getContent();
+        $this->assertStringContainsString('<g class="eg-card" data-focus="member:192.0.2.1">', $wrong);
+
+        $collapsed = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&" . http_build_query(['collapse' => ['site:BER, hall']]))->assertOk()->getContent();
+        $this->assertStringNotContainsString('<g class="eg-card" data-focus="member:192.0.2.1">', $collapsed);
+        $this->assertStringContainsString('1 member', $collapsed);
+    }
+
     public function testTheVnisTabPagesAndOpensOnTheRowsWithIssues(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
