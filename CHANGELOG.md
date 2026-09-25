@@ -1,29 +1,138 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 – 2026-09-25
 
-The topology map of a fabric is interactive. The static SVG puts every member in one row —
-1,968 px wide at 14 members, 3,780 px at 26 — and a browser scales that down until the labels
-are unreadable; a healthy EVPN overlay adds one arc per pair, 91 of them at 14 members.
+A new picture of a fabric, a tracer that answers "how does this address reach that one", and
+the EVPN MAC database finally switchable from the UI.
 
-- The overview opens a **draggable, physics-driven map** built on the vis-network LibreNMS
-  already ships (`html/js`, so no external asset and no new dependency): drag a member and its
-  neighbours follow, scroll to zoom, click through to the device page. **Collapse sites** folds
-  every location into a single node — 26 members become 8 — and opens again on click. The
-  arrangement is kept per fabric in the browser; *reset layout* forgets it.
-- The **overlay arcs are off while the overlay is a complete mesh**, with one sentence saying
-  what they would have drawn; a pair only one side lists is always drawn, in red.
-- **A border router's transit and IX peers are no longer drawn as fabric underlay.** Every BGP
-  session inside a member's own subnet became an underlay half link, which is right for a spine
-  nobody monitors and wrong for a peering LAN — the first production fabric drew six of them off
-  its edge router. A far end **several members** peer with is now a fabric node that is not
-  monitored yet: one dashed box with all its sessions meeting there, so it looks like the spine
-  it is. A far end **one member alone** has is a session out of the fabric, with its own toggle,
-  off by default.
-- The **static picture is still one click away** and is what a core without vis-network renders.
-- The **Checks tab links at most six devices per issue** and counts the rest. An issue can
-  involve every member of a fabric and LibreNMS's device links carry a ~2 kB tooltip each, which
-  made 88 issues a 1.9 MB page.
+**What changes on an existing installation.** The fabric overview opens on the new *eagle
+view* instead of the interactive map (`?topo=interactive` still reaches it). The EVPN MAC
+database is collected on every fabric device from the next poll on; see the upgrade note
+below if that is not wanted. The `mac-mobility` check ships **off**.
+
+### The overview is an eagle view of the fabric
+
+The old picture put every member in one row — 1,968 px at 14 members, 3,780 px at 26 — and
+the browser scaled it down until the labels were unreadable. Its replacement wraps instead:
+the same role-coloured cards, but in tiers and site compounds, laid out on the server.
+
+- **Cards wrap inside site compounds, and compounds pack into rows.** Twelve leaves in one
+  location are three rows of four, not a 1,968 px strip; 26 members in six sites come out
+  1,112 px wide in two rows. A compound with a single member is a labelled box like the
+  others, because that is what a gateway with its own facility string looks like.
+- **The shape is named and the naming is audited.** A sentence under the picture says which
+  template you are looking at and what it was concluded from — where the IRBs are, whether
+  there is a spine tier, whether the overlay is a full mesh, a route-reflector fabric or
+  neither. Nothing tiers on the stored role: a member is marked `gateway` as soon as any VNI
+  has an IRB, so an ERB leaf is stored as one, and tiering on that would lift every ERB leaf
+  out of its site.
+- **A healthy full mesh is that sentence and no arcs.** Only the pairs that change what you
+  do next are drawn: one listed by a single side, or one every other member has and this one
+  lacks. Uncollected members are out of the denominator, so two unpolled routers no longer
+  make a healthy twelve-leaf mesh look partial.
+- **Anycast gateway segments are not ESI-LAGs.** A type-5 segment is the same value on both
+  gateways, sits on an `irb` unit and has no member port; drawn as multihoming it would put a
+  bracket between two routers that share no cable and light a degraded chip on both. One
+  predicate now keeps them out of the brackets, the chips, the graphs and the attached
+  devices.
+- **Edge state has a dash pattern as well as a colour** — up solid, down dashed, no session
+  state dotted, WAN its own — so the picture survives a greyscale print and a colour-blind
+  reader, which the cards' chips already did.
+- **Site collapse, the outside-session layer and attached devices are query parameters**, not
+  client-side toggles: a collapsed site stays a labelled compound with the worst state of
+  what it hides, and the links it had land on its header. A spine reaching every leaf of a
+  site with the same protocol set is one trunk; four up sessions and one down are five lines,
+  and so are four `bgp` beside one `bgp,ospf`.
+- **Clicking a card, a link or an ESI opens an inspector under the picture** rather than
+  leaving the page, and the URL round-trips the selection.
+- **Per-ESI-LAG traffic**: the sum over the aggregated interface of every PE, plus one graph
+  per PE so a quiet leg is visible instead of hidden inside a healthy sum. No graph is
+  fetched until one is asked for — an overview with 46 segments used to be a page with over a
+  hundred image requests waiting to happen.
+
+The interactive map and the one-row SVG are still there behind `?topo=interactive` and
+`?topo=static`, for one release.
+
+### Trace an address through the fabric
+
+A new **Trace** tab, and `lnms netconf:trace <from> <to>`:
+
+```text
+IP-A (ge-0/0/38)[LEAF-A](et-0/0/52) <-> (et-0/0/53)[LEAF-B](ge-0/0/28) IP-B
+```
+
+- Endpoints are resolved by **source ranking**, not from one required table: an EVPN MAC row
+  on a fabric member, then core's bridge tables, then core ARP. Every source is named with
+  what it returned, including the empty ones and including whether the MAC database is
+  switched off on the devices here — "not found" is most often a setting.
+- The underlay path is **every minimum-hop path**, not one pick. Parallel links between the
+  same pair stay separate, because which one carries the traffic is the question being asked,
+  and nothing prefers one routing protocol's edge over another's.
+- **Live mode** (admin only) asks each device on the way what its own forwarding table says,
+  which is the only thing that knows the answer on an ECMP fabric. It is bounded to eight hops
+  and twelve sessions, opens one session per device, closes them on every path, degrades to
+  the stored graph where it cannot reach, and writes nothing.
+- Beyond the path it checks the VNI, a tunnel each way, the flood lists, the EVPN session, the
+  DF of a multihomed attachment and whether either MAC has been moving. A question it cannot
+  answer reads *unknown*, never *no*, and a hop that is half up names the protocol that is
+  down instead of folding it into one word.
+- The result links back to the picture with the path highlighted.
+
+### The EVPN MAC database is a setting, not an attribute nobody writes
+
+`show evpn database` was gated on a device attribute the plugin offered nowhere — not on the
+settings page, not on the device tab, not in any form — so it could only be created with
+`lnms device:attribute` or SQL, and on the first production fabric it never was: the MACs tab
+read "0 devices opted in" after a day of clean polling.
+
+- New global setting **EVPN MAC database**, on by default, with a per-device *inherit / on /
+  off* control on the device's NETCONF tab and `lnms netconf:device --evpn-mac=`. The device
+  attribute always wins over the setting.
+- The per-queue counters (`netconf_queues`) had the same gap and get the same treatment, with
+  their global default the other way round: off unless asked for.
+- The MACs tab counts the **effective** set and says which of the three switches turned
+  collection off.
+
+### Fixes
+
+- **A half-broken underlay link no longer reads as up.** An edge carries joined strings — a
+  link running BGP and OSPF with the OSPF down reads `bgp,ospf` / `Established/Down` — and the
+  check was a substring match on the whole state, so the map drew it green. Each component is
+  judged on its own now, in either order, and `null` still means "no session state at all",
+  which is drawn as unknown and never as down.
+- **IS-IS underlays are read.** `UnderlayResolver` queried BGP and OSPF only, so an IS-IS
+  fabric produced stateless edges. Core's adjacencies are now a third source, with the
+  protocol token `isis`.
+
+### Upgrade note
+
+**Existing installations with the EVPN fabric view on start collecting the EVPN MAC database
+on the next poll** — one extra command every third poll, about 1.3 MB and 2 s on a busy leaf,
+roughly 2,700 rows per device, pruned rather than grown. To keep it off:
+
+- globally: uncheck *EVPN MAC database* on the plugin settings page;
+- for one device: its NETCONF tab → *Edit* → *EVPN MAC database* → **disabled**, or
+  `lnms netconf:device <device> --evpn-mac=0`.
+
+The `mac-mobility` check ships **off** (*MAC mobility limit* defaults to `0`). The data is
+collected, the check is not armed: no fabric has ever filled that table, this network is full
+of MACs that migrate by design, and the last time a check met a real fleet for the first time
+it opened 21,395 false criticals. Look at the MACs tab first, then pick a number.
+
+### Known gaps
+
+- **The interactive map is still shipped** behind `?topo=interactive`. Removing it and
+  `Topology::graph()` is deliberately not in the same release as the default flip.
+- **Routed (inter-VNI) traces are not implemented.** A trace between two VNIs stops and names
+  the gateways that have an IRB in both. Type-5 prefixes are not collected, and no capture
+  from a border gateway exists to build it against.
+- **The live walk's two `show route` fixtures are synthetic**, built from the documented
+  element names and the shape of the real route capture beside them. The parser is unit-tested
+  against them; a capture from a production leaf is still owed.
+- **IS-IS support ships on unit tests only.** No IS-IS fabric exists to verify it against.
+- The cost of collecting the MAC database on a 14-member fabric — poll duration, table size,
+  and whether `ip-address` is populated on these leaves — is measured after this release, not
+  before it. The IP side of the tracer depends on that one element.
 
 ## 1.3.0 – 2026-09-24
 

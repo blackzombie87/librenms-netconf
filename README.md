@@ -9,7 +9,7 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: 1.3.0 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
+**Status: 1.4.0 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
 credentials and the settings page, the YAML definition engine and the `netconf`
 poller/discovery module are verified against an EX4650 (Junos 23.4R2); the LDP, RPKI and
 VRRP definitions against recorded replies of a Junos 22.2
@@ -18,7 +18,9 @@ sensors (health tab, graphs, alert rules), per-port metrics and custom metrics w
 own RRDs and graphs. The web UI has a NETCONF status page, a **NETCONF tab on the device
 page** (status, metrics, ESI-LAGs and, for admins, credentials with test connection and
 discover/poll now), a device overview panel, the EVPN fabric pages with topology map and
-MAC search, a port tab with the per-port counters and a "run a show command" form. Not in
+MAC search, a fabric **tracer** (a MAC or IP to the full path through the fabric, with the
+interface on every hop), a port tab with the per-port counters and a "run a show command"
+form. Not in
 this version: license expiry (see `CHANGELOG.md`).
 
 ## Requirements
@@ -510,14 +512,87 @@ fabric has tabs:
 
 | Tab | Content |
 |---|---|
-| Overview | counts, health, notes (admins can rename the fabric) and the **topology map**. The map is interactive (LibreNMS's own vis-network, no external assets): drag a member and gravity pulls its neighbours along, scroll to zoom, click through to the device, and *collapse sites* folds every location into one node — which is how a fabric of dozens of members stays readable. The arrangement is remembered in the browser per fabric. Underlay links are coloured by BGP/OSPF state, dashed for WAN, grey for LLDP-only. A session whose far end is not a fabric member is drawn towards that address: when **several members** peer with it, it is a node that belongs to the fabric and is not monitored yet (one dashed box, all its sessions meeting there — onboard it); when **one member alone** has it, it is a session out of the fabric (a transit or IX peer of a border router) and stays hidden behind its own toggle; EVPN neighbour arcs are off while the overlay is a complete mesh (the page says so) and asymmetric pairs are always drawn in red; ESI pairs are orange. *Static picture* switches to the server-rendered SVG — a layered layout, gateways / spines on top and leaves grouped by site (device location, inherited by ESI partners) or ESI pair — which is also what a core without vis-network shows |
+| Overview | the **eagle view** (below), the health badges, the totals and, for admins, the fabric's name and notes |
 | Members | device, VTEP / router-id, role, platform, location, instances, VNIs, ESI-LAGs (DF count), MACs, neighbours, tunnels, collector state; unknown VTEPs with their BGP description |
 | BGP overlay | per member and peer: state and uptime (core `bgpPeers` with the evpn SAFI, or the plugin's `show bgp summary` rows), flaps, `bgp.evpn.0` prefix counts, EVPN route counts by type from `show evpn instance extensive`; a peer that other members have and one lacks is listed as *missing* |
 | VNIs | per VNI: VLAN tag per leaf (mismatch flagged), carriers, flood list with gaps and stale entries between monitored carriers, orphans, anycast IRBs, remote MACs; filter and issues-only switch |
 | ESI / multihoming | per Ethernet segment: every PE (monitored sides with LAG and resolution state, remote-only PEs), mode, DF/BDF, aliasing, LACP members not distributing, remote MACs; flags for single PE, DF disagreement, mode mismatch, LAG down, unresolved, aliasing off |
 | Tunnels | per member: `vtep.N` per remote VTEP with mode, next-hop, and — once core has discovered the IFL as a port — traffic, errors and a graph; reverse-tunnel check where the far end is monitored |
 | MACs | the MAC search scoped to the fabric |
+| Trace | source and destination to the full path through the fabric (below) |
 | Checks | the open issues of the consistency checks (below) with severity, message, involved devices, first and last seen; filter by severity, check and text; legend of every check |
+
+#### The eagle view
+
+The overview draws the whole fabric as one server-rendered SVG: role-coloured cards wrapped
+inside site compounds (the device's location, inherited by ESI partners, else the ESI-pair
+cluster), stacked in tiers. A compound holds up to four cards per row with one or two sites
+and two per row beyond that, and the compounds pack into rows no wider than 1,120 px, so 26
+members are two rows rather than a 3,780 px strip. Pan and zoom move a viewBox; the camera is
+remembered per fabric in the browser, and *reset* forgets it.
+
+Above the picture, one sentence names the shape and says what it was concluded from:
+
+- **where the routing is** — central gateways (IRBs and no ESI-LAG) get their own tier, ERB
+  leaves (both) stay with the leaves and carry an `IRB` chip. Neither follows the stored role,
+  which is `gateway` for any member with an IRB at all;
+- **whether there is a spine tier** — stored spines plus every unmonitored address several
+  members peer with;
+- **what the overlay is** — a full mesh (drawn as that sentence, not as 91 arcs), a
+  route-reflector fabric, or partial. Members the plugin has no EVPN data from are out of the
+  denominator. The only overlay edges drawn are the ones that change what you do next: a pair
+  one side lists and the other does not, and a session every other member has and this one
+  lacks.
+
+On the cards: SNMP down, not monitored, monitored but without EVPN data, a degraded-ESI count,
+and a version that is not the fabric's majority. Between them, underlay links coloured **and**
+dashed by state (up solid, down dashed, no session state dotted, WAN its own pattern,
+cross-site solid in its own colour), and orange ESI-LAG brackets — anycast gateway segments on
+an `irb` unit are not ESI-LAGs and are not drawn as one.
+
+The toolbar collapses sites (a collapsed compound keeps its label and takes the worst state of
+what it hides), turns on the sessions out of the fabric (a border router's transit and IX
+peers, off by default), and turns on the devices attached to the ESI-LAGs, from core's own
+discovery rows. Clicking a card, a link or an ESI opens an inspector under the picture instead
+of leaving the page, and the selection is in the URL. An ESI panel carries the traffic of that
+LAG: one summed graph over the aggregated interface of every PE plus one per PE, and no graph
+image is requested until a panel is opened.
+
+The previous pictures are still there for one release: `?topo=interactive` is the vis-network
+map, `?topo=static` the one-row SVG.
+
+#### Tracer
+
+The **Trace** tab and `lnms netconf:trace` answer "how does this address reach that one":
+
+```bash
+./lnms netconf:trace 02:00:00:00:11:40 203.0.113.41
+./lnms netconf:trace 203.0.113.40 203.0.113.41 --fabric=1 --vni=10010
+./lnms netconf:trace 203.0.113.40 203.0.113.41 --live --json
+```
+
+```text
+IP-A (ge-0/0/38)[LEAF-A](et-0/0/52) <-> (et-0/0/53)[LEAF-B](ge-0/0/28) IP-B
+```
+
+Each endpoint is looked up in the EVPN MAC database, then in core's bridge tables, then in
+core ARP, and the answer names every source with what it returned — including the empty ones,
+and including whether MAC collection is off on the devices in scope. A leaf that only learnt
+the MAC from the fabric is corroboration, not an attachment.
+
+The path is every minimum-hop path through the stored underlay (parallel links stay separate;
+no routing protocol's edge is preferred). **Trace live** (admin only) instead asks each device
+on the way what its own forwarding table says, which is the only thing that knows the answer
+where several equal paths exist; it opens one SSH session per device, at most twelve per
+trace, closes them on every path, falls back to the stored graph where it cannot reach, and
+writes nothing.
+
+Under the one-liner: a hop table with both interfaces, the protocol, the session state and a
+traffic graph per hop, and a "what was checked" list — the same VNI on both ends, a tunnel
+each way, the VNI in both flood lists, the EVPN session listed by both sides, the DF and
+aliasing of a multihomed attachment, and whether either MAC is suppressed or has been moving.
+A question that cannot be answered reads *unknown*, never *no*. A trace between two VNIs stops
+and names the gateways that have an IRB in both; routed traces are not implemented.
 
 **MAC search** (`/plugin/netconf/evpn/mac?q=`, also linked from the fabric list): a MAC in any
 notation (or a prefix), an IP or a VNI. Results are every opted-in leaf's view from the EVPN
