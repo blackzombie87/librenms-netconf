@@ -5,7 +5,8 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 use SafferIt\LibrenmsNetconf\Fabric\EsiLinks;
 
 /**
- * The devices hanging off an ESI-LAG, from core's own discovery rows (plan §11 E3). Pure: it takes the ESI sides `EsiMatrix` already
+ * The devices hanging off an ESI-LAG, from core's own discovery rows (plan §11 E3). Pure: it
+ * takes the ESI sides `EsiMatrix` already
  * built, the `ports_stack` rows that name the physical members of those AEs, and the `links`
  * rows on either, and returns one record per far end.
  *

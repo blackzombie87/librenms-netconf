@@ -5,7 +5,8 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
- * What shape a fabric has, as three independent answers rather than one label (plan §11 E1): the underlay template, where the routing happens,
+ * What shape a fabric has, as three independent answers rather than one label (plan §11 E1): the
+ * underlay template, where the routing happens,
  * and whether the overlay is a mesh, a route-reflector fabric or neither. The production
  * fabric is CRB **and** a leaf mesh **and** a full mesh at the same time, so a single enum
  * would have to lie about two of them.

@@ -3,7 +3,8 @@
 namespace SafferIt\LibrenmsNetconf\Fabric\View;
 
 /**
- * Which core ports one ESI-LAG's traffic graph is drawn from (plan §11 E3). Pure: it takes the sides `EsiMatrix` already built
+ * Which core ports one ESI-LAG's traffic graph is drawn from (plan §11 E3). Pure: it takes the
+ * sides `EsiMatrix` already built
  * and returns port ids, nothing from SNMP and nothing from the datastore.
  *
  * The rule that matters is what is **not** in the list. The AE ports of the PEs sum to the
