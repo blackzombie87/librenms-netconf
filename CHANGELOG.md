@@ -1,15 +1,23 @@
 # Changelog
 
-## Unreleased
+## 1.4.1 – 2026-09-25
 
-Two rendering fixes on the eagle view, found by driving the page in a browser:
+Two rendering fixes on the eagle view. Both were found by driving the page in a browser, which
+is the one thing the unit suite cannot do: it asserts coordinates, and these are defects of
+text width and of a strip nobody reserved.
 
-- **A site compound's caption is cut to its box.** A location is free text, and the two
-  gateway locations on the first production fabric are long enough
-  (`IPB/CarrierColo Rechenzentrum Berlin - RZ BER2`) to run across the neighbouring compound.
-  The full location stays in the box's tooltip.
-- **An ESI-LAG bracket stays inside the compound it belongs to.** The box reserved no room for
-  the mark drawn under the pair, so most brackets hung below their own site.
+- **A site compound's caption is cut to its box.** `devices.location` is free text, and the
+  two gateway locations on the first production fabric measure 204 px and 304 px of 11 px type
+  against a 176 px box (`IPB/CarrierColo Rechenzentrum Berlin - RZ BER2`), so the caption ran
+  straight across the neighbouring compound and made the single-member boxes — which is what a
+  gateway with its own facility string gets — look broken. The full location stays in the box's
+  tooltip.
+- **An ESI-LAG bracket stays inside the compound it belongs to.** The bracket is drawn under
+  the pair it joins and the box reserved no room for it, so five of six brackets on a
+  fourteen-member fabric hung below their own site. A pair split across two sites is a segment
+  between boxes and still widens neither.
+
+Nothing else changed: no data, no setting, no schema, and no change to what a poll does.
 
 ## 1.4.0 – 2026-09-25
 
