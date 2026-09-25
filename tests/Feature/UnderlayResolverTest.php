@@ -66,6 +66,55 @@ final class UnderlayResolverTest extends LibrenmsTestCase
         $this->assertSame(['ip', true], [$edges[0]->protocol, $edges[0]->lldp]);
     }
 
+    public function testAnIsIsAdjacencyIsAThirdSessionSourceBesideBgpAndOspf(): void
+    {
+        // plan §12.4a / T10: an IS-IS underlay is as normal as OSPF or eBGP, and until now it
+        // produced a stateless `ip` edge. No IS-IS fabric exists to check this against, so
+        // this test is the whole guarantee.
+        [$a, $b, $unitA, $unitB] = $this->sharedSubnet();
+        $resolve = fn () => (new UnderlayResolver)->resolve([$a->device_id, $b->device_id]);
+
+        $edges = $resolve();
+        $this->assertSame(['ip', null], [$edges[0]->protocol, $edges[0]->state]);
+
+        DB::table('isis_adjacencies')->insert([
+            ['device_id' => $a->device_id, 'port_id' => $unitA->port_id, 'ifIndex' => 1501, 'isisISAdjState' => 'up', 'isisISAdjIPAddrAddress' => '10.0.0.1', 'isisCircAdminState' => 'on'],
+            ['device_id' => $b->device_id, 'port_id' => $unitB->port_id, 'ifIndex' => 1501, 'isisISAdjState' => 'up', 'isisISAdjIPAddrAddress' => '10.0.0.0', 'isisCircAdminState' => 'on'],
+        ]);
+        $edges = $resolve();
+        $this->assertCount(1, $edges);
+        $this->assertSame(['isis', 'up'], [$edges[0]->protocol, $edges[0]->state]);
+        $this->assertTrue(\SafferIt\LibrenmsNetconf\Fabric\View\Topology::sessionUp('isis', 'up'));
+
+        // and it joins a protocol set rather than replacing one
+        DB::table('ospf_nbrs')->insert([
+            ['device_id' => $a->device_id, 'ospf_nbr_id' => 'x1', 'ospfNbrIpAddr' => '10.0.0.1', 'ospfNbrRtrId' => '192.0.2.2', 'ospfNbrState' => 'full', 'ospfNbrAddressLessIndex' => 0, 'ospfNbrOptions' => 0, 'ospfNbrPriority' => 1, 'ospfNbrEvents' => 0, 'ospfNbrLsRetransQLen' => 0, 'ospfNbmaNbrStatus' => 'active', 'ospfNbmaNbrPermanence' => 'dynamic', 'ospfNbrHelloSuppressed' => 'false', 'context_name' => ''],
+        ]);
+        $edges = $resolve();
+        $this->assertSame('ospf,isis', $edges[0]->protocol);
+        $this->assertSame('full/up', $edges[0]->state);
+        $this->assertTrue(\SafferIt\LibrenmsNetconf\Fabric\View\Topology::sessionUp('ospf,isis', 'full/up'));
+    }
+
+    /**
+     * Two leaves whose unit addresses share one /31, with no session on it yet.
+     *
+     * @return array{Device, Device, Port, Port}
+     */
+    private function sharedSubnet(): array
+    {
+        [$a, $b] = $this->twoLeaves();
+        $unitA = Port::factory()->create(['device_id' => $a->device_id, 'ifName' => 'et-0/0/1.0', 'ifIndex' => 1501]);
+        $unitB = Port::factory()->create(['device_id' => $b->device_id, 'ifName' => 'et-0/0/1.0', 'ifIndex' => 1501]);
+        $network = (int) DB::table('ipv4_networks')->insertGetId(['ipv4_network' => '10.0.0.0/31']);
+        DB::table('ipv4_addresses')->insert([
+            ['ipv4_address' => '10.0.0.0', 'ipv4_prefixlen' => 31, 'ipv4_network_id' => $network, 'port_id' => $unitA->port_id],
+            ['ipv4_address' => '10.0.0.1', 'ipv4_prefixlen' => 31, 'ipv4_network_id' => $network, 'port_id' => $unitB->port_id],
+        ]);
+
+        return [$a, $b, $unitA, $unitB];
+    }
+
     /**
      * @return array{Device, Device, Port, Port}
      */

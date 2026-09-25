@@ -68,6 +68,13 @@ class UnderlayResolver
         foreach (DB::table('ospf_nbrs')->whereIn('device_id', $deviceIds)->get(['device_id', 'ospfNbrIpAddr', 'ospfNbrRtrId', 'ospfNbrState']) as $nbr) {
             $ospf[(int) $nbr->device_id][] = ['ip' => (string) $nbr->ospfNbrIpAddr, 'rtr' => (string) $nbr->ospfNbrRtrId, 'state' => (string) $nbr->ospfNbrState];
         }
+        // IS-IS is the third underlay protocol an EVPN fabric commonly runs (plan §12.4a,
+        // T10). There is no router-id to harvest from an adjacency, so a half edge towards an
+        // IS-IS neighbour is named by its address, exactly like the BGP case.
+        $isis = [];
+        foreach (DB::table('isis_adjacencies')->whereIn('device_id', $deviceIds)->whereNotNull('isisISAdjIPAddrAddress')->get(['device_id', 'isisISAdjIPAddrAddress', 'isisISAdjState']) as $adj) {
+            $isis[(int) $adj->device_id][] = ['ip' => (string) $adj->isisISAdjIPAddrAddress, 'state' => (string) $adj->isisISAdjState];
+        }
         // core discovery protocols only: the plugin's own evpn-esi rows (EsiLinkWriter) describe
         // a logical multihoming relation, not a cable, and must not confirm an underlay edge
         $lldp = [];   // local_port_id => list of [remote_device_id, remote_port_id]
@@ -80,14 +87,11 @@ class UnderlayResolver
 
         // far-end addresses of half edges resolved to any monitored device
         $farAddresses = [];
-        foreach ($bgp as $sessions) {
-            foreach ($sessions as $s) {
-                $farAddresses[$s['ip']] = true;
-            }
-        }
-        foreach ($ospf as $sessions) {
-            foreach ($sessions as $s) {
-                $farAddresses[$s['ip']] = true;
+        foreach ([$bgp, $ospf, $isis] as $bySession) {
+            foreach ($bySession as $sessions) {
+                foreach ($sessions as $s) {
+                    $farAddresses[$s['ip']] = true;
+                }
             }
         }
         $farDevices = [];   // ip => [device_id, port_id]
@@ -119,8 +123,8 @@ class UnderlayResolver
                         $protocols = [];
                         $states = [];
                         $vtep = null;
-                        self::sessions($bgp[$a['device_id']] ?? [], $ospf[$a['device_id']] ?? [], $b['address'], $protocols, $states, $vtep);
-                        self::sessions($bgp[$b['device_id']] ?? [], $ospf[$b['device_id']] ?? [], $a['address'], $protocols, $states, $vtep);
+                        self::sessions($bgp[$a['device_id']] ?? [], $ospf[$a['device_id']] ?? [], $isis[$a['device_id']] ?? [], $b['address'], $protocols, $states, $vtep);
+                        self::sessions($bgp[$b['device_id']] ?? [], $ospf[$b['device_id']] ?? [], $isis[$b['device_id']] ?? [], $a['address'], $protocols, $states, $vtep);
                         $edge = new UnderlayEdge(
                             $a['device_id'], $a['port_id'], $a['address'], $b['device_id'], $b['port_id'], $b['address'], null, $cidr,
                             $protocols === [] ? 'ip' : implode(',', array_keys($protocols)), $states === [] ? null : implode('/', array_unique($states)),
@@ -149,6 +153,12 @@ class UnderlayResolver
                         $far[$s['ip']]['protocols']['ospf'] = true;
                         $far[$s['ip']]['states'][] = $s['state'];
                         $far[$s['ip']]['vtep'] = $s['rtr'];
+                    }
+                }
+                foreach ($isis[$a['device_id']] ?? [] as $s) {
+                    if ($cidr !== null && self::inCidr($s['ip'], $cidr)) {
+                        $far[$s['ip']]['protocols']['isis'] = true;
+                        $far[$s['ip']]['states'][] = $s['state'];
                     }
                 }
                 foreach ($far as $ip => $info) {
@@ -193,10 +203,11 @@ class UnderlayResolver
     /**
      * @param  list<array{ip: string, state: string}>  $bgp
      * @param  list<array{ip: string, rtr: string, state: string}>  $ospf
+     * @param  list<array{ip: string, state: string}>  $isis
      * @param  array<string, true>  $protocols
      * @param  list<string>  $states
      */
-    private static function sessions(array $bgp, array $ospf, string $peerAddress, array &$protocols, array &$states, ?string &$vtep): void
+    private static function sessions(array $bgp, array $ospf, array $isis, string $peerAddress, array &$protocols, array &$states, ?string &$vtep): void
     {
         foreach ($bgp as $s) {
             if ($s['ip'] === $peerAddress) {
@@ -209,6 +220,12 @@ class UnderlayResolver
                 $protocols['ospf'] = true;
                 $states[] = $s['state'];
                 $vtep ??= $s['rtr'];
+            }
+        }
+        foreach ($isis as $s) {
+            if ($s['ip'] === $peerAddress) {
+                $protocols['isis'] = true;
+                $states[] = $s['state'];
             }
         }
     }

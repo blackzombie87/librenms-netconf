@@ -453,7 +453,7 @@ Enable *EVPN fabric view* on the settings page to collect the per-leaf EVPN tabl
 (`junos-evpn-fabric`, four extra commands per leaf) and to aggregate them across devices:
 every VTEP or EVPN peer address becomes a node, resolved to a LibreNMS device where one owns
 the address; EVPN neighbours, ESI peers, VXLAN tunnels, EVPN BGP sessions and confirmed
-underlay links (shared point-to-point subnet with a BGP or OSPF session, LLDP as
+underlay links (shared point-to-point subnet with a BGP, OSPF or IS-IS session, LLDP as
 confirmation) connect the nodes, and every connected component is one fabric
 (`netconf_evpn_fabric`, key = lowest VTEP address, members in `netconf_evpn_fabric_member`).
 Roles: `leaf` (terminates VXLAN), `gateway` (anycast IRBs), `spine` (EVPN session only),

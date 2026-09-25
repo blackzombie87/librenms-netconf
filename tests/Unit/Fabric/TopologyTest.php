@@ -65,7 +65,12 @@ it('classifies session states', function () {
         ->and(Topology::sessionUp('bgp', 'idle'))->toBeFalse()
         ->and(Topology::sessionUp('lldp-only', null))->toBeNull()
         ->and(Topology::sessionUp('ip', 'x'))->toBeNull()
-        ->and(Topology::sessionUp('ospf', ''))->toBeNull();
+        ->and(Topology::sessionUp('ospf', ''))->toBeNull()
+        // IS-IS reports a plain adjacency state, and nothing here branches on the protocol
+        ->and(Topology::sessionUp('isis', 'up'))->toBeTrue()
+        ->and(Topology::sessionUp('isis', 'initializing'))->toBeFalse()
+        ->and(Topology::sessionUp('ospf,isis', 'full/up'))->toBeTrue()
+        ->and(Topology::sessionUp('ospf,isis', 'full/down'))->toBeFalse();
 });
 
 it('reads a multi-protocol edge per component, in either order of the joined state', function () {
