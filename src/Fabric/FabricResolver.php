@@ -249,9 +249,13 @@ class FabricResolver
         DB::table(TableSchema::tableName('vtep'))->whereNotIn('vtep_ip', $keep ?: [''])->delete();
 
         $fabrics = TableSchema::tableName('fabric');
-        DB::table($fabrics)->where('auto', 1)->whereNotExists(function ($q) use ($members, $fabrics) {
+        $empty = fn () => DB::table($fabrics)->where('auto', 1)->whereNotExists(function ($q) use ($members, $fabrics) {
             $q->select(DB::raw(1))->from($members)->whereColumn("$members.fabric_id", "$fabrics.id");
-        })->delete();
+        });
+        // the saved arrangement goes with the fabric it describes; there is no foreign key to
+        // cascade, and a fabric that still has members keeps its layout
+        DB::table(TableSchema::tableName('fabric_layout'))->whereIn('fabric_id', $empty()->pluck("$fabrics.id"))->delete();
+        $empty()->delete();
     }
 
     /**

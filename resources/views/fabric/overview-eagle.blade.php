@@ -14,6 +14,10 @@
         <p class="text-muted" style="margin-bottom: 10px;"><small>@foreach ($eagle['sentences'] as $sentence){{ $sentence }} @endforeach</small></p>
 
         @include('netconf::fabric.topology-eagle')
+        @if (isset($layout))
+            {{-- one arrangement per fabric, so the next operator sees the drag; the row says who --}}
+            <p class="text-muted" style="margin: 6px 0 0;"><small>@if ($layout_by)arranged by {{ $layout_by }}, @else arranged @endif{{ \Carbon\Carbon::parse($layout_at)->diffForHumans() }}</small></p>
+        @endif
         @include('netconf::fabric.inspector')
 
         <p class="text-muted" style="margin-top: 10px;"><small>

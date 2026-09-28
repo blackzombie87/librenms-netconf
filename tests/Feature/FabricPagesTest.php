@@ -125,6 +125,98 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertStringContainsString("removeItem('netconf-topology-' + wrap.dataset.fabric)", $page);
     }
 
+    public function testAnArrangementIsSavedForTheFabricAndShownToEveryOperator(): void
+    {
+        $reader = User::factory()->read()->create(['enabled' => 1]);
+        $this->actingAs($reader);
+        [$fabric] = $this->fabricWithVnis(3);
+        $table = TableSchema::tableName('fabric_layout');
+        $body = ['v' => 1, 'members' => ['192.0.2.1'], 'nodes' => ['192.0.2.1' => ['x' => 400, 'y' => 250]], 'groups' => []];
+
+        // global read saves it: the people who read this page are the people who arrange it
+        $this->postJson("/plugin/netconf/fabric/$fabric/layout", $body)->assertNoContent();
+        $this->assertSame(1, DB::table($table)->where('fabric_id', $fabric)->count());
+
+        // ... and a second operator opens the page on those coordinates, with a line naming
+        // who put them there
+        $this->actingAs(User::factory()->read()->create(['enabled' => 1]));
+        $page = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+        $this->assertStringContainsString('"x":400', $page);
+        $this->assertStringContainsString('arranged by ' . $reader->username, $page);
+
+        // reset forgets it and the page goes back to EagleLayout::place()
+        $this->postJson("/plugin/netconf/fabric/$fabric/layout", ['reset' => true])->assertNoContent();
+        $this->assertSame(0, DB::table($table)->where('fabric_id', $fabric)->count());
+        $this->assertStringNotContainsString('arranged by', $this->get("/plugin/netconf/fabric/$fabric")->getContent());
+    }
+
+    public function testALayoutThatIsNotThisFabricsIsRejectedAndNeverWritten(): void
+    {
+        $this->actingAs(User::factory()->read()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithVnis(3);
+        $table = TableSchema::tableName('fabric_layout');
+        $good = ['v' => 1, 'members' => ['192.0.2.1'], 'nodes' => ['192.0.2.1' => ['x' => 400, 'y' => 250]], 'groups' => []];
+        $this->postJson("/plugin/netconf/fabric/$fabric/layout", $good)->assertNoContent();
+
+        $bad = [
+            // a member set that is not this fabric's
+            ['v' => 1, 'members' => ['192.0.2.1', '10.9.9.9'], 'nodes' => [], 'groups' => []],
+            // a coordinate for a card this fabric does not have
+            ['v' => 1, 'members' => ['192.0.2.1'], 'nodes' => ['10.9.9.9' => ['x' => 1, 'y' => 2]], 'groups' => []],
+            // not a point, out of range, another version, and a key that is not part of the shape
+            ['v' => 1, 'members' => ['192.0.2.1'], 'nodes' => ['192.0.2.1' => ['x' => 'x', 'y' => 2]], 'groups' => []],
+            ['v' => 1, 'members' => ['192.0.2.1'], 'nodes' => ['192.0.2.1' => ['x' => 1e9, 'y' => 2]], 'groups' => []],
+            ['v' => 2, 'members' => ['192.0.2.1'], 'nodes' => [], 'groups' => []],
+            ['v' => 1, 'members' => ['192.0.2.1'], 'nodes' => [], 'groups' => [], 'edges' => []],
+        ];
+        foreach ($bad as $body) {
+            $this->postJson("/plugin/netconf/fabric/$fabric/layout", $body)->assertStatus(400);
+        }
+
+        // none of them wrote, and the good one is still there
+        $stored = json_decode((string) DB::table($table)->where('fabric_id', $fabric)->value('positions'), true);
+        $this->assertSame(400, $stored['nodes']['192.0.2.1']['x']);
+        $this->postJson('/plugin/netconf/fabric/999999/layout', ['reset' => true])->assertNotFound();
+    }
+
+    public function testAStoredArrangementForADifferentMemberSetIsIgnoredButKept(): void
+    {
+        $this->actingAs(User::factory()->read()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithVnis(3);
+        $table = TableSchema::tableName('fabric_layout');
+        // a row from when the fabric had another member: a transient mismatch must not wipe
+        // what somebody arranged, so the page paints place() and leaves the row alone
+        DB::table($table)->insert([
+            'fabric_id' => $fabric,
+            'positions' => json_encode(['v' => 1, 'members' => ['192.0.2.1', '192.0.2.77'], 'nodes' => ['192.0.2.1' => ['x' => 999, 'y' => 999]], 'groups' => []]),
+            'user_id' => null, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $page = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+        $this->assertStringNotContainsString('"x":999', $page);
+        $this->assertStringNotContainsString('arranged', $page);
+        $this->assertSame(1, DB::table($table)->where('fabric_id', $fabric)->count());
+    }
+
+    public function testTheOverviewCarriesTheDragAndGravityScriptAndNoPositionKey(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithVnis(3);
+        $page = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+
+        // gravity is a control, unchecked, and never written anywhere: a reload turns it off
+        $this->assertStringContainsString('id="eagle-gravity"', $page);
+        $this->assertStringNotContainsString('eagle-gravity" checked', $page);
+        // the arrangement is server state; there is no second copy in this browser
+        $this->assertStringNotContainsString('eagle-pos', $page);
+        // the drag is in user units, and 4 screen px is the only screen-pixel number
+        $this->assertStringContainsString('box.w / r.width', $page);
+        $this->assertStringContainsString('THRESHOLD = 4', $page);
+        // and the client routes with the same numbers the server does
+        $this->assertStringContainsString('GUTTER = 28', $page);
+        $this->assertStringContainsString('0.65 * velocity', $page);
+    }
+
     public function testTheEagleViewFocusesAMemberFromTheQueryString(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));

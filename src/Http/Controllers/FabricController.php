@@ -4,6 +4,7 @@ namespace SafferIt\LibrenmsNetconf\Http\Controllers;
 
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
@@ -150,6 +151,7 @@ class FabricController extends Controller
         // `place()` takes a highlight instead of there being a second picture (plan §11 E-F6)
         $highlight = self::highlight($request);
         $eagle = EagleLayout::place($shape, $input['nodes'], $input['underlay'], $shape['overlay_edges'], $input['shared_far_ends'], $input['esi_pairs'], $view, $highlight);
+        $saved = self::savedLayout($fabricId, self::placedIds($shape, $input, $eagle));
 
         return [
             'shape' => $shape,
@@ -158,7 +160,160 @@ class FabricController extends Controller
             'eagle_input' => $input,
             'focus' => (string) $request->query('focus', ''),
             'view' => $view,
+        ] + $saved;
+    }
+
+    /**
+     * Every id `place()` could have drawn a card for: the members it was given plus the
+     * `far:` cards it made for the unmonitored addresses on the spine tier.
+     *
+     * A collapsed site still lists its members, so collapsing does not change this set and
+     * cannot turn a saved arrangement into a mismatch.
+     *
+     * @param  array<string, mixed>  $shape
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $eagle
+     * @return list<string>
+     */
+    private static function placedIds(array $shape, array $input, array $eagle): array
+    {
+        $tier = $shape['tier'] ?? [];
+        $ids = [];
+        foreach ($input['nodes'] as $n) {
+            if (isset($tier[(string) $n['ip']])) {
+                $ids[] = (string) $n['ip'];
+            }
+        }
+        foreach ($eagle['nodes'] as $id => $node) {
+            if ($node['kind'] === 'far') {
+                $ids[] = (string) $id;
+            }
+        }
+        sort($ids, SORT_STRING);
+
+        return $ids;
+    }
+
+    /**
+     * The arrangement someone saved for this fabric, when it still describes this fabric.
+     *
+     * A document whose member list no longer matches is not applied and is **not** deleted: a
+     * transient load that saw a different set must not wipe what an operator arranged. The next
+     * explicit save or reset is what writes.
+     *
+     * @param  list<string>  $ids
+     * @return array{layout?: array<string, mixed>, layout_by?: string|null, layout_at?: string}
+     */
+    private static function savedLayout(int $fabricId, array $ids): array
+    {
+        $row = DB::table(TableSchema::tableName('fabric_layout'))->where('fabric_id', $fabricId)->first();
+        if ($row === null) {
+            return [];
+        }
+        $document = json_decode((string) $row->positions, true);
+        if (! is_array($document) || ($document['members'] ?? null) !== $ids) {
+            return [];
+        }
+
+        return [
+            'layout' => $document,
+            'layout_by' => $row->user_id === null ? null : DB::table('users')->where('user_id', $row->user_id)->value('username'),
+            'layout_at' => (string) $row->updated_at,
         ];
+    }
+
+    /**
+     * Save or forget the arrangement of this fabric's overview picture.
+     *
+     * One row per fabric and last write wins: two operators dragging at the same time is
+     * accepted, and the row records who wrote it and when so the page can say so. The body is
+     * coordinates and ids this user has already been shown, and every one of them is checked
+     * against a fresh `place()` before anything is written.
+     */
+    public function layout(Request $request, int $fabric): Response
+    {
+        $table = TableSchema::tableName('fabric_layout');
+        abort_unless(DB::table(TableSchema::tableName('fabric'))->where('id', $fabric)->exists(), 404, 'No such fabric');
+
+        if ($request->input('reset') === true) {
+            DB::table($table)->where('fabric_id', $fabric)->delete();
+
+            return response()->noContent();
+        }
+
+        $nodes = FabricNodes::forFabric($fabric);
+        $input = FabricTopologyInput::load($fabric, $nodes);
+        $shape = FabricShape::classify($input['members'], $input['overlay'], $input['shared_far_ends'], $input['missing']);
+        $eagle = EagleLayout::place($shape, $input['nodes'], $input['underlay'], $shape['overlay_edges'], $input['shared_far_ends'], $input['esi_pairs']);
+        $document = self::validLayout($request->all(), self::placedIds($shape, $input, $eagle), array_column($eagle['groups'], 'key'));
+        abort_if($document === null, 400, 'Not a layout of this fabric');
+
+        DB::table($table)->updateOrInsert(['fabric_id' => $fabric], [
+            'positions' => json_encode($document),
+            'user_id' => auth()->id(),
+            'created_at' => now()->toDateTimeString(),
+            'updated_at' => now()->toDateTimeString(),
+        ]);
+
+        return response()->noContent();
+    }
+
+    /**
+     * The posted document, or null if it is not one. Nothing is written before this returns.
+     *
+     * @param  array<string, mixed>  $body
+     * @param  list<string>  $ids  the cards this fabric has
+     * @param  list<string>  $siteKeys  the compounds it has
+     * @return array{v: int, members: list<string>, nodes: array<string, array{x: int, y: int}>, groups: array<string, array{x: int, y: int}>}|null
+     */
+    private static function validLayout(array $body, array $ids, array $siteKeys): ?array
+    {
+        if (array_diff(array_keys($body), ['v', 'members', 'nodes', 'groups']) !== [] || ($body['v'] ?? null) !== 1) {
+            return null;
+        }
+        $members = $body['members'] ?? null;
+        if (! is_array($members) || array_map('strval', array_values($members)) !== $ids) {
+            return null;
+        }
+        $nodes = $body['nodes'] ?? [];
+        $groups = $body['groups'] ?? [];
+        if (! is_array($nodes) || ! is_array($groups) || count($nodes) + count($groups) > 512) {
+            return null;
+        }
+
+        $point = function (mixed $value): ?array {
+            if (! is_array($value) || array_diff(array_keys($value), ['x', 'y']) !== [] || count($value) !== 2) {
+                return null;
+            }
+            $out = [];
+            foreach (['x', 'y'] as $axis) {
+                if (! is_numeric($value[$axis]) || ! is_finite((float) $value[$axis]) || abs((float) $value[$axis]) > 100000) {
+                    return null;
+                }
+                $out[$axis] = (int) round((float) $value[$axis]);
+            }
+
+            return $out;
+        };
+
+        $clean = [];
+        foreach ([['nodes', $nodes, $ids], ['groups', $groups, $siteKeys]] as [$field, $values, $allowed]) {
+            $clean[$field] = [];
+            foreach ($values as $key => $value) {
+                // the body is never rendered as HTML, and a key that is not one of this
+                // fabric's own ids is not stored under any circumstances
+                if (! is_string($key) || ! in_array($key, $allowed, true) || str_contains($key, '<') || str_contains($key, '>')) {
+                    return null;
+                }
+                $coordinates = $point($value);
+                if ($coordinates === null) {
+                    return null;
+                }
+                $clean[$field][$key] = $coordinates;
+            }
+        }
+
+        return ['v' => 1, 'members' => $ids, 'nodes' => $clean['nodes'], 'groups' => $clean['groups']];
     }
 
     /**

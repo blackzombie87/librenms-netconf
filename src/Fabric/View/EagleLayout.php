@@ -659,7 +659,13 @@ final class EagleLayout
             $col = $index % $group['cols'];
             $row = intdiv($index, $group['cols']);
             $x = $left + $col * (self::CARD_W + self::COL_GAP);
-            $placed[$ip] = self::memberNode($byIp[$ip], $tier[$ip] ?? FabricShape::TIER_LEAF, $x, $rowTop[$row] ?? $top, $hlNodes) + ['site' => $group['key'], 'row' => $row, 'col' => $col];
+            // array_merge and not `+`: memberNode() already has a `site` key, and the union
+            // operator keeps the left one, so every card carried a null site -- which told the
+            // router each card was a compound of its own and the inspector that it had no site
+            $placed[$ip] = array_merge(
+                self::memberNode($byIp[$ip], $tier[$ip] ?? FabricShape::TIER_LEAF, $x, $rowTop[$row] ?? $top, $hlNodes),
+                ['site' => $group['key'], 'row' => $row, 'col' => $col],
+            );
             $index++;
         }
 

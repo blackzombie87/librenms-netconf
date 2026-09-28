@@ -10,6 +10,9 @@
         <span class="text-muted">
             {{ $eg['counts']['sites'] }} site{{ $eg['counts']['sites'] === 1 ? '' : 's' }}@if ($eg['counts']['collapsed'] > 0), {{ $eg['counts']['collapsed'] }} collapsed @endif
         </span>
+        <label class="checkbox-inline" style="margin-left: 10px;" title="While on, releasing a drag eases the underlay neighbours of what was moved. Off by default; it does not run on load and it does not run on reset.">
+            <input type="checkbox" id="eagle-gravity"> gravity
+        </label>
         <span class="btn-group btn-group-xs" style="margin-left: 10px;" role="group">
             <a class="btn btn-default" href="{{ request()->fullUrlWithQuery(['focus' => null, 'collapse' => count($collapsed) === count($eg['groups']) ? [] : array_column($eg['groups'], 'key')]) }}">{{ count($collapsed) === count($eg['groups']) && $eg['groups'] !== [] ? 'expand all sites' : 'collapse all sites' }}</a>
             @if ($eg['counts']['outside'] > 0)
@@ -22,7 +25,7 @@
             <button type="button" class="btn btn-default" id="eagle-in" title="zoom in">+</button>
             <button type="button" class="btn btn-default" id="eagle-fit" title="fit the whole picture">fit</button>
             <button type="button" class="btn btn-default" id="eagle-actual" title="draw at layout size and scroll">1:1</button>
-            <a class="btn btn-default" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}" id="eagle-reset" title="forget the stored camera and every view flag">reset</a>
+            <a class="btn btn-default" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}" id="eagle-reset" title="forget the saved arrangement, the stored camera and every view flag">reset</a>
         </span>
     </div>
 
@@ -137,8 +140,12 @@
         html.dark .netconf-eagle .eg-outside-dot { fill: #b794e0; }
                                                                             </style>
 
+    {{-- the saved arrangement, embedded rather than fetched: it was validated against this very
+         place() before it was stored, and the client only reads numbers out of it --}}
+    <script type="application/json" id="eagle-layout">@json($layout ?? null)</script>
     <div id="eagle-frame">
-    <div id="eagle-view" data-fabric="{{ $fabric['id'] }}" data-w="{{ $eg['width'] }}" data-h="{{ $eg['height'] }}">
+    <div id="eagle-view" data-fabric="{{ $fabric['id'] }}" data-w="{{ $eg['width'] }}" data-h="{{ $eg['height'] }}"
+         data-layout-url="{{ route('netconf.fabric.layout', [$fabric['id']]) }}" data-csrf="{{ csrf_token() }}">
         <svg id="eagle-svg" width="{{ $eg['width'] }}" height="{{ $eg['height'] }}" viewBox="0 0 {{ $eg['width'] }} {{ $eg['height'] }}" xmlns="http://www.w3.org/2000/svg">
             @foreach ($eg['groups'] as $g)
                 <a href="{{ $toggleSite($g['key']) }}" class="eg-site" data-key="{{ $g['key'] }}" data-members="{{ implode(' ', $g['members']) }}" data-home-x="{{ $g['x'] }}" data-home-y="{{ $g['y'] }}" data-home-w="{{ $g['w'] }}" data-home-h="{{ $g['h'] }}">
@@ -273,7 +280,12 @@
         document.getElementById('eagle-out').addEventListener('click', function () { zoom(1.2, 0.5, 0.5); });
         document.getElementById('eagle-fit').addEventListener('click', function () { box = { x: 0, y: 0, w: W, h: H }; apply(); autoSize(); store(); });
         document.getElementById('eagle-actual').addEventListener('click', function () { box = { x: 0, y: 0, w: W, h: H }; apply(); sizeActual(); store(); });
-        document.getElementById('eagle-reset').addEventListener('click', function () { try { localStorage.removeItem(KEY); } catch (e) {} });
+        document.getElementById('eagle-reset').addEventListener('click', function () {
+            try { localStorage.removeItem(KEY); } catch (e) {}
+            // back to EagleLayout::place(): the row goes, the camera goes, and the link that
+            // follows clears collapse, outside, attached and focus with the query string
+            send({ reset: true });
+        });
         // the two keys the vis map left behind: it is gone, and nothing reads them again
         try { localStorage.removeItem('netconf-topology-' + wrap.dataset.fabric); localStorage.removeItem('netconf-topology-' + wrap.dataset.fabric + '-view'); } catch (e) {}
 
@@ -285,7 +297,7 @@
 
         var drag = null;
         wrap.addEventListener('mousedown', function (ev) {
-            if (ev.target.closest('.eg-card, .eg-edge')) { return; }
+            if (ev.target.closest('.eg-card, .eg-edge, .eg-site')) { return; }
             drag = { x: ev.clientX, y: ev.clientY, bx: box.x, by: box.y };
             ev.preventDefault();
         });
@@ -297,6 +309,661 @@
             apply();
         });
         window.addEventListener('mouseup', function () { if (drag) { drag = null; store(); } });
+
+
+        // ================= the picture as a model, and the router that keeps it honest =======
+        // Constants below are EagleLayout's. A path the browser draws has to be one the server
+        // would have drawn for the same rects, or a reload would jump.
+        var CARD_W = 156, SITE_PAD = 10, SITE_HEADER = 20, MARGIN = 24;
+        var GUTTER = 28, CLEARANCE = 4, LANE_PITCH = 6, OUTER = 8, INSIDE_TOL = 1, EDGE_CHAR_W = 4.8;
+
+        var nodes = {}, groups = {}, links = [];
+
+        function num(el, name) { return parseFloat(el.getAttribute(name)) || 0; }
+
+        Array.prototype.forEach.call(svg.querySelectorAll('.eg-card'), function (g) {
+            var rect = g.querySelector('rect');
+            nodes[g.dataset.id] = {
+                el: g, rect: rect, kind: g.dataset.kind, site: g.dataset.site || null, tier: g.dataset.tier || '',
+                anchor: g.dataset.anchor || null,
+                hx: parseInt(g.dataset.homeX, 10), hy: parseInt(g.dataset.homeY, 10),
+                x: parseInt(g.dataset.homeX, 10), y: parseInt(g.dataset.homeY, 10),
+                w: num(rect, 'width'), h: num(rect, 'height'),
+            };
+        });
+        Array.prototype.forEach.call(svg.querySelectorAll('.eg-site'), function (a) {
+            var rect = a.querySelector('rect');
+            groups[a.dataset.key] = {
+                el: a, rect: rect, caption: a.querySelector('text'),
+                members: (a.dataset.members || '').split(' ').filter(Boolean),
+                hx: parseInt(a.dataset.homeX, 10), hy: parseInt(a.dataset.homeY, 10),
+                hw: parseInt(a.dataset.homeW, 10), hh: parseInt(a.dataset.homeH, 10),
+                x: parseInt(a.dataset.homeX, 10), y: parseInt(a.dataset.homeY, 10),
+                w: parseInt(a.dataset.homeW, 10), h: parseInt(a.dataset.homeH, 10),
+            };
+        });
+        Array.prototype.forEach.call(svg.querySelectorAll('.eg-edge'), function (g) {
+            links.push({
+                el: g, path: g.querySelector('path'), text: g.querySelector('text'),
+                kind: g.dataset.kind, shape: g.dataset.shape,
+                a: g.dataset.a, b: g.dataset.b, siteA: g.dataset.siteA || null, siteB: g.dataset.siteB || null,
+                label: g.querySelector('text') ? g.querySelector('text').textContent : '',
+            });
+        });
+
+        function rectOf(id) {
+            var n = nodes[id];
+            if (n) { return { x: n.x, y: n.y, w: n.w, h: n.h }; }
+            var g = groups[id];
+            return g ? { x: g.x, y: g.y, w: g.w, h: g.h } : null;
+        }
+        // where an edge lands: its own card, or the header of the site it was collapsed into
+        function anchorOf(id) {
+            var n = nodes[id];
+            if (n) { return { x: n.x + n.w / 2, top: n.y, bottom: n.y + n.h }; }
+            var g = groups[id];
+            return g ? { x: g.x + g.w / 2, top: g.y, bottom: g.y + SITE_HEADER } : null;
+        }
+
+        // ---- geometry, the same rules EagleLayout::route() applies
+        function side(r, which) {
+            if (which === 'right') { return [r.x + r.w, Math.round(r.y + r.h / 2)]; }
+            if (which === 'left') { return [r.x, Math.round(r.y + r.h / 2)]; }
+            if (which === 'bottom') { return [Math.round(r.x + r.w / 2), r.y + r.h]; }
+            return [Math.round(r.x + r.w / 2), r.y];
+        }
+        function ports(from, to) {
+            var dx = (to.x + to.w / 2) - (from.x + from.w / 2);
+            var dy = (to.y + to.h / 2) - (from.y + from.h / 2);
+            if (Math.abs(dx) >= Math.abs(dy)) {
+                return dx >= 0 ? [side(from, 'right'), side(to, 'left')] : [side(from, 'left'), side(to, 'right')];
+            }
+            return dy >= 0 ? [side(from, 'bottom'), side(to, 'top')] : [side(from, 'top'), side(to, 'bottom')];
+        }
+        function segmentClean(a, b, obstacles) {
+            var length = Math.sqrt(Math.pow(b[0] - a[0], 2) + Math.pow(b[1] - a[1], 2));
+            var samples = [];
+            for (var d = 0; d <= length; d += 1) {
+                var t = length > 0 ? d / length : 0;
+                samples.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+            }
+            samples.push(b);
+            for (var i = 0; i < samples.length; i++) {
+                for (var j = 0; j < obstacles.length; j++) {
+                    var r = obstacles[j], p = samples[i];
+                    var inside = Math.min(p[0] - r.x, r.x + r.w - p[0], p[1] - r.y, r.y + r.h - p[1]);
+                    if (inside > INSIDE_TOL) { return false; }
+                }
+            }
+            return true;
+        }
+        function pathClean(points, obstacles) {
+            for (var i = 1; i < points.length; i++) {
+                if (points[i][0] === points[i - 1][0] && points[i][1] === points[i - 1][1]) { continue; }
+                if (!segmentClean(points[i - 1], points[i], obstacles)) { return false; }
+            }
+            return true;
+        }
+        function inset(r, by) { return { x: r.x + by, y: r.y + by, w: Math.max(1, r.w - 2 * by), h: Math.max(1, r.h - 2 * by) }; }
+        function grow(r, by) { return { x: r.x - by, y: r.y - by, w: r.w + 2 * by, h: r.h + 2 * by }; }
+
+        function context() {
+            var boxes = [], loose = {}, group = {};
+            Object.keys(groups).forEach(function (k) { group[k] = { x: groups[k].x, y: groups[k].y, w: groups[k].w, h: groups[k].h }; boxes.push(group[k]); });
+            Object.keys(nodes).forEach(function (id) {
+                var n = nodes[id];
+                if ((n.kind === 'member' || n.kind === 'far') && !n.site) { loose[id] = { x: n.x, y: n.y, w: n.w, h: n.h }; boxes.push(loose[id]); }
+            });
+            if (!boxes.length) { boxes.push({ x: 0, y: 0, w: W, h: H }); }
+            var left = Math.min.apply(null, boxes.map(function (r) { return r.x; }));
+            var top = Math.min.apply(null, boxes.map(function (r) { return r.y; }));
+            var right = Math.max.apply(null, boxes.map(function (r) { return r.x + r.w; }));
+            var bottom = Math.max.apply(null, boxes.map(function (r) { return r.y + r.h; }));
+            var bounds = { x: Math.min(0, left - MARGIN), y: Math.min(0, top - MARGIN) };
+            bounds.w = Math.max(W, right + MARGIN) - bounds.x;
+            bounds.h = Math.max(H, bottom + MARGIN) - bounds.y;
+
+            // bands of compounds, then the channels between them
+            var keys = Object.keys(group).sort(function (a, b) {
+                var ca = group[a].y + group[a].h / 2, cb = group[b].y + group[b].h / 2;
+                return ca - cb || group[a].x - group[b].x || (a < b ? -1 : a > b ? 1 : 0);
+            });
+            var bands = [];
+            keys.forEach(function (key) {
+                var r = group[key], last = bands[bands.length - 1];
+                if (last && r.y < last.bottom && last.top < r.y + r.h) {
+                    last.keys.push(key); last.top = Math.min(last.top, r.y); last.bottom = Math.max(last.bottom, r.y + r.h);
+                } else {
+                    bands.push({ keys: [key], top: r.y, bottom: r.y + r.h });
+                }
+            });
+            bands.forEach(function (band) { band.keys.sort(function (a, b) { return group[a].x - group[b].x || (a < b ? -1 : 1); }); });
+
+            var all = boxes;
+            var blocked = function (from, to, axis) {
+                return all.some(function (r) { var c = axis === 'x' ? r.x + r.w / 2 : r.y + r.h / 2; return c > from && c < to; });
+            };
+            var vgaps = {}, hgaps = {};
+            bands.forEach(function (band, i) {
+                for (var j = 0; j + 1 < band.keys.length; j++) {
+                    var a = group[band.keys[j]], b = group[band.keys[j + 1]];
+                    var start = a.x + a.w + CLEARANCE, end = b.x - CLEARANCE;
+                    if (end - start < 2 || blocked(a.x + a.w, b.x, 'x')) { continue; }
+                    vgaps['v:' + i + ':' + band.keys[j]] = { start: start, end: end };
+                }
+            });
+            for (var i = 0; i + 1 < bands.length; i++) {
+                var start = bands[i].bottom + CLEARANCE, end = bands[i + 1].top - CLEARANCE;
+                if (end - start < 2 || blocked(bands[i].bottom, bands[i + 1].top, 'y')) { continue; }
+                hgaps['h:' + i] = { start: start, end: end };
+            }
+            return { group: group, loose: loose, bounds: bounds, ring: inset(bounds, OUTER), vgaps: vgaps, hgaps: hgaps, lanes: {} };
+        }
+
+        function lane(start, end, k) {
+            var n = Math.max(1, Math.floor((end - start) / LANE_PITCH));
+            return n === 1 ? Math.round((start + end) / 2) : start + Math.floor(LANE_PITCH / 2) + (k % n) * LANE_PITCH;
+        }
+        function ringCandidates(ps, pd, ring) {
+            return [
+                [ps, [ps[0], ring.y], [pd[0], ring.y], pd],
+                [ps, [ps[0], ring.y + ring.h], [pd[0], ring.y + ring.h], pd],
+                [ps, [ring.x, ps[1]], [ring.x, pd[1]], pd],
+                [ps, [ring.x + ring.w, ps[1]], [ring.x + ring.w, pd[1]], pd],
+            ];
+        }
+        function onPerimeter(r, p) {
+            if (p[1] <= r.y) { return p[0] - r.x; }
+            if (p[0] >= r.x + r.w) { return r.w + p[1] - r.y; }
+            if (p[1] >= r.y + r.h) { return r.w + r.h + r.x + r.w - p[0]; }
+            return 2 * r.w + r.h + r.y + r.h - p[1];
+        }
+        function walk(r, from, to) {
+            var perimeter = 2 * r.w + 2 * r.h;
+            var a = Math.round(onPerimeter(r, from)), b = Math.round(onPerimeter(r, to));
+            var clockwise = ((b - a) % perimeter + perimeter) % perimeter;
+            var corners = {};
+            corners[0] = [r.x, r.y];
+            corners[r.w] = [r.x + r.w, r.y];
+            corners[r.w + r.h] = [r.x + r.w, r.y + r.h];
+            corners[2 * r.w + r.h] = [r.x, r.y + r.h];
+            var order = clockwise <= perimeter - clockwise ? 1 : -1;
+            var steps = order === 1 ? clockwise : perimeter - clockwise;
+            var out = [];
+            for (var i = 1; i < steps; i++) {
+                var at = (((a + order * i) % perimeter) + perimeter) % perimeter;
+                if (corners[at]) { out.push(corners[at]); }
+            }
+            return out;
+        }
+        function escape(port, rect, ring, obstacles) {
+            var l = rect.x, t = rect.y, r = rect.x + rect.w, b = rect.y + rect.h;
+            var point = { rt: [r, t], rb: [r, b], lb: [l, b], lt: [l, t] };
+            var rays = {
+                rt: [[r, ring.y], [ring.x + ring.w, t]],
+                rb: [[ring.x + ring.w, b], [r, ring.y + ring.h]],
+                lb: [[l, ring.y + ring.h], [ring.x, b]],
+                lt: [[ring.x, t], [l, ring.y]],
+            };
+            var from = port[0] >= r ? 'right' : port[0] <= l ? 'left' : port[1] >= b ? 'bottom' : 'top';
+            var order = from === 'right' ? ['rb', 'lb', 'lt', 'rt']
+                : from === 'bottom' ? ['lb', 'lt', 'rt', 'rb']
+                : from === 'left' ? ['lt', 'rt', 'rb', 'lb'] : ['rt', 'rb', 'lb', 'lt'];
+            var path = [port];
+            for (var i = 0; i < order.length; i++) {
+                path.push(point[order[i]]);
+                if (!pathClean(path, obstacles)) { return null; }
+                for (var j = 0; j < rays[order[i]].length; j++) {
+                    if (pathClean([point[order[i]], rays[order[i]][j]], obstacles)) { return path.concat([rays[order[i]][j]]); }
+                }
+            }
+            return null;
+        }
+
+        function route(from, to, obstacles, ctx, id, fixed) {
+            var p = fixed || ports(from, to);
+            var ps = p[0], pd = p[1];
+            var overlapY = Math.min(from.y + from.h, to.y + to.h) - Math.max(from.y, to.y) > 0;
+            var joins = function (gap, a, b) { return Math.min(a, b) < gap.start && gap.end < Math.max(a, b); };
+            var candidates = [];
+            if (overlapY) {
+                Object.keys(ctx.vgaps).forEach(function (key) {
+                    if (joins(ctx.vgaps[key], from.x + from.w / 2, to.x + to.w / 2)) { candidates.push({ gap: key, axis: 'x', spec: ctx.vgaps[key] }); }
+                });
+            } else {
+                Object.keys(ctx.hgaps).forEach(function (key) {
+                    if (joins(ctx.hgaps[key], from.y + from.h / 2, to.y + to.h / 2)) { candidates.push({ gap: key, axis: 'y', spec: ctx.hgaps[key] }); }
+                });
+            }
+            for (var i = 0; i < candidates.length; i++) {
+                var k = (ctx.lanes[candidates[i].gap] || []).length;
+                var at = lane(candidates[i].spec.start, candidates[i].spec.end, k);
+                var points = candidates[i].axis === 'x'
+                    ? [ps, [at, ps[1]], [at, pd[1]], pd]
+                    : [ps, [ps[0], at], [pd[0], at], pd];
+                if (pathClean(points, obstacles)) {
+                    ctx.lanes[candidates[i].gap] = (ctx.lanes[candidates[i].gap] || []).concat([id]);
+                    return { points: points, gap: candidates[i].gap, k: k };
+                }
+            }
+            var rings = [ctx.ring, inset(grow(ctx.bounds, GUTTER), OUTER)];
+            for (var r = 0; r < rings.length; r++) {
+                var options = ringCandidates(ps, pd, rings[r]);
+                for (var c = 0; c < options.length; c++) {
+                    if (pathClean(options[c], obstacles)) { return { points: options[c], gap: null, k: 0 }; }
+                }
+            }
+            var s = escape(ps, from, ctx.ring, obstacles), d = escape(pd, to, ctx.ring, obstacles);
+            if (s && d) {
+                return { points: s.concat(walk(ctx.ring, s[s.length - 1], d[d.length - 1]), d.slice().reverse()), gap: null, k: 0 };
+            }
+            return { points: ringCandidates(ps, pd, ctx.ring)[0], gap: null, k: 0 };
+        }
+
+        function padRoute(rect, from, to, siblings) {
+            var box = inset(rect, CLEARANCE);
+            var p = ports(from, to);
+            var exit = function (port, own) {
+                var order = ['right', 'bottom', 'left', 'top'];
+                var at = port[0] >= own.x + own.w ? 0 : port[1] >= own.y + own.h ? 1 : port[0] <= own.x ? 2 : 3;
+                for (var i = 0; i < 4; i++) {
+                    var which = order[(at + i) % 4], q = side(own, which);
+                    var hit = which === 'right' ? [box.x + box.w, q[1]] : which === 'left' ? [box.x, q[1]]
+                        : which === 'bottom' ? [q[0], box.y + box.h] : [q[0], box.y];
+                    if (pathClean([q, hit], siblings)) { return [q, hit]; }
+                }
+                var q0 = side(own, order[at]);
+                return [q0, order[at] === 'right' ? [box.x + box.w, q0[1]] : order[at] === 'left' ? [box.x, q0[1]]
+                    : order[at] === 'bottom' ? [q0[0], box.y + box.h] : [q0[0], box.y]];
+            };
+            var s = exit(p[0], from), d = exit(p[1], to);
+            return [s[0], s[1]].concat(walk(box, s[1], d[1]), [d[1], d[0]]);
+        }
+
+        function polyline(points) {
+            var out = '', previous = null;
+            points.forEach(function (p) {
+                var v = [Math.round(p[0]), Math.round(p[1])];
+                if (previous && v[0] === previous[0] && v[1] === previous[1]) { return; }
+                out += (out === '' ? 'M' : ' L') + v[0] + ' ' + v[1];
+                previous = v;
+            });
+            return out;
+        }
+        function labelOn(points, label) {
+            var best = null, longest = -1;
+            for (var i = 1; i < points.length; i++) {
+                var length = Math.abs(points[i][0] - points[i - 1][0]) + Math.abs(points[i][1] - points[i - 1][1]);
+                if (length > longest) { longest = length; best = [points[i - 1], points[i]]; }
+            }
+            if (!best) { return [0, 0, false]; }
+            return [Math.round((best[0][0] + best[1][0]) / 2), Math.round((best[0][1] + best[1][1]) / 2), longest >= label.length * EDGE_CHAR_W + 8];
+        }
+        function arcLift(dx) { return Math.round(20 + Math.sqrt(dx) * 2.5); }
+
+        // ---- draw
+        function moveNode(n) {
+            var dx = n.x - n.hx, dy = n.y - n.hy;
+            if (dx || dy) { n.el.setAttribute('transform', 'translate(' + dx + ' ' + dy + ')'); } else { n.el.removeAttribute('transform'); }
+        }
+        function moveGroup(g) {
+            g.rect.setAttribute('x', g.x); g.rect.setAttribute('y', g.y);
+            g.rect.setAttribute('width', g.w); g.rect.setAttribute('height', g.h);
+            var dx = g.x - g.hx, dy = g.y - g.hy;
+            if (g.caption) {
+                if (dx || dy) { g.caption.setAttribute('transform', 'translate(' + dx + ' ' + dy + ')'); } else { g.caption.removeAttribute('transform'); }
+            }
+        }
+        function resizeGroup(g) {
+            var own = g.members.map(function (id) { return nodes[id]; }).filter(Boolean);
+            if (!own.length) { return; }
+            var left = Math.min.apply(null, own.map(function (n) { return n.x; }));
+            var top = Math.min.apply(null, own.map(function (n) { return n.y; }));
+            var right = Math.max.apply(null, own.map(function (n) { return n.x + n.w; }));
+            var bottom = Math.max.apply(null, own.map(function (n) { return n.y + n.h; }));
+            // the members' bounding box plus the pad, with the header kept above it
+            g.x = left - SITE_PAD; g.w = right - left + 2 * SITE_PAD;
+            g.y = top - SITE_PAD - SITE_HEADER; g.h = bottom - top + 2 * SITE_PAD + SITE_HEADER;
+        }
+
+        function obstaclesFor(ctx, sites, cards) {
+            var out = [];
+            Object.keys(ctx.group).forEach(function (k) { if (sites.indexOf(k) < 0) { out.push(ctx.group[k]); } });
+            Object.keys(ctx.loose).forEach(function (k) { if (cards.indexOf(k) < 0) { out.push(ctx.loose[k]); } });
+            return out;
+        }
+        function siblingsOf(site, a, b) {
+            return Object.keys(nodes).filter(function (id) {
+                return nodes[id].site === site && nodes[id].kind === 'member' && id !== a && id !== b;
+            }).map(function (id) { return { x: nodes[id].x, y: nodes[id].y, w: nodes[id].w, h: nodes[id].h }; });
+        }
+
+        function redraw() {
+            Object.keys(nodes).forEach(function (id) {
+                var n = nodes[id];
+                // an outside dot and an attached card are not routed and are not saved: they
+                // simply stick to the card they hang from
+                if (n.anchor && nodes[n.anchor]) { n.x = n.hx + (nodes[n.anchor].x - nodes[n.anchor].hx); n.y = n.hy + (nodes[n.anchor].y - nodes[n.anchor].hy); }
+                moveNode(n);
+            });
+            Object.keys(groups).forEach(function (k) { moveGroup(groups[k]); });
+
+            var ctx = context();
+            links.slice().sort(function (a, b) {
+                return a.el.dataset.focus < b.el.dataset.focus ? -1 : a.el.dataset.focus > b.el.dataset.focus ? 1 : 0;
+            }).forEach(function (e) { drawEdge(e, ctx); });
+        }
+
+        function drawEdge(e, ctx) {
+            var id = e.el.dataset.focus;
+            var pa = anchorOf(e.a), pb = anchorOf(e.b);
+            if (!pa || !pb) { return; }
+            var setText = function (x, y, show) {
+                if (!e.text) { return; }
+                e.text.setAttribute('x', x); e.text.setAttribute('y', y);
+                e.text.textContent = show ? e.label : '';
+            };
+
+            if (e.shape === 'hanger' || e.shape === 'stub') {
+                var target = e.shape === 'stub' ? [pa.x, pa.bottom + 20] : [pb.x, pb.top];
+                e.path.setAttribute('d', polyline([[pa.x, pa.bottom], target]));
+                return;
+            }
+            if (e.kind === 'overlay' || e.kind === 'asymmetric' || e.kind === 'missing') {
+                // exempt: a fault or a partial mesh is a mark, and a gutter would hide it
+                e.path.setAttribute('d', pa.top === pb.top
+                    ? 'M' + pa.x + ' ' + pa.top + ' Q' + Math.round((pa.x + pb.x) / 2) + ' ' + (pa.top - Math.round(30 + Math.sqrt(Math.abs(pa.x - pb.x)) * 3)) + ' ' + pb.x + ' ' + pb.top
+                    : polyline([[pa.x, pa.top < pb.top ? pa.bottom : pa.top], [pb.x, pa.top < pb.top ? pb.top : pb.bottom]]));
+                setText(Math.round((pa.x + pb.x) / 2), Math.min(pa.top, pb.top) - 8, e.label !== '');
+                return;
+            }
+            if (e.kind === 'esi') { return drawEsi(e, pa, pb, ctx, setText); }
+
+            var from = rectOf(e.a), to = e.kind === 'trunk' ? rectOf(e.b) : rectOf(e.b);
+            if (!from || !to) { return; }
+
+            if (e.kind === 'trunk') {
+                var box = groups[e.b];
+                var fixed = [[Math.round(from.x + from.w / 2), from.y + from.h], [Math.round(box.x + box.w / 2), box.y]];
+                var blockers = obstaclesFor(ctx, [e.siteA, e.b], [e.a]);
+                var points = pathClean(fixed, blockers) ? fixed : route(from, to, blockers, ctx, id, fixed).points;
+                e.path.setAttribute('d', polyline(points));
+                var t = labelOn(points, e.label);
+                setText(t[0], t[1], t[2]);
+                return;
+            }
+
+            // same site and still side by side: the short arc over the cards, which is exempt
+            if (e.siteA && e.siteA === e.siteB) {
+                if (Math.min(from.y + from.h, to.y + to.h) - Math.max(from.y, to.y) >= 8) {
+                    var lift = arcLift(Math.abs(pa.x - pb.x));
+                    e.path.setAttribute('d', 'M' + pa.x + ' ' + pa.top + ' Q' + Math.round((pa.x + pb.x) / 2) + ' ' + (pa.top - lift) + ' ' + pb.x + ' ' + pb.top);
+                    setText(Math.round((pa.x + pb.x) / 2), Math.round(pa.top - lift / 2), e.label !== '');
+                    return;
+                }
+                var pad = padRoute({ x: groups[e.siteA].x, y: groups[e.siteA].y, w: groups[e.siteA].w, h: groups[e.siteA].h }, from, to, siblingsOf(e.siteA, e.a, e.b));
+                e.path.setAttribute('d', polyline(pad));
+                var pt = labelOn(pad, e.label);
+                setText(pt[0], pt[1], pt[2]);
+                return;
+            }
+
+            var routed = route(from, to, obstaclesFor(ctx, [e.siteA, e.siteB], [e.a, e.b]), ctx, id);
+            e.path.setAttribute('d', polyline(routed.points));
+            var at = labelOn(routed.points, e.label);
+            setText(at[0], at[1], at[2] && !(routed.gap && routed.k > 0));
+        }
+
+        /**
+         * After a drag there is no reserved band and `row` / `col` are the server's grid, so the
+         * shape is recomputed from the rects as they are now. A bracket the operator has pulled
+         * apart stops being one rather than retargeting whatever card is underneath.
+         */
+        function drawEsi(e, pa, pb, ctx, setText) {
+            var from = rectOf(e.a), to = rectOf(e.b);
+            if (!from || !to) { return; }
+            var L = from.x <= to.x ? from : to, R = from.x <= to.x ? to : from;
+            var gap = R.x - (L.x + L.w);
+            var overlap = Math.min(L.y + L.h, R.y + R.h) - Math.max(L.y, R.y);
+            var sameSite = e.siteA && e.siteA === e.siteB;
+
+            if (sameSite && overlap >= 8 && gap >= -8 && gap <= CARD_W) {
+                var bottom = Math.max(L.y + L.h, R.y + R.h), leg = bottom + 12;
+                var bracket = [[L.x + L.w / 2, bottom], [L.x + L.w / 2, leg], [R.x + R.w / 2, leg], [R.x + R.w / 2, bottom]].map(function (p) { return [Math.round(p[0]), Math.round(p[1])]; });
+                if (pathClean(bracket, siblingsOf(e.siteA, e.a, e.b))) {
+                    e.path.setAttribute('d', polyline(bracket));
+                    setText(Math.round((bracket[0][0] + bracket[3][0]) / 2), leg - 3, e.label.length * EDGE_CHAR_W <= Math.abs(bracket[0][0] - bracket[3][0]) - 8);
+                    return;
+                }
+            }
+            if (sameSite) {
+                var upper = from.y <= to.y ? from : to, lower = from.y <= to.y ? to : from;
+                var y = upper.y + upper.h + 12;
+                var segment = [[upper.x + upper.w / 2, upper.y + upper.h], [upper.x + upper.w / 2, y], [lower.x + lower.w / 2, y], [lower.x + lower.w / 2, lower.y]].map(function (p) { return [Math.round(p[0]), Math.round(p[1])]; });
+                var siblings = siblingsOf(e.siteA, e.a, e.b);
+                var points = pathClean(segment, siblings) ? segment
+                    : padRoute({ x: groups[e.siteA].x, y: groups[e.siteA].y, w: groups[e.siteA].w, h: groups[e.siteA].h }, from, to, siblings);
+                e.path.setAttribute('d', polyline(points));
+                var at = labelOn(points, e.label);
+                setText(at[0], at[1], at[2]);
+                return;
+            }
+            var routed = route(from, to, obstaclesFor(ctx, [e.siteA, e.siteB], [e.a, e.b]), ctx, e.el.dataset.focus);
+            e.path.setAttribute('d', polyline(routed.points));
+            var label = labelOn(routed.points, e.label);
+            setText(label[0], label[1], label[2] && !(routed.gap && routed.k > 0));
+        }
+
+        // ================= the saved arrangement ============================================
+        function document_() {
+            var ids = Object.keys(nodes).filter(function (id) { return nodes[id].kind === 'member' || nodes[id].kind === 'far'; });
+            // a collapsed site still lists its members, and their coordinates are kept even
+            // though no card is in the DOM, so collapsing never changes this set
+            Object.keys(groups).forEach(function (k) {
+                groups[k].members.forEach(function (id) { if (ids.indexOf(id) < 0) { ids.push(id); } });
+            });
+            ids.sort();
+            var out = { v: 1, members: ids, nodes: {}, groups: {} };
+            ids.forEach(function (id) {
+                var n = nodes[id] || offstage[id];
+                if (n) { out.nodes[id] = { x: Math.round(n.x), y: Math.round(n.y) }; }
+            });
+            Object.keys(groups).forEach(function (k) { out.groups[k] = { x: Math.round(groups[k].x), y: Math.round(groups[k].y) }; });
+            return out;
+        }
+        var offstage = {};
+        function send(body) {
+            try {
+                fetch(wrap.dataset.layoutUrl, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': wrap.dataset.csrf, 'Accept': 'application/json' },
+                    body: JSON.stringify(body),
+                    // reset posts and then follows its own href: without this the navigation
+                    // cancels the request and the row survives the click
+                    keepalive: true,
+                });
+            } catch (e) {}
+        }
+        function save() { send(document_()); }
+
+        (function applySaved() {
+            var holder = document.getElementById('eagle-layout');
+            var saved = null;
+            try { saved = JSON.parse(holder ? holder.textContent : 'null'); } catch (e) {}
+            if (!saved || saved.v !== 1 || !saved.nodes) { return; }
+            var finite = function (p) { return p && isFinite(p.x) && isFinite(p.y); };
+            Object.keys(saved.nodes).forEach(function (id) {
+                if (!finite(saved.nodes[id])) { return; }
+                if (nodes[id]) { nodes[id].x = saved.nodes[id].x; nodes[id].y = saved.nodes[id].y; }
+                else { offstage[id] = { x: saved.nodes[id].x, y: saved.nodes[id].y }; }
+            });
+            Object.keys(groups).forEach(function (k) { resizeGroup(groups[k]); });
+            Object.keys(saved.groups || {}).forEach(function (k) {
+                // a collapsed compound has no member cards to size it, so it keeps its own point
+                if (groups[k] && finite(saved.groups[k]) && !groups[k].members.some(function (id) { return nodes[id]; })) {
+                    groups[k].x = saved.groups[k].x; groups[k].y = saved.groups[k].y;
+                }
+            });
+            redraw();   // applying what the server sent is not a save
+        })();
+
+        // ================= drag ==============================================================
+        var THRESHOLD = 4;   // screen pixels; everything else here is user units
+        var grab = null, pinned = {}, dragged = false;
+
+        function units(ev, start) {
+            var r = svg.getBoundingClientRect();
+            return [(ev.clientX - start.cx) * box.w / r.width, (ev.clientY - start.cy) * box.h / r.height];
+        }
+        function moved(ev, start) { return Math.hypot(ev.clientX - start.cx, ev.clientY - start.cy) > THRESHOLD; }
+
+        svg.addEventListener('mousedown', function (ev) {
+            var card = ev.target.closest('.eg-card');
+            var site = ev.target.closest('.eg-site');
+            if (!card && !site) { return; }
+            // no preventDefault here: in current browsers it suppresses the later click, and the
+            // site caption is the <a> that collapses the site
+            var id = card ? card.dataset.id : site.dataset.key;
+            dragged = false;
+            grab = { id: id, isCard: !!card, cx: ev.clientX, cy: ev.clientY, dragged: false, start: {} };
+            var move = card ? [id] : [id].concat(Object.keys(nodes).filter(function (k) { return nodes[k].site === id; }));
+            move.forEach(function (k) { if (nodes[k]) { grab.start[k] = [nodes[k].x, nodes[k].y]; } });
+            if (!card) { grab.startGroup = [groups[id].x, groups[id].y]; }
+        });
+
+        window.addEventListener('mousemove', function (ev) {
+            if (!grab) { return; }
+            if (!grab.dragged && !moved(ev, grab)) { return; }
+            grab.dragged = true;
+            dragged = true;
+            var d = units(ev, grab);
+            Object.keys(grab.start).forEach(function (k) { nodes[k].x = grab.start[k][0] + d[0]; nodes[k].y = grab.start[k][1] + d[1]; });
+            if (grab.isCard) {
+                // a member never leaves its site; the compound grows to hold it
+                if (nodes[grab.id].site) { resizeGroup(groups[nodes[grab.id].site]); }
+            } else {
+                groups[grab.id].x = grab.startGroup[0] + d[0];
+                groups[grab.id].y = grab.startGroup[1] + d[1];
+            }
+            redraw();
+        });
+
+        window.addEventListener('mouseup', function () {
+            if (!grab) { return; }
+            var done = grab;
+            grab = null;
+            if (!done.dragged) { return; }
+            pinned = {};
+            Object.keys(done.start).forEach(function (k) { pinned[k] = true; });
+            growCanvas();
+            if (document.getElementById('eagle-gravity').checked) { settle(); } else { redraw(); save(); }
+        });
+
+        // a drag that left the picture bigger than the server drew it grows the canvas rather
+        // than clipping; it never shrinks below the server size
+        function growCanvas() {
+            var right = W, bottom = H;
+            Object.keys(nodes).forEach(function (id) { right = Math.max(right, nodes[id].x + nodes[id].w + MARGIN); bottom = Math.max(bottom, nodes[id].y + nodes[id].h + MARGIN); });
+            Object.keys(groups).forEach(function (k) { right = Math.max(right, groups[k].x + groups[k].w + MARGIN); bottom = Math.max(bottom, groups[k].y + groups[k].h + MARGIN); });
+            if (right > W || bottom > H) {
+                W = Math.round(right); H = Math.round(bottom);
+                wrap.dataset.w = W; wrap.dataset.h = H;
+            }
+        }
+
+        // ================= gravity ===========================================================
+        function neighbours() {
+            var out = [];
+            links.forEach(function (e) {
+                if (e.kind === 'esi' || e.kind === 'attached' || e.kind === 'overlay' || e.kind === 'asymmetric' || e.kind === 'missing') { return; }
+                if (e.kind === 'trunk') {
+                    // a trunk does not end on a card: it expands to the spine and every member
+                    // of the site it lands on, or the spine would never move
+                    (groups[e.b] ? groups[e.b].members : []).forEach(function (m) { if (nodes[m]) { out.push([e.a, m]); } });
+                    return;
+                }
+                if (nodes[e.a] && nodes[e.b]) { out.push([e.a, e.b]); }
+            });
+            return out;
+        }
+
+        function settle() {
+            var pairs = neighbours();
+            var velocity = {};
+            Object.keys(nodes).forEach(function (id) { velocity[id] = [0, 0]; });
+            var band = {};
+            Object.keys(nodes).forEach(function (id) {
+                var t = nodes[id].tier;
+                if (!t) { return; }
+                band[t] = band[t] || [];
+                band[t].push(nodes[id].hy + nodes[id].h / 2);
+            });
+            Object.keys(band).forEach(function (t) { band[t] = band[t].reduce(function (a, b) { return a + b; }, 0) / band[t].length; });
+
+            var frame = 0;
+            (function step() {
+                var snapshot = {};
+                Object.keys(nodes).forEach(function (id) { snapshot[id] = [nodes[id].x + nodes[id].w / 2, nodes[id].y + nodes[id].h / 2]; });
+                var before = {};
+                Object.keys(nodes).forEach(function (id) { before[id] = [nodes[id].x, nodes[id].y]; });
+
+                // 1. spring, on the unpinned neighbours of the pinned set only. The rest length
+                // is the distance between the two home centres, so a settle does not ratchet
+                var touched = {};
+                pairs.forEach(function (pair) {
+                    [[pair[0], pair[1]], [pair[1], pair[0]]].forEach(function (p) {
+                        var self = nodes[p[0]], other = nodes[p[1]];
+                        if (!self || !other || pinned[p[0]] || !pinned[p[1]]) { return; }
+                        var rest = Math.hypot((other.hx + other.w / 2) - (self.hx + self.w / 2), (other.hy + other.h / 2) - (self.hy + self.h / 2));
+                        var dx = snapshot[p[1]][0] - snapshot[p[0]][0], dy = snapshot[p[1]][1] - snapshot[p[0]][1];
+                        var current = Math.hypot(dx, dy);
+                        var ux = current > 0 ? dx / current : 0, uy = current > 0 ? dy / current : 0;
+                        velocity[p[0]][0] = 0.65 * velocity[p[0]][0] + 0.08 * (current - rest) * ux;
+                        velocity[p[0]][1] = 0.65 * velocity[p[0]][1] + 0.08 * (current - rest) * uy;
+                        touched[p[0]] = true;
+                    });
+                });
+                Object.keys(touched).forEach(function (id) { nodes[id].x += velocity[id][0]; nodes[id].y += velocity[id][1]; });
+
+                // 2. separate overlapping cards, on the shallower axis
+                var cards = Object.keys(nodes).filter(function (id) { return nodes[id].kind === 'member' || nodes[id].kind === 'far'; });
+                for (var i = 0; i < cards.length; i++) {
+                    for (var j = i + 1; j < cards.length; j++) {
+                        var a = nodes[cards[i]], b = nodes[cards[j]];
+                        var ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+                        var oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+                        if (ox <= 0 || oy <= 0) { continue; }
+                        var axis = ox <= oy ? 0 : 1, depth = ox <= oy ? ox : oy;
+                        var pa = pinned[cards[i]], pb = pinned[cards[j]];
+                        if (pa && pb) { continue; }
+                        var away = axis === 0 ? (a.x < b.x ? -1 : 1) : (a.y < b.y ? -1 : 1);
+                        if (!pa && pb) { axis === 0 ? a.x += away * depth : a.y += away * depth; }
+                        else if (pa && !pb) { axis === 0 ? b.x -= away * depth : b.y -= away * depth; }
+                        else {
+                            var first = cards[i] > cards[j] ? a : b, second = first === a ? b : a;
+                            if (axis === 0) { first.x += depth / 2; second.x -= depth / 2; } else { first.y += depth / 2; second.y -= depth / 2; }
+                        }
+                    }
+                }
+
+                // 3. pull every unpinned neighbour back toward its own tier band. A spine the
+                // operator dragged into the leaves is pinned and stays there
+                Object.keys(touched).forEach(function (id) {
+                    var n = nodes[id];
+                    if (pinned[id] || band[n.tier] === undefined) { return; }
+                    n.y += 0.05 * (band[n.tier] - (n.y + n.h / 2));
+                });
+
+                Object.keys(groups).forEach(function (k) { resizeGroup(groups[k]); });
+                redraw();
+
+                var motion = 0;
+                Object.keys(nodes).forEach(function (id) { motion += Math.abs(nodes[id].x - before[id][0]) + Math.abs(nodes[id].y - before[id][1]); });
+                frame++;
+                if (motion < 0.5 || frame >= 40) { growCanvas(); redraw(); save(); return; }
+                requestAnimationFrame(step);
+            })();
+        }
 
         function select(focus) {
             Array.prototype.forEach.call(document.querySelectorAll('#eagle-inspector [data-focus]'), function (el) {
@@ -313,6 +980,9 @@
         }
 
         svg.addEventListener('click', function (ev) {
+            // a gesture over 4 screen px was a drag, not a selection, and the site caption is an
+            // <a>: preventDefault only once the pointer has actually moved, or collapse breaks
+            if (dragged) { ev.preventDefault(); return; }
             var target = ev.target.closest('.eg-card, .eg-edge');
             if (!target) { return; }
             var focus = target.dataset.focus;

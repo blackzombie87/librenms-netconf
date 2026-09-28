@@ -25,6 +25,11 @@ Route::middleware(['web', 'auth'])
             Route::get('fabrics', [FabricController::class, 'index'])->name('fabrics');
             Route::get('fabric/{fabric}/{tab?}', [FabricController::class, 'show'])->whereNumber('fabric')->whereAlpha('tab')->name('fabric');
             Route::get('evpn/mac', [FabricController::class, 'mac'])->name('evpn.mac');
+            // where the operator dropped the sites and cards of the overview picture. One
+            // arrangement per fabric, shown to everyone who opens it, so saving it is a
+            // deliberate exception to this plugin's admin-only mutations: the people who read
+            // this page are the people who arrange it, and reset is the same permission
+            Route::post('fabric/{fabric}/layout', [FabricController::class, 'layout'])->whereNumber('fabric')->name('fabric.layout');
         });
 
         // per-device page: redirects to the NETCONF device tab when that is registered,

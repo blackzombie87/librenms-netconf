@@ -23,7 +23,7 @@ use SafferIt\LibrenmsNetconf\NetconfSettings;
 class Uninstaller
 {
     public const TABLES = [
-        'netconf_evpn_issue_device', 'netconf_evpn_issue', 'netconf_evpn_underlay_link', 'netconf_evpn_fabric_member', 'netconf_evpn_fabric', 'netconf_evpn_vtep', 'netconf_evpn_mac',
+        'netconf_evpn_issue_device', 'netconf_evpn_issue', 'netconf_evpn_underlay_link', 'netconf_evpn_fabric_member', 'netconf_evpn_fabric_layout', 'netconf_evpn_fabric', 'netconf_evpn_vtep', 'netconf_evpn_mac',
         'netconf_evpn_tunnel', 'netconf_evpn_vni_vtep', 'netconf_evpn_vni', 'netconf_evpn_esi', 'netconf_evpn_neighbor',
         'netconf_port_metrics', 'netconf_metrics', 'netconf_device_status',
     ];
