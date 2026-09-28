@@ -395,11 +395,19 @@ it('draws a segment, not a bracket, for an ESI pair that crosses from one site t
     $edge = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'esi'))[0];
     $boxes = fn (array $o) => array_column($o['groups'], 'h', 'key');
 
+    // every vertex of the routed path, as pairs
+    preg_match_all('/(-?\d+) (-?\d+)/', $edge['path'], $m, PREG_SET_ORDER);
+    $points = array_map(fn ($p) => [(int) $p[1], (int) $p[2]], $m);
+
     expect($edge['shape'])->toBe('segment')
-        // the path is the straight line between the two card bottoms, not the four-point bracket
-        ->and($edge['path'])->toMatch('/^M-?\d+ -?\d+ L-?\d+ -?\d+$/')
-        // and no box grew, on either side, which is the other half of the 1.4.1 claim
-        ->and($boxes($out))->toBe($boxes($bare))
+        // not the four-point bracket, and not a diagonal either: it takes the channel between
+        // the two compounds, so every segment is horizontal or vertical
+        ->and(count($points))->toBeGreaterThan(1);
+    for ($i = 1; $i < count($points); $i++) {
+        expect($points[$i][0] === $points[$i - 1][0] || $points[$i][1] === $points[$i - 1][1])->toBeTrue();
+    }
+    // and no box grew, on either side, which is the other half of the 1.4.1 claim
+    expect($boxes($out))->toBe($boxes($bare))
         ->and(array_column($out['groups'], 'bracket'))->toBe([false, false]);
 });
 
@@ -640,4 +648,198 @@ it('names the placed far card on an untrunked line to the same far end', functio
     expect($lines)->toHaveCount(2)
         ->and(array_column($lines, 'kind'))->toBe(['underlay', 'underlay'])
         ->and(array_column($lines, 'b'))->toBe(['far:10.9.9.1', 'far:10.9.9.1']);
+});
+
+/**
+ * A routing context over hand-built compound rects, so a candidate can be asserted without the
+ * packing rule choosing the geometry.
+ *
+ * @param  array<string, array{x: int, y: int, w: int, h: int}>  $rects
+ * @return array<string, mixed>
+ */
+function eagleRouteContext(array $rects): array
+{
+    $groups = [];
+    foreach ($rects as $key => $rect) {
+        $groups[] = ['key' => $key] + $rect;
+    }
+
+    // no picture rect: the bounds are the rects themselves, so the ring is where the arithmetic
+    // in the plan puts it rather than wherever a canvas size would have pushed it
+    return EagleLayout::routeContext($groups, [], 0, 0);
+}
+
+/** @return list<array{0: int, 1: int}> */
+function eaglePoints(string $path): array
+{
+    preg_match_all('/(-?\d+) (-?\d+)/', $path, $m, PREG_SET_ORDER);
+
+    return array_map(fn ($p) => [(int) $p[1], (int) $p[2]], $m);
+}
+
+/** @param list<array{0: int, 1: int}> $points */
+function eagleOrthogonal(array $points): bool
+{
+    for ($i = 1; $i < count($points); $i++) {
+        if ($points[$i][0] !== $points[$i - 1][0] && $points[$i][1] !== $points[$i - 1][1]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+it('routes around a compound it does not terminate on, and never diagonally', function () {
+    // hand-built rects, so the packing cannot hide the case. A source compound, a wide foreign
+    // compound overlapping it in y, and a target compound below: the channel between the bands
+    // is blocked by the foreign box and so is every vertical leg, which leaves the left ring.
+    $sourceGroup = ['x' => 100, 'y' => 40, 'w' => 180, 'h' => 100];
+    $sourceCard = ['x' => 110, 'y' => 50, 'w' => 156, 'h' => 58];
+    $foreign = ['x' => 80, 'y' => 130, 'w' => 400, 'h' => 40];
+    $targetGroup = ['x' => 100, 'y' => 200, 'w' => 180, 'h' => 100];
+    $targetCard = ['x' => 110, 'y' => 230, 'w' => 156, 'h' => 58];
+
+    $ctx = eagleRouteContext(['A' => $sourceGroup, 'B' => $foreign, 'C' => $targetGroup]);
+    $routed = EagleLayout::route($sourceCard, $targetCard, [$foreign], $ctx, 'edge:underlay:one');
+
+    expect($routed['points'])->toBe([[188, 108], [64, 108], [64, 230], [188, 230]])
+        ->and(eagleOrthogonal($routed['points']))->toBeTrue()
+        // and it is the ring, not a channel, so it holds no lane
+        ->and($routed['gap'])->toBeNull()
+        ->and(EagleLayout::pathClean($routed['points'], [$foreign]))->toBeTrue();
+});
+
+it('takes the channel between two compounds in a row rather than crossing the middle one', function () {
+    $left = ['x' => 40, 'y' => 100, 'w' => 180, 'h' => 100];
+    $middle = ['x' => 248, 'y' => 100, 'w' => 180, 'h' => 100];
+    $right = ['x' => 456, 'y' => 100, 'w' => 180, 'h' => 100];
+    $leftCard = ['x' => 50, 'y' => 120, 'w' => 156, 'h' => 58];
+    $rightCard = ['x' => 466, 'y' => 120, 'w' => 156, 'h' => 58];
+
+    $ctx = eagleRouteContext(['L' => $left, 'M' => $middle, 'R' => $right]);
+    $routed = EagleLayout::route($leftCard, $rightCard, [$middle], $ctx, 'edge:underlay:one');
+
+    // the two outer compounds are not neighbours in the band, so no channel joins them: the
+    // path leaves on the ring rather than through the middle box
+    expect(eagleOrthogonal($routed['points']))->toBeTrue()
+        ->and(EagleLayout::pathClean($routed['points'], [$middle]))->toBeTrue()
+        ->and($routed['points'][0])->toBe([206, 149])
+        ->and(end($routed['points']))->toBe([466, 149]);
+
+    // two neighbouring compounds do share a channel, and it is used. The middle box is where
+    // this edge lands, so it is not one of its obstacles
+    $neighbour = EagleLayout::route($leftCard, ['x' => 258, 'y' => 120, 'w' => 156, 'h' => 58], [], $ctx, 'edge:underlay:two');
+    expect($neighbour['gap'])->toStartWith('v:')
+        ->and($neighbour['k'])->toBe(0)
+        ->and(eagleOrthogonal($neighbour['points']))->toBeTrue();
+});
+
+it('gives each edge in one channel its own lane and lets only the first label it', function () {
+    $left = ['x' => 40, 'y' => 100, 'w' => 180, 'h' => 100];
+    $right = ['x' => 248, 'y' => 100, 'w' => 180, 'h' => 100];
+    $a = ['x' => 50, 'y' => 120, 'w' => 156, 'h' => 58];
+    $b = ['x' => 258, 'y' => 120, 'w' => 156, 'h' => 58];
+
+    $ctx = eagleRouteContext(['L' => $left, 'R' => $right]);
+    $lanes = [];
+    foreach (['edge:underlay:a', 'edge:underlay:b', 'edge:underlay:c', 'edge:underlay:d'] as $i => $id) {
+        $routed = EagleLayout::route($a, $b, [], $ctx, $id);
+        $lanes[] = [$routed['k'], $routed['points'][1][0]];
+    }
+
+    // GUTTER 28 less CLEARANCE on each side is 20 usable, which is three lanes at pitch 6; the
+    // fourth edge shares a stroke rather than inventing a lane outside the gap, and its k is
+    // still 3, so it is not the one that draws the label
+    expect(array_column($lanes, 0))->toBe([0, 1, 2, 3])
+        ->and(count(array_unique(array_column($lanes, 1))))->toBe(3)
+        ->and($lanes[3][1])->toBe($lanes[0][1]);
+});
+
+it('walks the inset of its own compound when two cards do not face each other', function () {
+    // the pad fixture: the two cards overlap in y by -2, so this is not an arc, and the ports
+    // are A's right midpoint and B's left midpoint. "The nearest point on the inset" would not
+    // produce this list -- the exit is along the port's own normal.
+    $group = ['x' => 10, 'y' => 10, 'w' => 344, 'h' => 158];
+    $a = ['x' => 20, 'y' => 40, 'w' => 156, 'h' => 58];
+    $b = ['x' => 188, 'y' => 100, 'w' => 156, 'h' => 58];
+
+    $points = EagleLayout::padRoute($group, $a, $b);
+
+    expect($points)->toBe([[176, 69], [350, 69], [350, 164], [14, 164], [14, 129], [188, 129]])
+        ->and(eagleOrthogonal($points))->toBeTrue()
+        // a sibling sitting on the straight chord between the two ports is never sampled: the
+        // path does not go near it
+        ->and(EagleLayout::pathClean($points, [['x' => 180, 'y' => 80, 'w' => 20, 'h' => 40]]))->toBeTrue();
+});
+
+it('routes a trunk around the tier between the spine and its site, and labels the long leg', function () {
+    // fabric 16: an unmonitored far end on the spine tier, the gateway tier under it, and the
+    // leaf sites below that. The straight stroke to a leaf header crosses a gateway compound.
+    $nodes = [
+        eagleNode('10.0.0.1', 'gateway', ['site' => 'GW-A', 'device_id' => 1, 'irbs' => 9]),
+        eagleNode('10.0.0.2', 'gateway', ['site' => 'GW-B', 'device_id' => 2, 'irbs' => 9]),
+    ];
+    foreach ([['11', 'A'], ['12', 'A'], ['21', 'B'], ['22', 'B']] as $i => [$last, $site]) {
+        $nodes[] = eagleNode('10.0.0.' . $last, 'leaf', ['site' => $site, 'device_id' => 10 + $i]);
+    }
+    $shape = eagleShape($nodes, FabricShape::UNDERLAY_SPINE_LEAF, FabricShape::ROUTING_CRB);
+    $links = [];
+    foreach ($nodes as $n) {
+        $links[] = eagleLink($n['ip'], null, ['b_label' => '10.9.9.1', 'link_key' => 'k-' . $n['ip']]);
+    }
+
+    $out = EagleLayout::place($shape, $nodes, $links, [], ['10.9.9.1'], [], []);
+    $boxes = array_map(fn ($g) => ['x' => $g['x'], 'y' => $g['y'], 'w' => $g['w'], 'h' => $g['h']], $out['groups']);
+    $byKey = array_combine(array_column($out['groups'], 'key'), $boxes);
+    $trunks = array_values(array_filter($out['edges'], fn ($e) => $e['kind'] === 'trunk'));
+
+    expect($trunks)->toHaveCount(2);
+    foreach ($trunks as $trunk) {
+        $points = eaglePoints($trunk['path']);
+        // one stroke, still, and it misses every compound it does not land on
+        $foreign = array_values(array_filter($byKey, fn ($k) => $k !== $trunk['b'], ARRAY_FILTER_USE_KEY));
+        expect($trunk['shape'])->toBe('trunk')
+            ->and(eagleOrthogonal($points))->toBeTrue()
+            ->and(EagleLayout::pathClean($points, $foreign))->toBeTrue()
+            // the label is on the polyline, not at the midpoint of the chord it rejected
+            ->and($trunk['lx'])->toBeGreaterThanOrEqual(min(array_column($points, 0)))
+            ->and($trunk['lx'])->toBeLessThanOrEqual(max(array_column($points, 0)));
+    }
+});
+
+it('keeps every routed edge of a real fabric out of the compounds it does not terminate on', function () {
+    // the invariant, over the production shape with cross-site sessions between every site
+    $nodes = productionNodes();
+    $shape = eagleShape($nodes, FabricShape::UNDERLAY_LEAF_MESH, FabricShape::ROUTING_CRB);
+    $links = [];
+    $ips = array_column($nodes, 'ip');
+    foreach ($ips as $i => $a) {
+        foreach (array_slice($ips, $i + 1) as $b) {
+            $links[] = eagleLink($a, $b, ['link_key' => $a . '|' . $b]);
+        }
+    }
+
+    $out = EagleLayout::place($shape, $nodes, $links, [], [], [], []);
+    $byKey = [];
+    foreach ($out['groups'] as $g) {
+        $byKey[$g['key']] = ['x' => $g['x'], 'y' => $g['y'], 'w' => $g['w'], 'h' => $g['h']];
+    }
+
+    $routed = array_values(array_filter($out['edges'], fn ($e) => in_array($e['shape'] ?? '', ['line', 'trunk'], true)));
+    expect($routed)->not->toBeEmpty();
+    foreach ($routed as $e) {
+        $points = eaglePoints($e['path']);
+        $foreign = [];
+        foreach ($byKey as $key => $rect) {
+            if ($key !== ($e['site_a'] ?? '') && $key !== ($e['site_b'] ?? '')) {
+                $foreign[] = $rect;
+            }
+        }
+        // a trunk whose straight stroke is already clean stays that one segment and may run at
+        // an angle; everything the router touched is orthogonal
+        expect(EagleLayout::pathClean($points, $foreign))->toBeTrue();
+        if ($e['shape'] === 'line') {
+            expect(eagleOrthogonal($points))->toBeTrue();
+        }
+    }
 });

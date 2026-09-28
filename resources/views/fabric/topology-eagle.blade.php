@@ -141,7 +141,7 @@
     <div id="eagle-view" data-fabric="{{ $fabric['id'] }}" data-w="{{ $eg['width'] }}" data-h="{{ $eg['height'] }}">
         <svg id="eagle-svg" width="{{ $eg['width'] }}" height="{{ $eg['height'] }}" viewBox="0 0 {{ $eg['width'] }} {{ $eg['height'] }}" xmlns="http://www.w3.org/2000/svg">
             @foreach ($eg['groups'] as $g)
-                <a href="{{ $toggleSite($g['key']) }}" class="eg-site">
+                <a href="{{ $toggleSite($g['key']) }}" class="eg-site" data-key="{{ $g['key'] }}" data-members="{{ implode(' ', $g['members']) }}" data-home-x="{{ $g['x'] }}" data-home-y="{{ $g['y'] }}" data-home-w="{{ $g['w'] }}" data-home-h="{{ $g['h'] }}">
                     <rect class="eg-site-box {{ $g['state'] === 'down' ? 'eg-site-down' : ($g['state'] === 'warning' ? 'eg-site-warning' : '') }}" x="{{ $g['x'] }}" y="{{ $g['y'] }}" width="{{ $g['w'] }}" height="{{ $g['h'] }}" rx="6" stroke-dasharray="4 3">
                         <title>{{ $g['label'] ?? 'no location' }} — {{ count($g['members']) }} member{{ count($g['members']) === 1 ? '' : 's' }}, click to {{ $g['collapsed'] ? 'expand' : 'collapse' }}</title>
                     </rect>
@@ -152,7 +152,7 @@
             @endforeach
 
             @foreach ($eg['edges'] as $e)
-                <g class="eg-edge" data-focus="{{ $e['id'] }}">
+                <g class="eg-edge" data-focus="{{ $e['id'] }}" data-kind="{{ $e['kind'] }}" data-shape="{{ $e['shape'] }}" data-a="{{ $e['a'] }}" data-b="{{ $e['b'] }}" data-tier-a="{{ $e['tier_a'] }}" data-tier-b="{{ $e['tier_b'] }}" data-site-a="{{ $e['site_a'] }}" data-site-b="{{ $e['site_b'] }}">
                     <path d="{{ $e['path'] }}" fill="none" stroke-width="{{ $e['width'] }}" @if ($e['dash'] !== '') stroke-dasharray="{{ $e['dash'] }}" @endif class="{{ $e['strokeClass'] }} {{ $e['highlight'] ? 'eg-hl' : '' }}">
                         <title>{{ $e['title'] }}</title>
                     </path>
@@ -163,7 +163,7 @@
             @endforeach
 
             @foreach ($eg['nodes'] as $id => $n)
-                <g class="eg-card" data-focus="{{ $n['kind'] === 'member' ? 'member:' . $n['ip'] : $id }}">
+                <g class="eg-card" data-focus="{{ $n['kind'] === 'member' ? 'member:' . $n['ip'] : $id }}" data-id="{{ $id }}" data-kind="{{ $n['kind'] }}" data-site="{{ $n['site'] ?? '' }}" data-tier="{{ $n['tier'] }}" data-home-x="{{ $n['x'] }}" data-home-y="{{ $n['y'] }}"@if (($n['anchor'] ?? null) !== null) data-anchor="{{ $n['anchor'] }}"@endif>
                     <rect class="{{ $n['fillClass'] }} {{ $n['strokeClass'] }}" x="{{ $n['x'] }}" y="{{ $n['y'] }}" width="{{ $n['w'] }}" height="{{ $n['h'] }}" rx="5" stroke-width="{{ $n['highlight'] ? 3 : 1.5 }}" @if ($n['dashed']) stroke-dasharray="4 3" @endif>
                         <title>{{ $n['title'] }}</title>
                     </rect>

@@ -271,10 +271,10 @@ final class FabricPagesTest extends LibrenmsTestCase
 
         // one repeated parameter, never a comma split: "BER" must not be collapsed by it
         $wrong = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&collapse[]=site:BER")->assertOk()->getContent();
-        $this->assertStringContainsString('<g class="eg-card" data-focus="member:192.0.2.1">', $wrong);
+        $this->assertStringContainsString('data-focus="member:192.0.2.1"', $wrong);
 
         $collapsed = $this->get("/plugin/netconf/fabric/$fabric?topo=eagle&" . http_build_query(['collapse' => ['site:BER, hall']]))->assertOk()->getContent();
-        $this->assertStringNotContainsString('<g class="eg-card" data-focus="member:192.0.2.1">', $collapsed);
+        $this->assertStringNotContainsString('data-focus="member:192.0.2.1"', $collapsed);
         $this->assertStringContainsString('1 member', $collapsed);
     }
 

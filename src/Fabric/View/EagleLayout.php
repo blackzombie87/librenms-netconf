@@ -38,7 +38,26 @@ final class EagleLayout
 
     public const SITE_HEADER = 20;
 
-    public const SITE_GAP = 16;
+    /**
+     * Between two compounds, on both axes. Wide enough to be a routing channel: `SITE_GAP` was
+     * 16 and nothing could pass through it, so a cross-site line went over the boxes instead.
+     */
+    public const GUTTER = 28;
+
+    /** A lane sits at least this far outside a foreign rect, and a gap is inset by it first. */
+    public const CLEARANCE = 4;
+
+    /** Between the centre-lines of two parallel lanes in one gap. */
+    public const LANE_PITCH = 6;
+
+    /** How far the fallback ring is inset from the routing bounds. */
+    public const OUTER = 8;
+
+    /** How far apart a routed segment is sampled when testing it against the obstacles. */
+    public const SAMPLE_PX = 1;
+
+    /** Penetration into an obstacle, in px, that a routed sample is still allowed. */
+    public const INSIDE_TOL = 1;
 
     public const TIER_GAP = 96;
 
@@ -214,10 +233,10 @@ final class EagleLayout
         unset($group);
 
         $anchorOf = self::anchors($placed, $groups, $siteOf, $collapsed);
-        $edges = self::edges($underlay, $overlayEdges, $esiPairs, $placed, $groups, $anchorOf, $siteOf, $collapsed, $sharedSet, $outsideOn, $hlEdges, $tier);
-        self::summarise($groups, $placed, $byIp, $underlay, $siteOf, $collapsed, $esiPairs, $outsideOf, $attachedOf, $attached, $outsideOn, $hlNodes);
-
         $height = (int) max($bottom + self::MARGIN, self::MARGIN * 2 + self::CARD_H);
+        $ctx = self::routeContext($groups, $placed, $width, $height);
+        $edges = self::edges($underlay, $overlayEdges, $esiPairs, $placed, $groups, $anchorOf, $siteOf, $collapsed, $sharedSet, $outsideOn, $hlEdges, $tier, $ctx);
+        self::summarise($groups, $placed, $byIp, $underlay, $siteOf, $collapsed, $esiPairs, $outsideOf, $attachedOf, $attached, $outsideOn, $hlNodes);
 
         return [
             'width' => $width,
@@ -365,14 +384,14 @@ final class EagleLayout
         $rowWidth = 0;
         foreach ($sites as $site) {
             $box = self::siteBox($site, isset($collapsed[$site['key']]), $cap, $outsideOn, $outsideOf, $attachedOf, $attached, $esiPairs, $gatewayTier);
-            if ($rowWidth > 0 && $rowWidth + self::SITE_GAP + $box['w'] > $usable) {
+            if ($rowWidth > 0 && $rowWidth + self::GUTTER + $box['w'] > $usable) {
                 $rows[] = ['width' => $rowWidth, 'cards' => [], 'groups' => $rowIndices];
                 $rowIndices = [];
-                $rowTop += $rowHeight + self::SITE_GAP;
+                $rowTop += $rowHeight + self::GUTTER;
                 $rowWidth = 0;
                 $rowHeight = 0;
             }
-            $x = $rowWidth === 0 ? 0 : $rowWidth + self::SITE_GAP;
+            $x = $rowWidth === 0 ? 0 : $rowWidth + self::GUTTER;
             $box['x'] = $x + self::MARGIN;
             $box['y'] = $rowTop;
             $box['header']['x'] = $box['x'];
@@ -855,12 +874,13 @@ final class EagleLayout
      * @param  array<string, true>  $sharedSet
      * @param  array<string, true>  $hlEdges
      * @param  array<string, string>  $tier
+     * @param  array<string, mixed>  $ctx
      * @return list<array<string, mixed>>
      */
-    private static function edges(array $underlay, array $overlayEdges, array $esiPairs, array $placed, array $groups, array $anchorOf, array $siteOf, array $collapsed, array $sharedSet, bool $outsideOn, array $hlEdges, array $tier): array
+    private static function edges(array $underlay, array $overlayEdges, array $esiPairs, array $placed, array $groups, array $anchorOf, array $siteOf, array $collapsed, array $sharedSet, bool $outsideOn, array $hlEdges, array $tier, array &$ctx): array
     {
         $edges = [];
-        $trunked = self::trunks($underlay, $groups, $siteOf, $tier, $anchorOf, $sharedSet, $hlEdges, $edges);
+        $trunked = self::trunks($underlay, $groups, $siteOf, $tier, $anchorOf, $sharedSet, $hlEdges, $edges, $ctx);
 
         foreach ($underlay as $e) {
             $a = (string) $e['a'];
@@ -871,9 +891,11 @@ final class EagleLayout
             if ($e['b'] === null) {
                 $far = (string) ($e['b_label'] ?? '');
                 if (isset($sharedSet[$far]) && isset($anchorOf['far:' . $far], $anchorOf[$a])) {
-                    $edges[] = self::lineEdge('underlay', 'edge:underlay:' . $key, $anchorOf[$a], $anchorOf['far:' . $far], $e, $hlEdges, 'far:' . $far);
+                    $edge = self::lineEdge('underlay', 'edge:underlay:' . $key, $anchorOf[$a], $anchorOf['far:' . $far], $e, $hlEdges, 'far:' . $far);
+                    $edges[] = $edge + ['_route' => self::routeRequest($a, 'far:' . $far, $placed, $groups, $siteOf, $collapsed)];
                 } elseif ($outsideOn && isset($anchorOf[$a])) {
-                    $edges[] = self::lineEdge('wan', 'edge:underlay:' . $key, $anchorOf[$a], ['x' => $anchorOf[$a]['x'], 'y' => $anchorOf[$a]['bottom'] + 20, 'bottom' => $anchorOf[$a]['bottom'] + 20, 'id' => 'outside', 'collapsed' => false], $e, $hlEdges);
+                    // a drop under the card it hangs from, which is exempt: there is no far card
+                    $edges[] = self::lineEdge('wan', 'edge:underlay:' . $key, $anchorOf[$a], ['x' => $anchorOf[$a]['x'], 'y' => $anchorOf[$a]['bottom'] + 20, 'bottom' => $anchorOf[$a]['bottom'] + 20, 'id' => 'outside', 'collapsed' => false], $e, $hlEdges, shape: 'stub');
                 }
 
                 continue;
@@ -896,7 +918,17 @@ final class EagleLayout
                 ($siteOf[$a] ?? null) !== ($siteOf[$b] ?? null) => 'cross-site',
                 default => 'underlay',
             };
-            $edges[] = self::lineEdge($kind, 'edge:underlay:' . $key, $anchorOf[$a], $anchorOf[$b], $e, $hlEdges);
+            // inside one compound a short arc over the cards is the point of the drawing, and it
+            // is exempt -- but only while the two cards really do sit side by side
+            $sameSite = ($siteOf[$a] ?? null) !== null && ($siteOf[$a] ?? null) === ($siteOf[$b] ?? null);
+            $overlap = self::overlapY($placed[$a] ?? null, $placed[$b] ?? null);
+            if ($sameSite && $overlap >= 8) {
+                $edges[] = self::lineEdge($kind, 'edge:underlay:' . $key, $anchorOf[$a], $anchorOf[$b], $e, $hlEdges, shape: 'arc');
+
+                continue;
+            }
+            $edge = self::lineEdge($kind, 'edge:underlay:' . $key, $anchorOf[$a], $anchorOf[$b], $e, $hlEdges);
+            $edges[] = $edge + ['_route' => self::routeRequest($a, $b, $placed, $groups, $siteOf, $collapsed)];
         }
 
         foreach ($overlayEdges as $o) {
@@ -911,6 +943,9 @@ final class EagleLayout
                 'id' => $id,
                 'a' => $o['a'],
                 'b' => $o['b'],
+                // exempt from the gutter: a fault arc or a partial mesh is a mark that
+                // something is wrong, and burying it in an OSPF channel would hide it
+                'shape' => $anchorOf[$o['a']]['y'] === $anchorOf[$o['b']]['y'] ? 'arc' : 'line',
                 'path' => self::arc($anchorOf[$o['a']], $anchorOf[$o['b']]),
                 'label' => $o['kind'] === 'symmetric' ? '' : $o['kind'],
                 'lx' => (int) (($anchorOf[$o['a']]['x'] + $anchorOf[$o['b']]['x']) / 2),
@@ -943,6 +978,7 @@ final class EagleLayout
                 && ($na['row'] ?? -1) === ($nb['row'] ?? -2) && abs((int) ($na['col'] ?? 0) - (int) ($nb['col'] ?? 0)) === 1;
             $style = self::edgeStyle('esi', null);
             $id = 'edge:esi:' . $p['id'];
+            $request = null;
 
             // the horizontal leg sits 12 px under the card it hangs from, inside the 22 px band
             // siteBox() reserved: 10 px still separate it from the row below
@@ -959,10 +995,11 @@ final class EagleLayout
                 $path = sprintf('M%d %d L%d %d L%d %d L%d %d', $upper['x'], $upper['bottom'], $upper['x'], $y, $lower['x'], $y, $lower['x'], $lower['y']);
                 $labelY = $y - 3;
             } else {
-                // a cross-site pair, and a same-site pair more than one row apart: no single band
-                // reaches the far card, so this stays a straight segment until the gutter router
+                // a cross-site pair takes the gutter, and a same-site pair more than one row
+                // apart takes the pad route: no single band reaches the far card
                 $path = sprintf('M%d %d L%d %d', $pa['x'], $pa['bottom'], $pb['x'], $pb['bottom']);
                 $labelY = $y - 3;
+                $request = self::routeRequest($p['a'], $p['b'], $placed, $groups, $siteOf, $collapsed);
             }
 
             // the label has to fit between the two anchors or it runs across the cards it names.
@@ -971,7 +1008,7 @@ final class EagleLayout
             $long = sprintf('%d ESI%s', $p['esis'], $p['esis'] === 1 ? '' : 's') . ($p['degraded'] > 0 ? sprintf(', %d degraded', $p['degraded']) : '');
             $fits = mb_strlen($long) * self::EDGE_CHAR_W <= abs($pa['x'] - $pb['x']) - 8;
 
-            $edges[] = [
+            $edges[] = ($request === null ? [] : ['_route' => $request]) + [
                 'kind' => 'esi',
                 'layer' => 'esi',
                 'shape' => $bracket ? 'bracket' : 'segment',
@@ -997,13 +1034,185 @@ final class EagleLayout
             $anchor = $anchorOf[(string) $n['anchor']];
             $edges[] = [
                 'kind' => 'attached', 'layer' => 'attached', 'id' => 'edge:attached:' . $id,
+                'shape' => 'hanger',
                 'a' => (string) $n['anchor'], 'b' => (string) $id,
                 'path' => sprintf('M%d %d L%d %d', $anchor['x'], $anchor['bottom'], (int) ($n['x'] + $n['w'] / 2), (int) $n['y']),
                 'label' => '', 'lx' => 0, 'ly' => 0, 'title' => (string) $n['title'], 'highlight' => false,
             ] + self::edgeStyle('attached', null);
         }
 
-        return $edges;
+        self::applyRoutes($edges, $ctx);
+
+        return self::annotate($edges, $placed, $siteOf, $tier);
+    }
+
+    /**
+     * The vertical overlap of two placed cards, in px; negative when one is clear of the other.
+     *
+     * @param  array<string, mixed>|null  $a
+     * @param  array<string, mixed>|null  $b
+     */
+    private static function overlapY(?array $a, ?array $b): int
+    {
+        if ($a === null || $b === null) {
+            return 0;
+        }
+
+        return (int) (min($a['y'] + $a['h'], $b['y'] + $b['h']) - max($a['y'], $b['y']));
+    }
+
+    /**
+     * What the router needs about one edge's two ends: the rects its ports sit on, the
+     * compounds it may pass through because it terminates in them, and whether the two ends
+     * share a compound (which makes it a pad route rather than a gutter one).
+     *
+     * @param  array<string, array<string, mixed>>  $placed
+     * @param  list<array<string, mixed>>  $groups
+     * @param  array<string, string>  $siteOf
+     * @param  array<string, true>  $collapsed
+     * @return array<string, mixed>|null
+     */
+    private static function routeRequest(string $a, string $b, array $placed, array $groups, array $siteOf, array $collapsed): ?array
+    {
+        $boxes = [];
+        foreach ($groups as $g) {
+            $boxes[(string) $g['key']] = ['x' => (int) $g['x'], 'y' => (int) $g['y'], 'w' => (int) $g['w'], 'h' => (int) $g['h']];
+        }
+        $end = function (string $id) use ($placed, $siteOf, $collapsed, $boxes): ?array {
+            $site = $siteOf[$id] ?? null;
+            if ($site !== null && isset($collapsed[$site], $boxes[$site])) {
+                return ['rect' => $boxes[$site], 'site' => $site, 'card' => null];
+            }
+            if (! isset($placed[$id])) {
+                return null;
+            }
+            $n = $placed[$id];
+
+            return ['rect' => ['x' => (int) $n['x'], 'y' => (int) $n['y'], 'w' => (int) $n['w'], 'h' => (int) $n['h']], 'site' => $site, 'card' => $id];
+        };
+        $from = $end($a);
+        $to = $end($b);
+        if ($from === null || $to === null) {
+            return null;
+        }
+
+        return [
+            'mode' => $from['site'] !== null && $from['site'] === $to['site'] ? 'pad' : 'global',
+            'from' => $from,
+            'to' => $to,
+            'group' => $from['site'] !== null ? ($boxes[$from['site']] ?? null) : null,
+            'siblings' => $from['site'] === null ? [] : array_values(array_filter(
+                array_map(
+                    fn (array $n) => ['x' => (int) $n['x'], 'y' => (int) $n['y'], 'w' => (int) $n['w'], 'h' => (int) $n['h']],
+                    array_filter($placed, fn ($n, $id) => ($n['site'] ?? null) === $from['site'] && $n['kind'] === 'member' && $id !== $a && $id !== $b, ARRAY_FILTER_USE_BOTH),
+                ),
+            )),
+        ];
+    }
+
+    /**
+     * Route every edge that asked for it, in `strcmp` order of id so a lane index is the same
+     * number in PHP and in the browser, then place its label.
+     *
+     * @param  list<array<string, mixed>>  $edges
+     * @param  array<string, mixed>  $ctx
+     *
+     * @param-out list<array<string, mixed>> $edges
+     */
+    private static function applyRoutes(array &$edges, array &$ctx): void
+    {
+        $order = [];
+        foreach ($edges as $i => $edge) {
+            if (isset($edge['_route'])) {
+                $order[$i] = (string) $edge['id'];
+            }
+        }
+        asort($order, SORT_STRING);
+
+        foreach (array_keys($order) as $i) {
+            /** @var array<string, mixed> $request */
+            $request = $edges[$i]['_route'];
+            unset($edges[$i]['_route']);
+            $from = $request['from'];
+            $to = $request['to'];
+
+            if ($request['mode'] === 'pad' && $request['group'] !== null) {
+                $points = self::padRoute($request['group'], $from['rect'], $to['rect'], $request['siblings']);
+                $gap = null;
+                $k = 0;
+            } else {
+                $obstacles = self::obstacles($ctx, [$from['site'], $to['site']], [$from['card'], $to['card']]);
+                $routed = self::route($from['rect'], $to['rect'], $obstacles, $ctx, (string) $edges[$i]['id'], $request['ports'] ?? null);
+                $points = $routed['points'];
+                $gap = $routed['gap'];
+                $k = $routed['k'];
+            }
+
+            $edges[$i]['path'] = self::polyline($points);
+            [$lx, $ly, $fits] = self::labelOn($points, (string) ($edges[$i]['label'] ?? ''));
+            $edges[$i]['lx'] = $lx;
+            $edges[$i]['ly'] = $ly;
+            // in a shared channel only the first edge labels the lane, or five OSPF lines print
+            // five "ospf full" on top of each other
+            if (! $fits || ($gap !== null && $k > 0)) {
+                $edges[$i]['label'] = '';
+            }
+        }
+
+        $edges = array_values($edges);
+    }
+
+    /**
+     * Everything one edge has to miss: every compound it does not terminate in, and every card
+     * that has no compound and is not one of its own ends.
+     *
+     * @param  array<string, mixed>  $ctx
+     * @param  list<string|null>  $sites
+     * @param  list<string|null>  $cards
+     * @return list<array{x: int, y: int, w: int, h: int}>
+     */
+    private static function obstacles(array $ctx, array $sites, array $cards): array
+    {
+        $out = [];
+        foreach ($ctx['group'] as $key => $rect) {
+            if (! in_array($key, $sites, true)) {
+                $out[] = $rect;
+            }
+        }
+        foreach ($ctx['loose'] as $id => $rect) {
+            if (! in_array($id, $cards, true)) {
+                $out[] = $rect;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The tier and compound of each end, on the edge itself, so the browser can look up a
+     * neighbour without re-deriving the layout.
+     *
+     * @param  list<array<string, mixed>>  $edges
+     * @param  array<string, array<string, mixed>>  $placed
+     * @param  array<string, string>  $siteOf
+     * @param  array<string, string>  $tier
+     * @return list<array<string, mixed>>
+     */
+    private static function annotate(array $edges, array $placed, array $siteOf, array $tier): array
+    {
+        return array_map(function (array $e) use ($placed, $siteOf, $tier): array {
+            $a = (string) $e['a'];
+            $b = (string) $e['b'];
+
+            return $e + [
+                'shape' => 'line',
+                'tier_a' => (string) ($placed[$a]['tier'] ?? $tier[$a] ?? ''),
+                // a trunk lands on a site header, so its far end is a compound and not a card
+                'tier_b' => $e['kind'] === 'trunk' ? '' : (string) ($placed[$b]['tier'] ?? $tier[$b] ?? ''),
+                'site_a' => (string) ($siteOf[$a] ?? ''),
+                'site_b' => $e['kind'] === 'trunk' ? $b : (string) ($siteOf[$b] ?? ''),
+            ];
+        }, $edges);
     }
 
     /**
@@ -1028,9 +1237,10 @@ final class EagleLayout
      * @param  array<string, true>  $sharedSet
      * @param  array<string, true>  $hlEdges
      * @param  list<array<string, mixed>>  $edges
+     * @param  array<string, mixed>  $ctx
      * @return array<string, true> link_keys the trunk swallowed
      */
-    private static function trunks(array $underlay, array $groups, array $siteOf, array $tier, array $anchorOf, array $sharedSet, array $hlEdges, array &$edges): array
+    private static function trunks(array $underlay, array $groups, array $siteOf, array $tier, array $anchorOf, array $sharedSet, array $hlEdges, array &$edges, array $ctx): array
     {
         $bySpineSite = [];
         foreach ($underlay as $e) {
@@ -1092,10 +1302,23 @@ final class EagleLayout
                 }
 
                 $id = 'edge:trunk:' . $spine . '|' . $siteKey;
-                $edges[] = [
+                // one stroke from the spine's bottom to the site header's top. It stays that one
+                // segment while nothing is in the way -- a Clos spine row over its pods -- and
+                // takes the gutter when a tier sits between the two, which is what a far-end
+                // spine above the gateway tier does. Either way it is one path.
+                $spineCard = ['x' => (int) ($anchorOf[$spine]['x'] - self::CARD_W / 2), 'y' => (int) $anchorOf[$spine]['y'], 'w' => self::CARD_W, 'h' => (int) ($anchorOf[$spine]['bottom'] - $anchorOf[$spine]['y'])];
+                $box = ['x' => (int) $group['x'], 'y' => (int) $group['y'], 'w' => (int) $group['w'], 'h' => (int) $group['h']];
+                $ports = [
+                    [(int) $anchorOf[$spine]['x'], (int) $anchorOf[$spine]['bottom']],
+                    [(int) ($group['header']['x'] + $group['header']['w'] / 2), (int) $group['header']['y']],
+                ];
+                $straight = self::pathClean($ports, self::obstacles($ctx, [$siteOf[array_key_first($byLeaf)] ?? null, $siteKey], [$spine]));
+
+                $edges[] = ($straight ? [] : ['_route' => ['mode' => 'global', 'from' => ['rect' => $spineCard, 'site' => null, 'card' => (string) $spine], 'to' => ['rect' => $box, 'site' => $siteKey, 'card' => null], 'group' => null, 'siblings' => [], 'ports' => $ports]]) + [
                     'kind' => 'trunk', 'layer' => 'underlay', 'id' => $id,
+                    'shape' => 'trunk',
                     'a' => (string) $spine, 'b' => $siteKey,
-                    'path' => sprintf('M%d %d L%d %d', $anchorOf[$spine]['x'], $anchorOf[$spine]['bottom'], (int) ($group['header']['x'] + $group['header']['w'] / 2), (int) $group['header']['y']),
+                    'path' => self::polyline($ports),
                     'label' => sprintf('%d up', count($trunked)),
                     'lx' => (int) (($anchorOf[$spine]['x'] + $group['header']['x'] + $group['header']['w'] / 2) / 2),
                     'ly' => (int) (($anchorOf[$spine]['bottom'] + $group['header']['y']) / 2),
@@ -1119,7 +1342,7 @@ final class EagleLayout
      * @param  array<string, true>  $hlEdges
      * @return array<string, mixed>
      */
-    private static function lineEdge(string $kind, string $id, array $pa, array $pb, array $row, array $hlEdges, ?string $bId = null): array
+    private static function lineEdge(string $kind, string $id, array $pa, array $pb, array $row, array $hlEdges, ?string $bId = null, string $shape = 'line'): array
     {
         $up = $row['up'] ?? null;
         $sameRow = $pa['y'] === $pb['y'];
@@ -1128,6 +1351,7 @@ final class EagleLayout
             : sprintf('M%d %d L%d %d', $pa['x'], $pa['y'] < $pb['y'] ? $pa['bottom'] : $pa['y'], $pb['x'], $pa['y'] < $pb['y'] ? $pb['y'] : $pb['bottom']);
 
         return [
+            'shape' => $shape,
             'kind' => $kind,
             'layer' => 'underlay',
             'id' => $id,
@@ -1292,5 +1516,620 @@ final class EagleLayout
         }
 
         return array_values(array_filter($sentences, fn ($s) => $s !== ''));
+    }
+
+    /**
+     * The routing context of one picture: the rects an edge has to miss, the channels between
+     * them, and the ring that is always clean.
+     *
+     * A rect is a compound, or a card that has no compound (a spine, an unmonitored far end).
+     * The cards inside a compound are not separate obstacles — the compound covers them — which
+     * is what lets a line pass a site without knowing how its members are packed.
+     *
+     * @param  list<array<string, mixed>>  $groups
+     * @param  array<string, array<string, mixed>>  $placed
+     * @return array<string, mixed>
+     */
+    public static function routeContext(array $groups, array $placed, int $width, int $height): array
+    {
+        $group = [];
+        foreach ($groups as $g) {
+            $group[(string) $g['key']] = ['x' => (int) $g['x'], 'y' => (int) $g['y'], 'w' => (int) $g['w'], 'h' => (int) $g['h']];
+        }
+        $loose = [];
+        foreach ($placed as $id => $n) {
+            if (($n['kind'] === 'member' || $n['kind'] === 'far') && ($n['site'] ?? null) === null) {
+                $loose[(string) $id] = ['x' => (int) $n['x'], 'y' => (int) $n['y'], 'w' => (int) $n['w'], 'h' => (int) $n['h']];
+            }
+        }
+
+        $all = array_merge(array_values($group), array_values($loose));
+        $left = $all === [] ? 0 : min(array_column($all, 'x'));
+        $top = $all === [] ? 0 : min(array_column($all, 'y'));
+        $right = $all === [] ? $width : max(array_map(fn ($r) => $r['x'] + $r['w'], $all));
+        $bottom = $all === [] ? $height : max(array_map(fn ($r) => $r['y'] + $r['h'], $all));
+        // every obstacle is inside the bounds by at least MARGIN, so every point of the ring
+        // below is at least MARGIN - OUTER outside every one of them. The picture's own rect is
+        // in the union too, so a camera fitted to the drawing still sees the whole ring.
+        $bounds = ['x' => $left - self::MARGIN, 'y' => $top - self::MARGIN];
+        $bounds['w'] = $right + self::MARGIN - $bounds['x'];
+        $bounds['h'] = $bottom + self::MARGIN - $bounds['y'];
+        if ($width > 0 && $height > 0) {
+            $bounds['w'] = max($width, $bounds['x'] + $bounds['w']) - min(0, $bounds['x']);
+            $bounds['h'] = max($height, $bounds['y'] + $bounds['h']) - min(0, $bounds['y']);
+            $bounds['x'] = min(0, $bounds['x']);
+            $bounds['y'] = min(0, $bounds['y']);
+        }
+
+        $ctx = [
+            'group' => $group,
+            'loose' => $loose,
+            'bounds' => $bounds,
+            'ring' => self::inset($bounds, self::OUTER),
+            'lanes' => [],
+        ];
+
+        return $ctx + self::channels($group, array_merge($group, $loose));
+    }
+
+    /**
+     * The gaps a routed edge may run in: one between two compounds that are neighbours in the
+     * same band, one between two consecutive bands. `TIER_GAP` is not a special channel — it is
+     * simply the tall horizontal gap between two bands.
+     *
+     * @param  array<string, array{x: int, y: int, w: int, h: int}>  $group
+     * @param  array<string, array{x: int, y: int, w: int, h: int}>  $obstacles
+     * @return array{bands: list<array{keys: list<string>, top: int, bottom: int}>, vgaps: array<string, array{start: int, end: int, a: string, b: string}>, hgaps: array<string, array{start: int, end: int, upper: int, lower: int}>}
+     */
+    private static function channels(array $group, array $obstacles): array
+    {
+        $keys = array_keys($group);
+        usort($keys, function (string $a, string $b) use ($group) {
+            $ca = $group[$a]['y'] + $group[$a]['h'] / 2;
+            $cb = $group[$b]['y'] + $group[$b]['h'] / 2;
+
+            return $ca <=> $cb ?: ($group[$a]['x'] <=> $group[$b]['x'] ?: strcmp($a, $b));
+        });
+
+        $bands = [];
+        foreach ($keys as $key) {
+            $r = $group[$key];
+            $last = count($bands) - 1;
+            if ($last >= 0 && $r['y'] < $bands[$last]['bottom'] && $bands[$last]['top'] < $r['y'] + $r['h']) {
+                $bands[$last]['keys'][] = $key;
+                $bands[$last]['top'] = min($bands[$last]['top'], $r['y']);
+                $bands[$last]['bottom'] = max($bands[$last]['bottom'], $r['y'] + $r['h']);
+
+                continue;
+            }
+            $bands[] = ['keys' => [$key], 'top' => $r['y'], 'bottom' => $r['y'] + $r['h']];
+        }
+        foreach ($bands as &$band) {
+            usort($band['keys'], fn (string $a, string $b) => $group[$a]['x'] <=> $group[$b]['x'] ?: strcmp($a, $b));
+        }
+        unset($band);
+
+        $vgaps = [];
+        foreach ($bands as $i => $band) {
+            for ($j = 0; $j + 1 < count($band['keys']); $j++) {
+                $a = $group[$band['keys'][$j]];
+                $b = $group[$band['keys'][$j + 1]];
+                $start = $a['x'] + $a['w'] + self::CLEARANCE;
+                $end = $b['x'] - self::CLEARANCE;
+                if ($end - $start < 2 || self::blockedX($obstacles, $a['x'] + $a['w'], $b['x'])) {
+                    continue;
+                }
+                $vgaps['v:' . $i . ':' . $band['keys'][$j]] = ['start' => $start, 'end' => $end, 'a' => $band['keys'][$j], 'b' => $band['keys'][$j + 1]];
+            }
+        }
+
+        $hgaps = [];
+        for ($i = 0; $i + 1 < count($bands); $i++) {
+            $start = $bands[$i]['bottom'] + self::CLEARANCE;
+            $end = $bands[$i + 1]['top'] - self::CLEARANCE;
+            if ($end - $start < 2 || self::blockedY($obstacles, $bands[$i]['bottom'], $bands[$i + 1]['top'])) {
+                continue;
+            }
+            $hgaps['h:' . $i] = ['start' => $start, 'end' => $end, 'upper' => $i, 'lower' => $i + 1];
+        }
+
+        return ['bands' => $bands, 'vgaps' => $vgaps, 'hgaps' => $hgaps];
+    }
+
+    /** @param array<string, array{x: int, y: int, w: int, h: int}> $obstacles */
+    private static function blockedX(array $obstacles, int $from, int $to): bool
+    {
+        foreach ($obstacles as $r) {
+            $c = $r['x'] + $r['w'] / 2;
+            if ($c > $from && $c < $to) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param array<string, array{x: int, y: int, w: int, h: int}> $obstacles */
+    private static function blockedY(array $obstacles, int $from, int $to): bool
+    {
+        foreach ($obstacles as $r) {
+            $c = $r['y'] + $r['h'] / 2;
+            if ($c > $from && $c < $to) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * An orthogonal path from one rect to another that does not pass through a third.
+     *
+     * The candidates are tried in order and the first clean one wins: the channel between two
+     * neighbouring compounds, the channel between two bands, then the four sides of the margin
+     * ring, which is outside every obstacle by construction. A diagonal is never a candidate,
+     * and neither is the straight chord — a line that crosses a compound it does not terminate
+     * on is the bug this exists to prevent.
+     *
+     * @param  array{x: int, y: int, w: int, h: int}  $from  the rect the edge leaves
+     * @param  array{x: int, y: int, w: int, h: int}  $to
+     * @param  list<array{x: int, y: int, w: int, h: int}>  $obstacles  everything it has to miss
+     * @param  array<string, mixed>  $ctx  routeContext(), whose lane lists this call may extend
+     * @param  array{0: array{0: int, 1: int}, 1: array{0: int, 1: int}}|null  $ports  overrides the side midpoints (a trunk leaves the spine's bottom and lands on a header's top)
+     * @return array{points: list<array{0: int, 1: int}>, gap: string|null, k: int}
+     */
+    public static function route(array $from, array $to, array $obstacles, array &$ctx, string $id, ?array $ports = null): array
+    {
+        [$ps, $pd] = $ports ?? self::ports($from, $to);
+
+        $overlapY = min($from['y'] + $from['h'], $to['y'] + $to['h']) - max($from['y'], $to['y']) > 0;
+        $candidates = [];
+        foreach ($ctx['vgaps'] as $key => $gap) {
+            if ($overlapY && self::gapJoins($gap, $from, $to, true)) {
+                $candidates[] = ['gap' => $key, 'axis' => 'x', 'spec' => $gap];
+            }
+        }
+        foreach ($ctx['hgaps'] as $key => $gap) {
+            if (! $overlapY && self::gapJoins($gap, $from, $to, false)) {
+                $candidates[] = ['gap' => $key, 'axis' => 'y', 'spec' => $gap];
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $k = count($ctx['lanes'][$candidate['gap']] ?? []);
+            $lane = self::lane($candidate['spec']['start'], $candidate['spec']['end'], $k);
+            $points = $candidate['axis'] === 'x'
+                ? [$ps, [$lane, $ps[1]], [$lane, $pd[1]], $pd]
+                : [$ps, [$ps[0], $lane], [$pd[0], $lane], $pd];
+            if (self::pathClean($points, $obstacles)) {
+                $ctx['lanes'][$candidate['gap']][] = $id;
+
+                return ['points' => $points, 'gap' => $candidate['gap'], 'k' => $k];
+            }
+        }
+
+        foreach ([$ctx['ring'], self::inset(self::grow($ctx['bounds'], self::GUTTER), self::OUTER)] as $ring) {
+            foreach (self::ringCandidates($ps, $pd, $ring) as $points) {
+                if (self::pathClean($points, $obstacles)) {
+                    return ['points' => $points, 'gap' => null, 'k' => 0];
+                }
+            }
+        }
+
+        $escape = self::cornerEscape($ps, $pd, $from, $to, $ctx['ring'], $obstacles);
+
+        // total by construction: a caller always gets an orthogonal path, and a unit test that
+        // expected a clean one fails loudly instead of the picture drawing a diagonal
+        return ['points' => $escape ?? self::ringCandidates($ps, $pd, $ctx['ring'])[0], 'gap' => null, 'k' => 0];
+    }
+
+    /**
+     * @param  array{start: int, end: int}  $gap
+     * @param  array{x: int, y: int, w: int, h: int}  $from
+     * @param  array{x: int, y: int, w: int, h: int}  $to
+     */
+    private static function gapJoins(array $gap, array $from, array $to, bool $vertical): bool
+    {
+        $a = $vertical ? $from['x'] + $from['w'] / 2 : $from['y'] + $from['h'] / 2;
+        $b = $vertical ? $to['x'] + $to['w'] / 2 : $to['y'] + $to['h'] / 2;
+
+        return min($a, $b) < $gap['start'] && $gap['end'] < max($a, $b);
+    }
+
+    /** One lane inside a gap. A gap that is already full reuses a lane rather than leaving it. */
+    private static function lane(int $start, int $end, int $k): int
+    {
+        $n = max(1, intdiv($end - $start, self::LANE_PITCH));
+
+        return $n === 1
+            ? (int) round(($start + $end) / 2)
+            : $start + intdiv(self::LANE_PITCH, 2) + ($k % $n) * self::LANE_PITCH;
+    }
+
+    /**
+     * @param  array{0: int, 1: int}  $ps
+     * @param  array{0: int, 1: int}  $pd
+     * @param  array{x: int, y: int, w: int, h: int}  $ring
+     * @return list<list<array{0: int, 1: int}>>
+     */
+    private static function ringCandidates(array $ps, array $pd, array $ring): array
+    {
+        $top = $ring['y'];
+        $bottom = $ring['y'] + $ring['h'];
+        $left = $ring['x'];
+        $right = $ring['x'] + $ring['w'];
+
+        return [
+            [$ps, [$ps[0], $top], [$pd[0], $top], $pd],
+            [$ps, [$ps[0], $bottom], [$pd[0], $bottom], $pd],
+            [$ps, [$left, $ps[1]], [$left, $pd[1]], $pd],
+            [$ps, [$right, $ps[1]], [$right, $pd[1]], $pd],
+        ];
+    }
+
+    /**
+     * The last resort: leave each rect at one of its own corners, meet on the ring, and walk it.
+     *
+     * @param  array{0: int, 1: int}  $ps
+     * @param  array{0: int, 1: int}  $pd
+     * @param  array{x: int, y: int, w: int, h: int}  $from
+     * @param  array{x: int, y: int, w: int, h: int}  $to
+     * @param  array{x: int, y: int, w: int, h: int}  $ring
+     * @param  list<array{x: int, y: int, w: int, h: int}>  $obstacles
+     * @return list<array{0: int, 1: int}>|null
+     */
+    private static function cornerEscape(array $ps, array $pd, array $from, array $to, array $ring, array $obstacles): ?array
+    {
+        $source = self::escape($ps, $from, $ring, $obstacles);
+        $target = self::escape($pd, $to, $ring, $obstacles);
+        if ($source === null || $target === null) {
+            return null;
+        }
+        $walk = self::walk($ring, end($source), end($target));
+
+        return array_merge($source, $walk, array_reverse($target));
+    }
+
+    /**
+     * From a port, round its own rect to the first corner with a clean ray out to the ring.
+     *
+     * The walk follows the boundary corner by corner, so every segment lies on an edge of the
+     * rect and stays orthogonal: jumping straight to the far corner would draw the diagonal
+     * this router exists to avoid.
+     *
+     * @param  array{0: int, 1: int}  $port
+     * @param  array{x: int, y: int, w: int, h: int}  $rect
+     * @param  array{x: int, y: int, w: int, h: int}  $ring
+     * @param  list<array{x: int, y: int, w: int, h: int}>  $obstacles
+     * @return list<array{0: int, 1: int}>|null
+     */
+    private static function escape(array $port, array $rect, array $ring, array $obstacles): ?array
+    {
+        $l = $rect['x'];
+        $t = $rect['y'];
+        $r = $rect['x'] + $rect['w'];
+        $b = $rect['y'] + $rect['h'];
+        $rt = 'rt';
+        $rb = 'rb';
+        $lb = 'lb';
+        $lt = 'lt';
+        $point = [$rt => [$r, $t], $rb => [$r, $b], $lb => [$l, $b], $lt => [$l, $t]];
+        // the two outward rays of each corner, in the order the corner faces
+        $rays = [
+            $rt => [[$r, $ring['y']], [$ring['x'] + $ring['w'], $t]],
+            $rb => [[$ring['x'] + $ring['w'], $b], [$r, $ring['y'] + $ring['h']]],
+            $lb => [[$l, $ring['y'] + $ring['h']], [$ring['x'], $b]],
+            $lt => [[$ring['x'], $t], [$l, $ring['y']]],
+        ];
+        // clockwise with y down, starting at the corner the port's own side runs into
+        $order = match (self::sideOf($rect, $port)) {
+            'right' => [$rb, $lb, $lt, $rt],
+            'bottom' => [$lb, $lt, $rt, $rb],
+            'left' => [$lt, $rt, $rb, $lb],
+            default => [$rt, $rb, $lb, $lt],
+        };
+
+        $path = [$port];
+        foreach ($order as $corner) {
+            $path[] = $point[$corner];
+            if (! self::pathClean($path, $obstacles)) {
+                return null;
+            }
+            foreach ($rays[$corner] as $ray) {
+                if (self::pathClean([$point[$corner], $ray], $obstacles)) {
+                    return [...$path, $ray];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The corners of `$rect` passed walking from one boundary point to another, the short way
+     * round; clockwise on a tie.
+     *
+     * @param  array{x: int, y: int, w: int, h: int}  $rect
+     * @param  array{0: int, 1: int}  $from
+     * @param  array{0: int, 1: int}  $to
+     * @return list<array{0: int, 1: int}>
+     */
+    private static function walk(array $rect, array $from, array $to): array
+    {
+        $perimeter = 2 * $rect['w'] + 2 * $rect['h'];
+        $a = self::onPerimeter($rect, $from);
+        $b = self::onPerimeter($rect, $to);
+        $clockwise = ($b - $a + $perimeter) % $perimeter;
+        $corners = [
+            0 => [$rect['x'], $rect['y']],
+            $rect['w'] => [$rect['x'] + $rect['w'], $rect['y']],
+            $rect['w'] + $rect['h'] => [$rect['x'] + $rect['w'], $rect['y'] + $rect['h']],
+            2 * $rect['w'] + $rect['h'] => [$rect['x'], $rect['y'] + $rect['h']],
+        ];
+
+        $out = [];
+        $order = $clockwise <= $perimeter - $clockwise ? 1 : -1;
+        $steps = $order === 1 ? $clockwise : $perimeter - $clockwise;
+        for ($i = 1; $i < $steps; $i++) {
+            $at = (($a + $order * $i) % $perimeter + $perimeter) % $perimeter;
+            if (isset($corners[$at])) {
+                $out[] = $corners[$at];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Distance of a boundary point from the rect's top-left corner, clockwise with y down.
+     *
+     * @param  array{x: int, y: int, w: int, h: int}  $rect
+     * @param  array{0: int, 1: int}  $p
+     */
+    private static function onPerimeter(array $rect, array $p): int
+    {
+        if ($p[1] <= $rect['y']) {
+            return (int) ($p[0] - $rect['x']);
+        }
+        if ($p[0] >= $rect['x'] + $rect['w']) {
+            return (int) ($rect['w'] + $p[1] - $rect['y']);
+        }
+        if ($p[1] >= $rect['y'] + $rect['h']) {
+            return (int) ($rect['w'] + $rect['h'] + $rect['x'] + $rect['w'] - $p[0]);
+        }
+
+        return (int) (2 * $rect['w'] + $rect['h'] + $rect['y'] + $rect['h'] - $p[1]);
+    }
+
+    /**
+     * Inside one compound: out of the port along its own normal, then round the inset rect.
+     *
+     * Not the global router's candidates, and not "the nearest point on the ring" either: the
+     * port is inside the inset, because SITE_PAD is 10 and CLEARANCE is 4, so those two are
+     * different polylines. Sibling cards are obstacles even though their compound is an
+     * endpoint; the two endpoint cards are not.
+     *
+     * @param  array{x: int, y: int, w: int, h: int}  $rect  the compound
+     * @param  array{x: int, y: int, w: int, h: int}  $from
+     * @param  array{x: int, y: int, w: int, h: int}  $to
+     * @param  list<array{x: int, y: int, w: int, h: int}>  $siblings
+     * @return list<array{0: int, 1: int}>
+     */
+    public static function padRoute(array $rect, array $from, array $to, array $siblings = []): array
+    {
+        $inset = self::inset($rect, self::CLEARANCE);
+        [$ps, $pd] = self::ports($from, $to);
+        [$ps, $hitS] = self::exit($ps, $from, $inset, $siblings);
+        [$pd, $hitD] = self::exit($pd, $to, $inset, $siblings);
+
+        return array_merge([$ps, $hitS], self::walk($inset, $hitS, $hitD), [$hitD, $pd]);
+    }
+
+    /**
+     * The port and where its outward normal meets the inset, trying each side clockwise until
+     * the ray misses every sibling.
+     *
+     * @param  array{0: int, 1: int}  $port
+     * @param  array{x: int, y: int, w: int, h: int}  $rect
+     * @param  array{x: int, y: int, w: int, h: int}  $inset
+     * @param  list<array{x: int, y: int, w: int, h: int}>  $siblings
+     * @return array{0: array{0: int, 1: int}, 1: array{0: int, 1: int}}
+     */
+    private static function exit(array $port, array $rect, array $inset, array $siblings): array
+    {
+        $order = ['right', 'bottom', 'left', 'top'];
+        $start = array_search(self::sideOf($rect, $port), $order, true);
+        for ($i = 0; $i < 4; $i++) {
+            $side = $order[((int) $start + $i) % 4];
+            $p = self::side($rect, $side);
+            $hit = match ($side) {
+                'right' => [$inset['x'] + $inset['w'], $p[1]],
+                'left' => [$inset['x'], $p[1]],
+                'bottom' => [$p[0], $inset['y'] + $inset['h']],
+                default => [$p[0], $inset['y']],
+            };
+            if (self::pathClean([$p, $hit], $siblings)) {
+                return [$p, $hit];
+            }
+        }
+
+        $p = self::side($rect, $order[(int) $start]);
+
+        return [$p, match ($order[(int) $start]) {
+            'right' => [$inset['x'] + $inset['w'], $p[1]],
+            'left' => [$inset['x'], $p[1]],
+            'bottom' => [$p[0], $inset['y'] + $inset['h']],
+            default => [$p[0], $inset['y']],
+        }];
+    }
+
+    /**
+     * @param  array{x: int, y: int, w: int, h: int}  $rect
+     * @param  array{0: int, 1: int}  $port
+     */
+    private static function sideOf(array $rect, array $port): string
+    {
+        return match (true) {
+            $port[0] >= $rect['x'] + $rect['w'] => 'right',
+            $port[0] <= $rect['x'] => 'left',
+            $port[1] >= $rect['y'] + $rect['h'] => 'bottom',
+            default => 'top',
+        };
+    }
+
+    /**
+     * The two side midpoints an edge leaves and lands on: the facing pair on whichever axis the
+     * two centres are further apart.
+     *
+     * @param  array{x: int, y: int, w: int, h: int}  $from
+     * @param  array{x: int, y: int, w: int, h: int}  $to
+     * @return array{0: array{0: int, 1: int}, 1: array{0: int, 1: int}}
+     */
+    private static function ports(array $from, array $to): array
+    {
+        $dx = ($to['x'] + $to['w'] / 2) - ($from['x'] + $from['w'] / 2);
+        $dy = ($to['y'] + $to['h'] / 2) - ($from['y'] + $from['h'] / 2);
+        if (abs($dx) >= abs($dy)) {
+            return $dx >= 0
+                ? [self::side($from, 'right'), self::side($to, 'left')]
+                : [self::side($from, 'left'), self::side($to, 'right')];
+        }
+
+        return $dy >= 0
+            ? [self::side($from, 'bottom'), self::side($to, 'top')]
+            : [self::side($from, 'top'), self::side($to, 'bottom')];
+    }
+
+    /**
+     * @param  array{x: int, y: int, w: int, h: int}  $rect
+     * @return array{0: int, 1: int}
+     */
+    private static function side(array $rect, string $which): array
+    {
+        return match ($which) {
+            'right' => [$rect['x'] + $rect['w'], (int) round($rect['y'] + $rect['h'] / 2)],
+            'left' => [$rect['x'], (int) round($rect['y'] + $rect['h'] / 2)],
+            'bottom' => [(int) round($rect['x'] + $rect['w'] / 2), $rect['y'] + $rect['h']],
+            default => [(int) round($rect['x'] + $rect['w'] / 2), $rect['y']],
+        };
+    }
+
+    /**
+     * @param  array{x: int, y: int, w: int, h: int}  $rect
+     * @return array{x: int, y: int, w: int, h: int}
+     */
+    private static function inset(array $rect, int $by): array
+    {
+        return ['x' => $rect['x'] + $by, 'y' => $rect['y'] + $by, 'w' => max(1, $rect['w'] - 2 * $by), 'h' => max(1, $rect['h'] - 2 * $by)];
+    }
+
+    /**
+     * @param  array{x: int, y: int, w: int, h: int}  $rect
+     * @return array{x: int, y: int, w: int, h: int}
+     */
+    private static function grow(array $rect, int $by): array
+    {
+        return ['x' => $rect['x'] - $by, 'y' => $rect['y'] - $by, 'w' => $rect['w'] + 2 * $by, 'h' => $rect['h'] + 2 * $by];
+    }
+
+    /**
+     * Whether a polyline stays out of every obstacle. Vertex-only checks are not the test: a
+     * segment that cuts a corner has clean vertices and is still drawn through the box.
+     *
+     * @param  list<array{0: int, 1: int}>  $points
+     * @param  list<array{x: int, y: int, w: int, h: int}>  $obstacles
+     */
+    public static function pathClean(array $points, array $obstacles): bool
+    {
+        for ($i = 1; $i < count($points); $i++) {
+            if ($points[$i] === $points[$i - 1]) {
+                continue;
+            }
+            if (! self::segmentClean($points[$i - 1], $points[$i], $obstacles)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array{0: int, 1: int}  $a
+     * @param  array{0: int, 1: int}  $b
+     * @param  list<array{x: int, y: int, w: int, h: int}>  $obstacles
+     */
+    private static function segmentClean(array $a, array $b, array $obstacles): bool
+    {
+        $length = sqrt((($b[0] - $a[0]) ** 2) + (($b[1] - $a[1]) ** 2));
+        $samples = [];
+        for ($d = 0; $d <= $length; $d += self::SAMPLE_PX) {
+            $t = $length > 0 ? $d / $length : 0.0;
+            $samples[] = [$a[0] + ($b[0] - $a[0]) * $t, $a[1] + ($b[1] - $a[1]) * $t];
+        }
+        $samples[] = $b;
+
+        foreach ($samples as $p) {
+            foreach ($obstacles as $r) {
+                $inside = min($p[0] - $r['x'], $r['x'] + $r['w'] - $p[0], $p[1] - $r['y'], $r['y'] + $r['h'] - $p[1]);
+                if ($inside > self::INSIDE_TOL) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * An SVG path of an orthogonal polyline, with repeated vertices dropped.
+     *
+     * @param  list<array{0: int, 1: int}>  $points
+     */
+    private static function polyline(array $points): string
+    {
+        $out = '';
+        $previous = null;
+        foreach ($points as $p) {
+            $vertex = [(int) round($p[0]), (int) round($p[1])];
+            if ($vertex === $previous) {
+                continue;
+            }
+            $out .= ($out === '' ? 'M' : ' L') . $vertex[0] . ' ' . $vertex[1];
+            $previous = $vertex;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Where a routed edge's label goes: the midpoint of the polyline's longest segment, and
+     * only when that segment is long enough to hold the string.
+     *
+     * The straight chord's midpoint is what put "ospf full" on a card the line does not
+     * terminate on, and once the path is a polyline that midpoint is not on it at all.
+     *
+     * @param  list<array{0: int, 1: int}>  $points
+     * @return array{0: int, 1: int, 2: bool}
+     */
+    private static function labelOn(array $points, string $label): array
+    {
+        $best = null;
+        $longest = -1.0;
+        for ($i = 1; $i < count($points); $i++) {
+            $length = abs($points[$i][0] - $points[$i - 1][0]) + abs($points[$i][1] - $points[$i - 1][1]);
+            if ($length > $longest) {
+                $longest = $length;
+                $best = [$points[$i - 1], $points[$i]];
+            }
+        }
+        if ($best === null) {
+            return [0, 0, false];
+        }
+
+        return [
+            (int) round(($best[0][0] + $best[1][0]) / 2),
+            (int) round(($best[0][1] + $best[1][1]) / 2),
+            $longest >= mb_strlen($label) * self::EDGE_CHAR_W + 8,
+        ];
     }
 }
