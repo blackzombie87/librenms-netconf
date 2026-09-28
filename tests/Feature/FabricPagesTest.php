@@ -100,6 +100,10 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertStringContainsString('var NARROW = 720;', $page);
         $this->assertStringContainsString('wrap.clientWidth < NARROW', $page);
         $this->assertStringContainsString('id="eagle-actual"', $page);
+        // the colours are classes with a dark override, not presentation attributes core's
+        // `class="dark"` on <html> cannot reach
+        $this->assertStringContainsString('html.dark .netconf-eagle', $page);
+        $this->assertStringContainsString('background: transparent;', $page);
         // and no graph image is requested before one is asked for
         $this->assertStringNotContainsString('class="graph-image"', $page);
         // the eagle camera stores a viewBox and nothing else

@@ -11,11 +11,11 @@ use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
  * until the labels are unreadable, and the row cannot grow. Wrapping is what makes 26 members an eagle view; the viewport is a viewBox, not a
  * layout engine.
  *
- * Pure, like `Topology::layout()`, which this does not touch: the vis map keeps seeding from
- * that one until it is removed.
+ * Pure, so the geometry is unit-testable without a browser: `place()` is the whole picture and
+ * the only overview picture there is.
  *
  * Two things the design document did not have and the review added (plan §11 E-F5, E-F6):
- * every edge carries a dash pattern as well as a colour, so state survives a greyscale print
+ * every edge carries a dash pattern as well as a class, so state survives a greyscale print
  * or a colour-blind reader the way the cards' chips already do; and `place()` takes an
  * optional highlight set, because a trace (§12) is exactly a list of node and edge ids and
  * the alternative would be a second picture.
@@ -247,7 +247,11 @@ final class EagleLayout
      * session is dashed, an unknown one dotted, an up one solid; the overlay, fault, ESI and
      * attached layers each have their own pattern as well as their own colour.
      *
-     * @return array{stroke: string, dash: string, width: float, state: string}
+     * The colour is a class, not a hex: LibreNMS sets `class="dark"` on `<html>` and a
+     * presentation attribute written here cannot follow it. The dash and the width are not
+     * theme, so they stay attributes.
+     *
+     * @return array{strokeClass: string, dash: string, width: float, state: string}
      */
     public static function edgeStyle(string $kind, ?bool $up): array
     {
@@ -260,14 +264,14 @@ final class EagleLayout
         };
 
         return match ($state) {
-            'overlay' => ['stroke' => '#337ab7', 'dash' => '3 3', 'width' => 1.0, 'state' => $state],
-            'fault' => ['stroke' => '#d9534f', 'dash' => '6 2 2 2', 'width' => 1.5, 'state' => $state],
-            'esi' => ['stroke' => '#f0ad4e', 'dash' => '', 'width' => 2.0, 'state' => $state],
-            'attached' => ['stroke' => '#999999', 'dash' => '2 3', 'width' => 1.0, 'state' => $state],
-            'down' => ['stroke' => '#d9534f', 'dash' => '5 3', 'width' => 3.0, 'state' => $state],
-            'unknown' => ['stroke' => '#999999', 'dash' => '1 4', 'width' => 2.0, 'state' => $state],
+            'overlay' => ['strokeClass' => 'eg-stroke-overlay', 'dash' => '3 3', 'width' => 1.0, 'state' => $state],
+            'fault' => ['strokeClass' => 'eg-stroke-fault', 'dash' => '6 2 2 2', 'width' => 1.5, 'state' => $state],
+            'esi' => ['strokeClass' => 'eg-stroke-esi', 'dash' => '', 'width' => 2.0, 'state' => $state],
+            'attached' => ['strokeClass' => 'eg-stroke-attached', 'dash' => '2 3', 'width' => 1.0, 'state' => $state],
+            'down' => ['strokeClass' => 'eg-stroke-down', 'dash' => '5 3', 'width' => 3.0, 'state' => $state],
+            'unknown' => ['strokeClass' => 'eg-stroke-unknown', 'dash' => '1 4', 'width' => 2.0, 'state' => $state],
             default => [
-                'stroke' => $kind === 'wan' ? '#8e6bbf' : ($kind === 'cross-site' ? '#3d5a80' : '#5cb85c'),
+                'strokeClass' => $kind === 'wan' ? 'eg-stroke-wan' : ($kind === 'cross-site' ? 'eg-stroke-cross' : 'eg-stroke-up'),
                 'dash' => $kind === 'wan' ? '7 3' : '',
                 'width' => $kind === 'trunk' ? 4.0 : 3.0,
                 'state' => $state,
@@ -576,7 +580,7 @@ final class EagleLayout
                         'x' => $placed[$ip]['x'] + 16 * $i + 8, 'y' => $bandY + 8, 'w' => 6, 'h' => 6,
                         'role' => 'outside', 'tier' => FabricShape::TIER_LEAF, 'device_id' => null, 'border' => false,
                         'status' => null, 'collected' => false, 'version' => null, 'chips' => [], 'site' => $group['key'],
-                        'fill' => '#f7f7f7', 'stroke' => '#8e6bbf', 'dashed' => true, 'highlight' => false,
+                        'fillClass' => 'eg-outside', 'strokeClass' => 'eg-stroke-wan', 'dashed' => true, 'highlight' => false,
                         'title' => sprintf('%s → %s: a session out of the fabric', (string) $stub['a'], (string) ($stub['b_label'] ?? 'unknown')),
                     ];
                 }
@@ -609,12 +613,13 @@ final class EagleLayout
         $down = ($node['status'] ?? null) === false;
 
         // stroke priority: not monitored, then down, then collected-but-empty (plan §10.4 is
-        // the record of why those three are different states and not one)
-        $stroke = match (true) {
-            ! $monitored => '#999999',
-            $down => '#d9534f',
-            ! $collected => '#f0ad4e',
-            default => '#5a5a5a',
+        // the record of why those three are different states and not one). A class, so the
+        // dark theme can lighten all four without a second hex in here
+        $strokeClass = match (true) {
+            ! $monitored => 'eg-card-unmonitored',
+            $down => 'eg-card-down',
+            ! $collected => 'eg-card-stale',
+            default => 'eg-card-ok',
         };
 
         $chips = [];
@@ -648,13 +653,16 @@ final class EagleLayout
             'y' => $y,
             'w' => self::CARD_W,
             'h' => self::CARD_H,
-            'fill' => match ($node['role'] ?? '') {
-                FabricGraph::ROLE_GATEWAY => '#dbe9f6',
-                FabricGraph::ROLE_SPINE => '#e3f1fa',
-                FabricGraph::ROLE_LEAF => '#e6f4e6',
-                default => '#f2f2f2',
+            // the fill follows the **stored** role, not the tier, so the picture and the
+            // Members tab agree: an ERB leaf stored as gateway keeps the gateway blue and
+            // still sits in its site
+            'fillClass' => match ($node['role'] ?? '') {
+                FabricGraph::ROLE_GATEWAY => 'eg-gateway',
+                FabricGraph::ROLE_SPINE => 'eg-spine',
+                FabricGraph::ROLE_LEAF => 'eg-leaf',
+                default => 'eg-unknown',
             },
-            'stroke' => $stroke,
+            'strokeClass' => $strokeClass,
             'dashed' => ! $monitored,
             'chips' => array_slice($chips, 0, 2),
             'chips_all' => $chips,
@@ -706,7 +714,7 @@ final class EagleLayout
             'tier' => FabricShape::TIER_SPINE, 'device_id' => null, 'border' => false, 'status' => null,
             'collected' => false, 'version' => null, 'site' => null,
             'x' => $x, 'y' => $y, 'w' => self::CARD_W, 'h' => self::CARD_H,
-            'fill' => '#f7f7f7', 'stroke' => '#999999', 'dashed' => true,
+            'fillClass' => 'eg-far', 'strokeClass' => 'eg-card-unmonitored', 'dashed' => true,
             'chips' => [['text' => 'unmonitored', 'class' => 'muted']], 'chips_all' => [],
             'highlight' => isset($hlNodes[$id]),
             'title' => $address . ' — several members peer with this address and it is not a monitored device',
@@ -723,7 +731,7 @@ final class EagleLayout
             'tier' => FabricShape::TIER_LEAF, 'device_id' => $deviceId, 'border' => false, 'status' => null,
             'collected' => false, 'version' => null, 'site' => $site, 'anchor' => $anchor,
             'x' => $x, 'y' => $y, 'w' => 40, 'h' => 16,
-            'fill' => '#ffffff', 'stroke' => '#999999', 'dashed' => false,
+            'fillClass' => 'eg-attached', 'strokeClass' => 'eg-card-unmonitored', 'dashed' => false,
             'chips' => [], 'chips_all' => [], 'highlight' => false,
             'title' => $label . ' — attached to this ESI-LAG',
         ];
@@ -1111,8 +1119,8 @@ final class EagleLayout
                 'status' => $state === 'down' ? false : null, 'collected' => true, 'version' => null, 'site' => $group['key'],
                 'x' => $group['x'] + self::SITE_PAD, 'y' => $group['y'] + self::SITE_HEADER + self::SITE_PAD,
                 'w' => self::CARD_W, 'h' => self::CARD_H,
-                'fill' => '#f2f2f2',
-                'stroke' => match ($state) { 'down' => '#d9534f', 'warning' => '#f0ad4e', default => '#5a5a5a' },
+                'fillClass' => 'eg-unknown',
+                'strokeClass' => match ($state) { 'down' => 'eg-card-down', 'warning' => 'eg-card-stale', default => 'eg-card-ok' },
                 'dashed' => false,
                 'chips' => [], 'chips_all' => [],
                 'summary' => $labels,

@@ -145,10 +145,10 @@ it('draws every overlay edge it is given and never reclassifies one', function (
         ->and(array_column($drawn, 'kind'))->toBe(['overlay', 'asymmetric', 'missing'])
         // a fault reads as a fault without colour, too
         ->and($drawn[1]['dash'])->not->toBe($drawn[0]['dash'])
-        ->and($drawn[1]['stroke'])->toBe('#d9534f');
+        ->and($drawn[1]['strokeClass'])->toBe('eg-stroke-fault');
 });
 
-it('gives every edge state its own dash pattern, not only its own colour', function () {
+it('gives every edge state its own dash pattern, not only its own colour class', function () {
     $up = EagleLayout::edgeStyle('underlay', true);
     $down = EagleLayout::edgeStyle('underlay', false);
     $unknown = EagleLayout::edgeStyle('underlay', null);
@@ -157,7 +157,10 @@ it('gives every edge state its own dash pattern, not only its own colour', funct
 
     expect([$up['dash'], $down['dash'], $unknown['dash'], $wan['dash']])->toBe(['', '5 3', '1 4', '7 3'])
         ->and(count(array_unique([$up['dash'], $down['dash'], $unknown['dash'], $wan['dash']])))->toBe(4)
-        ->and($cross['stroke'])->toBe('#3d5a80')     // cross-site is solid and not the WAN dash
+        // the colour is a class, so the dark theme can reach it; the dash is not theme
+        ->and($cross['strokeClass'])->toBe('eg-stroke-cross')
+        ->and($up['strokeClass'])->toBe('eg-stroke-up')
+        ->and($wan['strokeClass'])->toBe('eg-stroke-wan')
         ->and($cross['dash'])->toBe('')
         ->and($up['state'])->toBe('up')
         ->and($unknown['state'])->toBe('unknown');   // an `ip` edge is unknown, never down
@@ -249,7 +252,7 @@ it('collapses a site into one summary card that carries the worst state and the 
 
     expect($groupA['collapsed'])->toBeTrue()
         ->and($groupA['state'])->toBe('down')                 // the hidden session is down
-        ->and($out['nodes']['site:A']['stroke'])->toBe('#d9534f')
+        ->and($out['nodes']['site:A']['strokeClass'])->toBe('eg-card-down')
         ->and($groupA['summary'])->toBe(['2 members', '1 degraded ESI', '1 outside', '1 attached'])
         ->and($out['nodes'])->not->toHaveKey('10.0.0.11')     // no card at a coordinate that is gone
         ->and($out['nodes'])->not->toHaveKey('attached:k1')   // nothing hangs off a collapsed site
@@ -297,10 +300,12 @@ it('strokes a card by the worst of not-monitored, down and not-collected', funct
     ];
     $out = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], [], []);
 
-    expect($out['nodes']['10.0.0.11']['stroke'])->toBe('#999999')
+    expect($out['nodes']['10.0.0.11']['strokeClass'])->toBe('eg-card-unmonitored')
         ->and($out['nodes']['10.0.0.11']['dashed'])->toBeTrue()
-        ->and($out['nodes']['10.0.0.12']['stroke'])->toBe('#d9534f')
-        ->and($out['nodes']['10.0.0.13']['stroke'])->toBe('#f0ad4e')
+        ->and($out['nodes']['10.0.0.12']['strokeClass'])->toBe('eg-card-down')
+        ->and($out['nodes']['10.0.0.13']['strokeClass'])->toBe('eg-card-stale')
+        // the fill still follows the stored role, not the tier
+        ->and($out['nodes']['10.0.0.12']['fillClass'])->toBe('eg-leaf')
         ->and($out['nodes']['10.0.0.13']['chips'][0]['text'])->toBe('no EVPN data')
         ->and($out['nodes']['10.0.0.14']['chips'][0]['text'])->toBe('18.4R3-S8.7')
         ->and($out['nodes']['10.0.0.14']['title'])->toContain('18.4R3-S8.7');

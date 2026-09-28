@@ -37,8 +37,12 @@
         <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#f0ad4e" stroke-width="2"/></svg> ESI-LAG
     </small></p>
 
+    {{-- Every colour in the picture is a class here, because core sets class="dark" on <html>
+         and a presentation attribute written by PHP cannot follow that. Dashes and widths are
+         not theme and stay attributes. The frame is transparent, so the page surface shows
+         through instead of a white island in a dark theme. --}}
     <style>
-        #eagle-view { overflow: auto; max-height: 72vh; min-height: 420px; border: 1px solid #ddd; border-radius: 4px; background: #fff; }
+        #eagle-view { overflow: auto; max-height: 72vh; min-height: 420px; border: 1px solid #ddd; border-radius: 4px; background: transparent; }
         #eagle-view svg { display: block; max-width: none; height: auto; font-family: inherit; }
         #eagle-view svg text { font-family: inherit; }
         .eg-card { cursor: pointer; }
@@ -47,54 +51,123 @@
         .eg-hl { stroke: #337ab7 !important; stroke-width: 4 !important; }
         .eg-sel rect { stroke: #337ab7 !important; stroke-width: 3 !important; }
         .netconf-eagle .nt-bar { margin-bottom: 6px; }
+
+        .netconf-eagle .eg-gateway { fill: #dbe9f6; }
+        .netconf-eagle .eg-spine { fill: #e3f1fa; }
+        .netconf-eagle .eg-leaf { fill: #e6f4e6; }
+        .netconf-eagle .eg-unknown { fill: #f2f2f2; }
+        .netconf-eagle .eg-far { fill: #f7f7f7; }
+        .netconf-eagle .eg-outside { fill: #f7f7f7; }
+        .netconf-eagle .eg-attached { fill: #ffffff; }
+        .netconf-eagle .eg-site-box { fill: rgba(0,0,0,0.03); stroke: #ccc; }
+        .netconf-eagle .eg-site-down { stroke: #d9534f; }
+        .netconf-eagle .eg-site-warning { stroke: #f0ad4e; }
+        .netconf-eagle .eg-card-ok { stroke: #5a5a5a; }
+        .netconf-eagle .eg-card-down { stroke: #d9534f; }
+        .netconf-eagle .eg-card-stale { stroke: #f0ad4e; }
+        .netconf-eagle .eg-card-unmonitored { stroke: #999999; }
+        .netconf-eagle .eg-text { fill: #222; }
+        .netconf-eagle .eg-muted { fill: #666; }
+        .netconf-eagle .eg-caption { fill: #777; }
+        .netconf-eagle .eg-chip-text { fill: #444; }
+        .netconf-eagle .eg-chip-danger { fill: #f7dcdb; }
+        .netconf-eagle .eg-chip-warning { fill: #fcefdc; }
+        .netconf-eagle .eg-chip-info { fill: #deeefb; }
+        .netconf-eagle .eg-chip-muted { fill: #eeeeee; }
+        .netconf-eagle .eg-down-dot { fill: #d9534f; }
+        .netconf-eagle .eg-outside-dot { fill: #8e6bbf; }
+        .netconf-eagle .eg-stroke-up { stroke: #5cb85c; }
+        .netconf-eagle .eg-stroke-down { stroke: #d9534f; }
+        .netconf-eagle .eg-stroke-unknown { stroke: #999999; }
+        .netconf-eagle .eg-stroke-cross { stroke: #3d5a80; }
+        .netconf-eagle .eg-stroke-wan { stroke: #8e6bbf; }
+        .netconf-eagle .eg-stroke-overlay { stroke: #337ab7; }
+        .netconf-eagle .eg-stroke-fault { stroke: #d9534f; }
+        .netconf-eagle .eg-stroke-esi { stroke: #f0ad4e; }
+        .netconf-eagle .eg-stroke-attached { stroke: #999999; }
+
+        html.dark #eagle-view { border-color: #555; }
+        html.dark .netconf-eagle .eg-gateway { fill: #24384a; }
+        html.dark .netconf-eagle .eg-spine { fill: #1e3344; }
+        html.dark .netconf-eagle .eg-leaf { fill: #1e3324; }
+        html.dark .netconf-eagle .eg-unknown { fill: #2c3036; }
+        html.dark .netconf-eagle .eg-far { fill: #2a2e33; }
+        html.dark .netconf-eagle .eg-outside { fill: #2a2e33; }
+        html.dark .netconf-eagle .eg-attached { fill: #2c3036; }
+        html.dark .netconf-eagle .eg-site-box { fill: rgba(255,255,255,0.04); stroke: #666; }
+        html.dark .netconf-eagle .eg-site-down { stroke: #e87a76; }
+        html.dark .netconf-eagle .eg-site-warning { stroke: #f0c36a; }
+        html.dark .netconf-eagle .eg-card-ok { stroke: #c5c5c5; }
+        html.dark .netconf-eagle .eg-card-down { stroke: #e87a76; }
+        html.dark .netconf-eagle .eg-card-stale { stroke: #f0c36a; }
+        html.dark .netconf-eagle .eg-card-unmonitored { stroke: #aaaaaa; }
+        html.dark .netconf-eagle .eg-text { fill: #e8e8e8; }
+        html.dark .netconf-eagle .eg-muted { fill: #b5b5b5; }
+        html.dark .netconf-eagle .eg-caption { fill: #c8c8c8; }
+        html.dark .netconf-eagle .eg-chip-text { fill: #e8e8e8; }
+        html.dark .netconf-eagle .eg-chip-danger { fill: #4a2a2a; }
+        html.dark .netconf-eagle .eg-chip-warning { fill: #4a3b24; }
+        html.dark .netconf-eagle .eg-chip-info { fill: #23384a; }
+        html.dark .netconf-eagle .eg-chip-muted { fill: #33373d; }
+        html.dark .netconf-eagle .eg-down-dot { fill: #e87a76; }
+        html.dark .netconf-eagle .eg-outside-dot { fill: #b794e0; }
+        html.dark .netconf-eagle .eg-stroke-up { stroke: #7dca7a; }
+        html.dark .netconf-eagle .eg-stroke-down { stroke: #e87a76; }
+        html.dark .netconf-eagle .eg-stroke-unknown { stroke: #aaaaaa; }
+        html.dark .netconf-eagle .eg-stroke-cross { stroke: #8fb4d9; }
+        html.dark .netconf-eagle .eg-stroke-wan { stroke: #b794e0; }
+        html.dark .netconf-eagle .eg-stroke-overlay { stroke: #6aaee0; }
+        html.dark .netconf-eagle .eg-stroke-fault { stroke: #e87a76; }
+        html.dark .netconf-eagle .eg-stroke-esi { stroke: #f0c36a; }
+        html.dark .netconf-eagle .eg-stroke-attached { stroke: #aaaaaa; }
     </style>
 
     <div id="eagle-view" data-fabric="{{ $fabric['id'] }}" data-w="{{ $eg['width'] }}" data-h="{{ $eg['height'] }}">
         <svg id="eagle-svg" width="{{ $eg['width'] }}" height="{{ $eg['height'] }}" viewBox="0 0 {{ $eg['width'] }} {{ $eg['height'] }}" xmlns="http://www.w3.org/2000/svg">
             @foreach ($eg['groups'] as $g)
                 <a href="{{ $toggleSite($g['key']) }}" class="eg-site">
-                    <rect x="{{ $g['x'] }}" y="{{ $g['y'] }}" width="{{ $g['w'] }}" height="{{ $g['h'] }}" rx="6" fill="rgba(0,0,0,0.03)" stroke="{{ $g['state'] === 'down' ? '#d9534f' : ($g['state'] === 'warning' ? '#f0ad4e' : '#ccc') }}" stroke-dasharray="4 3">
+                    <rect class="eg-site-box {{ $g['state'] === 'down' ? 'eg-site-down' : ($g['state'] === 'warning' ? 'eg-site-warning' : '') }}" x="{{ $g['x'] }}" y="{{ $g['y'] }}" width="{{ $g['w'] }}" height="{{ $g['h'] }}" rx="6" stroke-dasharray="4 3">
                         <title>{{ $g['label'] ?? 'no location' }} — {{ count($g['members']) }} member{{ count($g['members']) === 1 ? '' : 's' }}, click to {{ $g['collapsed'] ? 'expand' : 'collapse' }}</title>
                     </rect>
                     {{-- the caption is cut to the box: a location is free text and the ones that
                          exist are long enough to run across the next compound --}}
-                    <text x="{{ $g['x'] + 6 }}" y="{{ $g['y'] + 14 }}" font-size="11" fill="#777">{{ $g['collapsed'] ? '▸' : '▾' }} {{ $g['caption'] }}<title>{{ $g['label'] ?? 'no location' }}</title></text>
+                    <text class="eg-caption" x="{{ $g['x'] + 6 }}" y="{{ $g['y'] + 14 }}" font-size="11">{{ $g['collapsed'] ? '▸' : '▾' }} {{ $g['caption'] }}<title>{{ $g['label'] ?? 'no location' }}</title></text>
                 </a>
             @endforeach
 
             @foreach ($eg['edges'] as $e)
                 <g class="eg-edge" data-focus="{{ $e['id'] }}">
-                    <path d="{{ $e['path'] }}" fill="none" stroke="{{ $e['stroke'] }}" stroke-width="{{ $e['width'] }}" @if ($e['dash'] !== '') stroke-dasharray="{{ $e['dash'] }}" @endif class="{{ $e['highlight'] ? 'eg-hl' : '' }}">
+                    <path d="{{ $e['path'] }}" fill="none" stroke-width="{{ $e['width'] }}" @if ($e['dash'] !== '') stroke-dasharray="{{ $e['dash'] }}" @endif class="{{ $e['strokeClass'] }} {{ $e['highlight'] ? 'eg-hl' : '' }}">
                         <title>{{ $e['title'] }}</title>
                     </path>
                     @if (($e['label'] ?? '') !== '')
-                        <text x="{{ $e['lx'] }}" y="{{ $e['ly'] }}" font-size="9" fill="#666" text-anchor="middle">{{ $e['label'] }}</text>
+                        <text class="eg-muted" x="{{ $e['lx'] }}" y="{{ $e['ly'] }}" font-size="9" text-anchor="middle">{{ $e['label'] }}</text>
                     @endif
                 </g>
             @endforeach
 
             @foreach ($eg['nodes'] as $id => $n)
                 <g class="eg-card" data-focus="{{ $n['kind'] === 'member' ? 'member:' . $n['ip'] : $id }}">
-                    <rect x="{{ $n['x'] }}" y="{{ $n['y'] }}" width="{{ $n['w'] }}" height="{{ $n['h'] }}" rx="5" fill="{{ $n['fill'] }}" stroke="{{ $n['stroke'] }}" stroke-width="{{ $n['highlight'] ? 3 : 1.5 }}" @if ($n['dashed']) stroke-dasharray="4 3" @endif>
+                    <rect class="{{ $n['fillClass'] }} {{ $n['strokeClass'] }}" x="{{ $n['x'] }}" y="{{ $n['y'] }}" width="{{ $n['w'] }}" height="{{ $n['h'] }}" rx="5" stroke-width="{{ $n['highlight'] ? 3 : 1.5 }}" @if ($n['dashed']) stroke-dasharray="4 3" @endif>
                         <title>{{ $n['title'] }}</title>
                     </rect>
                     @if ($n['kind'] === 'attached')
-                        <text x="{{ $n['x'] + 2 }}" y="{{ $n['y'] + 12 }}" font-size="9" fill="#555">{{ \Illuminate\Support\Str::limit($n['name'], 10, '…') }}</text>
+                        <text class="eg-muted" x="{{ $n['x'] + 2 }}" y="{{ $n['y'] + 12 }}" font-size="9">{{ \Illuminate\Support\Str::limit($n['name'], 10, '…') }}</text>
                     @elseif ($n['kind'] === 'outside')
-                        <circle cx="{{ $n['x'] + 3 }}" cy="{{ $n['y'] + 3 }}" r="3" fill="#8e6bbf"/>
+                        <circle class="eg-outside-dot" cx="{{ $n['x'] + 3 }}" cy="{{ $n['y'] + 3 }}" r="3"/>
                     @else
-                        <text x="{{ $n['x'] + $n['w'] / 2 }}" y="{{ $n['y'] + 17 }}" font-size="11" font-weight="bold" text-anchor="middle" fill="#222">{{ \Illuminate\Support\Str::limit($n['name'], 22, '…') }}</text>
-                        <text x="{{ $n['x'] + $n['w'] / 2 }}" y="{{ $n['y'] + 31 }}" font-size="10" text-anchor="middle" fill="#666">{{ $n['ip'] }}@if ($n['border']) · border @endif</text>
+                        <text class="eg-text" x="{{ $n['x'] + $n['w'] / 2 }}" y="{{ $n['y'] + 17 }}" font-size="11" font-weight="bold" text-anchor="middle">{{ \Illuminate\Support\Str::limit($n['name'], 22, '…') }}</text>
+                        <text class="eg-muted" x="{{ $n['x'] + $n['w'] / 2 }}" y="{{ $n['y'] + 31 }}" font-size="10" text-anchor="middle">{{ $n['ip'] }}@if ($n['border']) · border @endif</text>
                         @if (($n['summary'] ?? null) !== null)
-                            <text x="{{ $n['x'] + $n['w'] / 2 }}" y="{{ $n['y'] + 46 }}" font-size="9" text-anchor="middle" fill="#777">{{ implode(' · ', $n['summary']) }}</text>
+                            <text class="eg-caption" x="{{ $n['x'] + $n['w'] / 2 }}" y="{{ $n['y'] + 46 }}" font-size="9" text-anchor="middle">{{ implode(' · ', $n['summary']) }}</text>
                         @else
                             @foreach ($n['chips'] as $i => $chip)
                                 @php($cx = $n['x'] + 6 + $i * 76)
-                                <rect x="{{ $cx }}" y="{{ $n['y'] + 38 }}" width="72" height="14" rx="3" fill="{{ $chip['class'] === 'danger' ? '#f7dcdb' : ($chip['class'] === 'warning' ? '#fcefdc' : ($chip['class'] === 'info' ? '#deeefb' : '#eeeeee')) }}"/>
-                                <text x="{{ $cx + 36 }}" y="{{ $n['y'] + 48 }}" font-size="9" text-anchor="middle" fill="#444">{{ \Illuminate\Support\Str::limit($chip['text'], 13, '…') }}</text>
+                                <rect class="eg-chip-{{ $chip['class'] }}" x="{{ $cx }}" y="{{ $n['y'] + 38 }}" width="72" height="14" rx="3"/>
+                                <text class="eg-chip-text" x="{{ $cx + 36 }}" y="{{ $n['y'] + 48 }}" font-size="9" text-anchor="middle">{{ \Illuminate\Support\Str::limit($chip['text'], 13, '…') }}</text>
                             @endforeach
                         @endif
-                        @if ($n['status'] === false)<circle cx="{{ $n['x'] + $n['w'] - 8 }}" cy="{{ $n['y'] + 8 }}" r="4" fill="#d9534f"/>@endif
+                        @if ($n['status'] === false)<circle class="eg-down-dot" cx="{{ $n['x'] + $n['w'] - 8 }}" cy="{{ $n['y'] + 8 }}" r="4"/>@endif
                     @endif
                 </g>
             @endforeach
