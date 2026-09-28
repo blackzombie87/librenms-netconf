@@ -94,8 +94,12 @@ final class FabricPagesTest extends LibrenmsTestCase
         // ... and the vis map is not: the eagle response does not embed 91 edges of JSON
         $this->assertStringNotContainsString('js/vis-network.min.js', $page);
         $this->assertStringNotContainsString('id="nt-net"', $page);
-        // never max-width: 100%, which is what scales an 1,120 px picture down to unreadable
+        // never max-width: 100%: a stylesheet rule would shrink the desktop picture too. The
+        // narrow-frame fit is a clientWidth check in the script, with 1:1 as the way back
         $this->assertStringNotContainsString('max-width: 100%', $page);
+        $this->assertStringContainsString('var NARROW = 720;', $page);
+        $this->assertStringContainsString('wrap.clientWidth < NARROW', $page);
+        $this->assertStringContainsString('id="eagle-actual"', $page);
         // and no graph image is requested before one is asked for
         $this->assertStringNotContainsString('class="graph-image"', $page);
         // the eagle camera stores a viewBox and nothing else

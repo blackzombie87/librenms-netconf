@@ -21,6 +21,7 @@
             <button type="button" class="btn btn-default" id="eagle-out" title="zoom out">&minus;</button>
             <button type="button" class="btn btn-default" id="eagle-in" title="zoom in">+</button>
             <button type="button" class="btn btn-default" id="eagle-fit" title="fit the whole picture">fit</button>
+            <button type="button" class="btn btn-default" id="eagle-actual" title="draw at layout size and scroll">1:1</button>
             <a class="btn btn-default" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}" id="eagle-reset" title="forget the stored camera and every view flag">reset</a>
         </span>
     </div>
@@ -114,21 +115,48 @@
         function apply() { svg.setAttribute('viewBox', box.x + ' ' + box.y + ' ' + box.w + ' ' + box.h); }
         function store() { try { localStorage.setItem(KEY, JSON.stringify({ viewBox: box.x + ' ' + box.y + ' ' + box.w + ' ' + box.h })); } catch (e) {} }
 
-        var stored = null;
-        try { stored = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
-        if (stored && typeof stored.viewBox === 'string') {
-            var p = stored.viewBox.split(' ').map(Number);
-            if (p.length === 4 && p.every(function (n) { return isFinite(n); }) && p[2] > 0 && p[3] > 0) {
-                box = { x: p[0], y: p[1], w: p[2], h: p[3] };
-                apply();
-            }
-        } else if (W <= wrap.clientWidth && H <= wrap.clientHeight) {
+        // The CSS size of the SVG, which is not the camera: the viewBox is the camera and the
+        // three functions below only decide how many screen pixels one user unit gets.
+        var NARROW = 720;
+        function narrow() { return wrap.clientWidth < NARROW; }
+        function sizeActual() { svg.setAttribute('width', W); svg.setAttribute('height', H); }
+        function sizeFitWidth() {
+            var w = Math.max(1, wrap.clientWidth);
+            svg.setAttribute('width', w);
+            svg.setAttribute('height', Math.max(1, Math.round(H * w / W)));
+        }
+        function sizeGrow() {
             // smaller than the container: grow by CSS size, never by shrinking the viewBox --
             // that is what turns a two-node lab fabric into a postage stamp
             var scale = Math.min(wrap.clientWidth / W, wrap.clientHeight / H);
             svg.setAttribute('width', Math.floor(W * scale));
             svg.setAttribute('height', Math.floor(H * scale));
         }
+        function autoSize() {
+            // Under 720 px of frame the whole fabric goes in the frame even though the 11 px
+            // labels then render smaller. A phone showing the bottom-left corner of an 1,112 px
+            // drawing is not a picture of a fabric; `1:1` is how to get those pixels back.
+            // At 720 px and above the rule is the old one: never shrink on first paint.
+            if (narrow()) {
+                sizeFitWidth();
+            } else if (W <= wrap.clientWidth && H <= wrap.clientHeight) {
+                sizeGrow();
+            }
+        }
+
+        var stored = null;
+        try { stored = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+        var restored = false;
+        if (stored && typeof stored.viewBox === 'string') {
+            var p = stored.viewBox.split(' ').map(Number);
+            if (p.length === 4 && p.every(function (n) { return isFinite(n); }) && p[2] > 0 && p[3] > 0) {
+                // the operator's own camera, at every width
+                box = { x: p[0], y: p[1], w: p[2], h: p[3] };
+                apply();
+                restored = true;
+            }
+        }
+        if (!restored) { autoSize(); }
 
         function zoom(factor, cx, cy) {
             var nw = box.w * factor, nh = box.h * factor;
@@ -139,7 +167,8 @@
         }
         document.getElementById('eagle-in').addEventListener('click', function () { zoom(1 / 1.2, 0.5, 0.5); });
         document.getElementById('eagle-out').addEventListener('click', function () { zoom(1.2, 0.5, 0.5); });
-        document.getElementById('eagle-fit').addEventListener('click', function () { box = { x: 0, y: 0, w: W, h: H }; apply(); store(); });
+        document.getElementById('eagle-fit').addEventListener('click', function () { box = { x: 0, y: 0, w: W, h: H }; apply(); autoSize(); store(); });
+        document.getElementById('eagle-actual').addEventListener('click', function () { box = { x: 0, y: 0, w: W, h: H }; apply(); sizeActual(); store(); });
         document.getElementById('eagle-reset').addEventListener('click', function () { try { localStorage.removeItem(KEY); } catch (e) {} });
         // the two keys the vis map left behind: it is gone, and nothing reads them again
         try { localStorage.removeItem('netconf-topology-' + wrap.dataset.fabric); localStorage.removeItem('netconf-topology-' + wrap.dataset.fabric + '-view'); } catch (e) {}
