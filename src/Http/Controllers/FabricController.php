@@ -224,7 +224,10 @@ class FabricController extends Controller
         $live = $request->session()->get('netconf_trace');
 
         $result = null;
-        if ($from !== '' && $to !== '') {
+        // a live POST redirects back here with its own pair on the query string, so the boxes
+        // keep it — but the stored tables have nothing to add to a walk that just asked the
+        // devices themselves, and the blade would not show it. Do not pay for that query.
+        if ($from !== '' && $to !== '' && ! is_array($live)) {
             $result = (new TraceRunner($fabricId, $nodes))->run($from, $to, is_numeric($vni) ? (int) $vni : null);
         }
 
@@ -255,8 +258,15 @@ class FabricController extends Controller
         $result = $runner->run(trim($data['from']), trim($data['to']), $data['vni'] ?? null, live: true, walker: $walker);
         $result['log'] = $walker->log;
 
-        return redirect()->route('netconf.fabric', [$fabric, 'trace'])
-            ->withInput($data)
+        // the pair goes back on the query string, not into flashed input: the boxes are filled
+        // from there, the result is shareable and reloadable as a graph trace, and the next
+        // click on "Trace live" has the pair that was actually walked in front of it
+        return redirect()->route('netconf.fabric', array_filter([
+            $fabric, 'trace',
+            'from' => trim($data['from']),
+            'to' => trim($data['to']),
+            'vni' => $data['vni'] ?? null,
+        ], fn ($v) => $v !== null && $v !== ''))
             ->with('netconf_trace', $result);
     }
 

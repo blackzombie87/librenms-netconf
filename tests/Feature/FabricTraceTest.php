@@ -54,8 +54,67 @@ final class FabricTraceTest extends LibrenmsTestCase
         // an admin gets the redirect; the walk itself has no device to reach in a test
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
         $this->post("/plugin/netconf/fabric/$fabric/trace", $payload)
-            ->assertRedirect("/plugin/netconf/fabric/$fabric/trace");
+            ->assertRedirectContains("/plugin/netconf/fabric/$fabric/trace");
         $this->post("/plugin/netconf/fabric/$fabric/trace", ['from' => ''])->assertSessionHasErrors('from');
+    }
+
+    /**
+     * The live button submits a hidden form, so the pair it carries has to be the one in the
+     * boxes on the way out (the blade copies it across) and the one that was walked on the way
+     * back. Before this the hidden fields held the *previous* request's query string: a first
+     * click posted an empty pair, and a later one posted the pair before the one just typed.
+     */
+    public function testALiveTraceComesBackWithThePairItWalkedInTheBoxes(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        $fabric = $this->threeLeafFabric();
+        $payload = ['from' => '02:00:00:00:11:40', 'to' => '02:00:00:00:11:41', 'vni' => '10010'];
+
+        $location = (string) $this->post("/plugin/netconf/fabric/$fabric/trace", $payload)->headers->get('Location');
+        parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+        $this->assertSame(['from' => '02:00:00:00:11:40', 'to' => '02:00:00:00:11:41', 'vni' => '10010'], $query);
+
+        $page = $this->followingRedirects()
+            ->post("/plugin/netconf/fabric/$fabric/trace", $payload)->assertOk()->getContent();
+
+        // the visible boxes and the hidden POST form both start out on the pair that was
+        // walked, so the next click on "Trace live" repeats that walk and not an empty one
+        $this->assertStringContainsString('id="netconf-trace-from" class="form-control" placeholder="source MAC or IP" value="02:00:00:00:11:40"', $page);
+        $this->assertStringContainsString('<input type="hidden" name="from" value="02:00:00:00:11:40">', $page);
+        $this->assertStringContainsString('<input type="hidden" name="to" value="02:00:00:00:11:41">', $page);
+        $this->assertStringContainsString('<input type="hidden" name="vni" value="10010">', $page);
+    }
+
+    /**
+     * The redirect puts the pair back on the query string, which is also what a graph trace
+     * reads — so the tab must not also run the stored-table trace nobody asked for and the
+     * blade does not show while a live result is in the session.
+     */
+    public function testTheTabAfterALiveWalkDoesNotAlsoRunTheGraphTrace(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        $fabric = $this->threeLeafFabric();
+        $url = "/plugin/netconf/fabric/$fabric/trace?from=02:00:00:00:11:40&to=02:00:00:00:11:41";
+        $sources = ['consulted' => [], 'candidates' => [], 'notes' => []];
+        $live = ['ok' => false, 'mode' => 'live', 'reason' => 'no session to any member', 'from' => 'a', 'to' => 'b', 'a_sources' => $sources, 'b_sources' => $sources];
+        $macTable = TableSchema::tableName('mac');
+        // the endpoint resolution is the only thing on this tab that reads the MAC database,
+        // so counting those is a stabler witness than a total query count
+        $lookups = fn () => count(array_filter(DB::getQueryLog(), fn (array $q) => str_contains((string) $q['query'], $macTable)));
+
+        DB::enableQueryLog();
+        $this->get($url)->assertOk();
+        $graph = $lookups();
+
+        DB::flushQueryLog();
+        $page = $this->withSession(['netconf_trace' => $live])->get($url)->assertOk()->getContent();
+        $afterLive = $lookups();
+        DB::disableQueryLog();
+
+        $this->assertGreaterThan(0, $graph);
+        $this->assertSame(0, $afterLive, 'the live result is what the page shows, so the graph trace is dead work');
+        $this->assertStringContainsString('no session to any member', $page);
+        $this->assertStringNotContainsString('(ge-0/0/38)[leaf-1]', $page);
     }
 
     public function testTheCommandPrintsTheSameLineAsThePage(): void

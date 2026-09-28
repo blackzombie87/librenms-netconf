@@ -184,16 +184,6 @@ final class FabricNodes
     }
 
     /**
-     * deviceNodes() of the collected devices only.
-     *
-     * @return array<int, list<string>>
-     */
-    public function collectedNodes(): array
-    {
-        return array_intersect_key($this->deviceNodes, array_flip($this->collectedIds()));
-    }
-
-    /**
      * @return list<int>
      */
     public function deviceIds(): array

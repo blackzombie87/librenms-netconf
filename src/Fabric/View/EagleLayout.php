@@ -500,7 +500,10 @@ final class EagleLayout
             }
             foreach ($esiPairs as $pair) {
                 // a bracket between two members of this site is drawn under the cards, so the
-                // box has to own that strip or the mark lands outside its own compound
+                // box has to own that strip or the mark lands outside its own compound. This is
+                // the superset: the wrap can still put a same-site pair on two rows, which draws
+                // a segment and leaves the band unused. edges() must never draw a bracket for a
+                // pair this test would not have reserved for.
                 $hasBracket = $hasBracket || (isset($inSite[$pair['a']], $inSite[$pair['b']]));
             }
         }
@@ -842,7 +845,14 @@ final class EagleLayout
             $pb = $anchorOf[$p['b']];
             $na = $placed[$p['a']] ?? null;
             $nb = $placed[$p['b']] ?? null;
-            $bracket = ! $pa['collapsed'] && ! $pb['collapsed'] && $na !== null && $nb !== null
+            // `row` and `col` restart in every compound, so "next to each other" only means that
+            // once both cards are known to sit in the same one. Without the site test a pair from
+            // one site's right-hand card to the next site's left-hand card compares row 0 = row 0
+            // and cols 1 and 0, draws a bracket across the gap between the two boxes, and hangs it
+            // below both — neither reserved a strip, because siteBox() asks for the same site.
+            // This predicate has to stay a subset of the one that reserves ESI_BAND there.
+            $sameSite = isset($siteOf[$p['a']], $siteOf[$p['b']]) && $siteOf[$p['a']] === $siteOf[$p['b']];
+            $bracket = $sameSite && ! $pa['collapsed'] && ! $pb['collapsed'] && $na !== null && $nb !== null
                 && ($na['row'] ?? -1) === ($nb['row'] ?? -2) && abs((int) ($na['col'] ?? 0) - (int) ($nb['col'] ?? 0)) === 1;
             $style = self::edgeStyle('esi', null);
             $id = 'edge:esi:' . $p['id'];

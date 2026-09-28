@@ -358,6 +358,69 @@ it('reserves the strip an ESI bracket is drawn in, so the mark stays inside its 
         )['groups'][0]['bracket'])->toBeFalse();
 });
 
+it('draws a segment, not a bracket, for an ESI pair that crosses from one site to the next', function () {
+    // two sites of two members each — the production shape. Both put their members at local
+    // row 0, columns 0 and 1, so a pair from A's right-hand card to B's left-hand card passes
+    // a row/column adjacency test that does not also ask whether the two share a site.
+    $nodes = [
+        eagleNode('10.0.0.11', 'leaf', ['site' => 'A']), eagleNode('10.0.0.12', 'leaf', ['site' => 'A']),
+        eagleNode('10.0.0.13', 'leaf', ['site' => 'B']), eagleNode('10.0.0.14', 'leaf', ['site' => 'B']),
+    ];
+    $pairs = [['a' => '10.0.0.12', 'b' => '10.0.0.13', 'esis' => 1, 'degraded' => 0, 'id' => 'split']];
+
+    $bare = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], [], []);
+    $out = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], $pairs, []);
+    $edge = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'esi'))[0];
+    $boxes = fn (array $o) => array_column($o['groups'], 'h', 'key');
+
+    expect($edge['shape'])->toBe('segment')
+        // the path is the straight line between the two card bottoms, not the four-point bracket
+        ->and($edge['path'])->toMatch('/^M-?\d+ -?\d+ L-?\d+ -?\d+$/')
+        // and no box grew, on either side, which is the other half of the 1.4.1 claim
+        ->and($boxes($out))->toBe($boxes($bare))
+        ->and(array_column($out['groups'], 'bracket'))->toBe([false, false]);
+});
+
+it('never draws a bracket a compound has not reserved its band for', function () {
+    // the invariant the two predicates have to keep: every drawn bracket has both ends in one
+    // site, and that site reserved ESI_BAND for it. Same-site pairs, a split pair and a pair
+    // the wrap separates onto two rows, all in one picture.
+    $nodes = productionNodes();
+    $pairs = [
+        ['a' => '10.0.0.11', 'b' => '10.0.0.12', 'esis' => 2, 'degraded' => 0, 'id' => 'ber1-a'],
+        ['a' => '10.0.0.13', 'b' => '10.0.0.14', 'esis' => 2, 'degraded' => 1, 'id' => 'ber1-b'],
+        ['a' => '10.0.0.15', 'b' => '10.0.0.16', 'esis' => 1, 'degraded' => 0, 'id' => 'ber2'],
+        ['a' => '10.0.0.16', 'b' => '10.0.0.17', 'esis' => 1, 'degraded' => 0, 'id' => 'ber2-ber4'],
+        ['a' => '10.0.0.22', 'b' => '10.0.0.11', 'esis' => 1, 'degraded' => 0, 'id' => 'rlg1-ber1'],
+    ];
+    $out = EagleLayout::place(eagleShape($nodes, FabricShape::UNDERLAY_LEAF_MESH, FabricShape::ROUTING_CRB), $nodes, [], [], [], $pairs, []);
+
+    $siteOf = [];
+    foreach ($out['groups'] as $g) {
+        foreach ($g['members'] as $ip) {
+            $siteOf[$ip] = $g;
+        }
+    }
+    $brackets = array_values(array_filter($out['edges'], fn ($e) => ($e['shape'] ?? '') === 'bracket'));
+    $esis = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'esi'));
+
+    expect($esis)->toHaveCount(5);
+    foreach ($esis as $e) {
+        $sameSite = ($siteOf[$e['a']]['key'] ?? 'a') === ($siteOf[$e['b']]['key'] ?? 'b');
+        expect($sameSite || $e['shape'] === 'segment')->toBeTrue();
+    }
+    foreach ($brackets as $e) {
+        $site = $siteOf[$e['a']] ?? null;
+        expect($site)->not->toBeNull()
+            ->and($site['key'])->toBe($siteOf[$e['b']]['key'])
+            ->and($site['bracket'])->toBeTrue()
+            // and the mark it reserved that band for stays inside the box
+            ->and($e['ly'] + 3)->toBeLessThanOrEqual($site['y'] + $site['h']);
+    }
+    // the two cross-site pairs are drawn, and drawn as segments
+    expect(count($brackets))->toBe(3);
+});
+
 it('keeps a single-member compound and a null-location compound deliberate rather than broken', function () {
     // plan §11 E-F8: the two MX204s carry verbose facility strings, so each sits alone
     $nodes = [

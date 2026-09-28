@@ -218,7 +218,8 @@ class IssueStore
     }
 
     /**
-     * Open issues of a device by severity (the "EVPN fabric issues" sensor counts all but info).
+     * Open issues of a device by severity. IssueSensor::DESCRIPTION is the sensor built from
+     * this, and since 1.3.0 it carries the `critical` count alone.
      *
      * @return array{critical: int, warning: int, info: int}
      */

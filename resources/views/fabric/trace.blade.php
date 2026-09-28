@@ -1,22 +1,39 @@
 {{-- Tracer (plan §12): source and destination to the full path through the fabric, with the
      interfaces on every hop. Graph mode reads stored tables only; live mode is an admin POST
      because it opens an SSH session to every device on the way. --}}
-<form method="get" class="form-inline" style="margin-bottom: 10px;">
-    <input type="text" name="from" class="form-control" placeholder="source MAC or IP" value="{{ $trace_from }}" style="width: 220px;" autofocus>
-    <input type="text" name="to" class="form-control" placeholder="destination MAC or IP" value="{{ $trace_to }}" style="width: 220px;">
-    <input type="text" name="vni" class="form-control" placeholder="VNI (optional)" value="{{ $trace_vni }}" style="width: 130px;">
+<form method="get" class="form-inline" style="margin-bottom: 10px;" id="netconf-trace-graph">
+    <input type="text" name="from" id="netconf-trace-from" class="form-control" placeholder="source MAC or IP" value="{{ $trace_from }}" style="width: 220px;" autofocus>
+    <input type="text" name="to" id="netconf-trace-to" class="form-control" placeholder="destination MAC or IP" value="{{ $trace_to }}" style="width: 220px;">
+    <input type="text" name="vni" id="netconf-trace-vni" class="form-control" placeholder="VNI (optional)" value="{{ $trace_vni }}" style="width: 130px;">
     <button type="submit" class="btn btn-primary">Trace</button>
     @if ($can_admin)
         <button type="submit" class="btn btn-default" form="netconf-trace-live" title="ask every device on the way what its own forwarding table says">Trace live</button>
     @endif
 </form>
 @if ($can_admin)
+    {{-- The live button submits this form, not the one the boxes belong to, so the pair has to
+         be copied across on the way out; without that it posts whatever the *last* request had
+         on its query string. The rendered values are the no-JS fallback and the value the
+         redirect brings back, so the boxes and this form start out agreeing. --}}
     <form method="post" id="netconf-trace-live" action="{{ route('netconf.fabric.trace', $fabric['id']) }}" class="tw:hidden">
         @csrf
         <input type="hidden" name="from" value="{{ $trace_from }}">
         <input type="hidden" name="to" value="{{ $trace_to }}">
         <input type="hidden" name="vni" value="{{ $trace_vni }}">
     </form>
+    <script type="text/javascript">
+    (function () {
+        var live = document.getElementById('netconf-trace-live');
+        if (! live) { return; }
+        live.addEventListener('submit', function () {
+            ['from', 'to', 'vni'].forEach(function (name) {
+                var box = document.getElementById('netconf-trace-' + name);
+                var hidden = live.querySelector('input[name="' + name + '"]');
+                if (box && hidden) { hidden.value = box.value; }
+            });
+        });
+    })();
+    </script>
 @endif
 
 <p class="text-muted"><small>
