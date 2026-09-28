@@ -79,9 +79,9 @@ final class TraceContext
             }
         }
 
-        // the eagle rows, because a hop needs the link_key for a highlight and the two port
-        // ids for its traffic graph; the layout rows carry neither
-        $input = FabricTopologyInput::load($fabricId, $nodes, eagle: true);
+        // a hop needs the link_key for a highlight and the two port ids for its traffic graph,
+        // and every underlay row carries both
+        $input = FabricTopologyInput::load($fabricId, $nodes);
 
         return [
             'names' => $names,

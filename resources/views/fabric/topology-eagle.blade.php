@@ -4,28 +4,24 @@
 @php($collapsed = $view['collapse'])
 {{-- toolbar links keep every other parameter and are built with the query builder, so a
      location that itself contains a comma stays one value (`collapse[]` is never split) --}}
-@php($toggleSite = fn (string $key) => request()->fullUrlWithQuery(['topo' => 'eagle', 'focus' => null, 'collapse' => array_values(in_array($key, $collapsed, true) ? array_diff($collapsed, [$key]) : [...$collapsed, $key])]))
+@php($toggleSite = fn (string $key) => request()->fullUrlWithQuery(['focus' => null, 'collapse' => array_values(in_array($key, $collapsed, true) ? array_diff($collapsed, [$key]) : [...$collapsed, $key])]))
 <div class="netconf-eagle">
     <div class="nt-bar">
-        <span class="btn-group btn-group-xs" role="group">
-            <a class="btn btn-default active" href="{{ request()->fullUrlWithQuery(['topo' => null]) }}">eagle view</a>
-            <a class="btn btn-default" href="{{ request()->fullUrlWithQuery(['topo' => 'interactive', 'collapse' => null, 'outside' => null, 'attached' => null, 'focus' => null]) }}">interactive map</a>
-        </span>
-        <span class="text-muted" style="margin-left: 10px;">
+        <span class="text-muted">
             {{ $eg['counts']['sites'] }} site{{ $eg['counts']['sites'] === 1 ? '' : 's' }}@if ($eg['counts']['collapsed'] > 0), {{ $eg['counts']['collapsed'] }} collapsed @endif
         </span>
         <span class="btn-group btn-group-xs" style="margin-left: 10px;" role="group">
-            <a class="btn btn-default" href="{{ request()->fullUrlWithQuery(['topo' => 'eagle', 'focus' => null, 'collapse' => count($collapsed) === count($eg['groups']) ? [] : array_column($eg['groups'], 'key')]) }}">{{ count($collapsed) === count($eg['groups']) && $eg['groups'] !== [] ? 'expand all sites' : 'collapse all sites' }}</a>
+            <a class="btn btn-default" href="{{ request()->fullUrlWithQuery(['focus' => null, 'collapse' => count($collapsed) === count($eg['groups']) ? [] : array_column($eg['groups'], 'key')]) }}">{{ count($collapsed) === count($eg['groups']) && $eg['groups'] !== [] ? 'expand all sites' : 'collapse all sites' }}</a>
             @if ($eg['counts']['outside'] > 0)
-                <a class="btn btn-default {{ $view['outside'] ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['topo' => 'eagle', 'focus' => null, 'outside' => $view['outside'] ? null : 1]) }}">sessions out of the fabric ({{ $eg['counts']['outside'] }})</a>
+                <a class="btn btn-default {{ $view['outside'] ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['focus' => null, 'outside' => $view['outside'] ? null : 1]) }}">sessions out of the fabric ({{ $eg['counts']['outside'] }})</a>
             @endif
-            <a class="btn btn-default {{ $view['attached'] !== null ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['topo' => 'eagle', 'focus' => null, 'attached' => $view['attached'] !== null ? null : 1]) }}">attached devices {{ $view['attached'] === null ? '' : '(' . count($view['attached']) . ')' }}</a>
+            <a class="btn btn-default {{ $view['attached'] !== null ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['focus' => null, 'attached' => $view['attached'] !== null ? null : 1]) }}">attached devices {{ $view['attached'] === null ? '' : '(' . count($view['attached']) . ')' }}</a>
         </span>
         <span class="pull-right btn-group btn-group-xs" role="group">
             <button type="button" class="btn btn-default" id="eagle-out" title="zoom out">&minus;</button>
             <button type="button" class="btn btn-default" id="eagle-in" title="zoom in">+</button>
             <button type="button" class="btn btn-default" id="eagle-fit" title="fit the whole picture">fit</button>
-            <a class="btn btn-default" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}?topo=eagle" id="eagle-reset" title="forget the stored camera and every view flag">reset</a>
+            <a class="btn btn-default" href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}" id="eagle-reset" title="forget the stored camera and every view flag">reset</a>
         </span>
     </div>
 
@@ -145,6 +141,8 @@
         document.getElementById('eagle-out').addEventListener('click', function () { zoom(1.2, 0.5, 0.5); });
         document.getElementById('eagle-fit').addEventListener('click', function () { box = { x: 0, y: 0, w: W, h: H }; apply(); store(); });
         document.getElementById('eagle-reset').addEventListener('click', function () { try { localStorage.removeItem(KEY); } catch (e) {} });
+        // the two keys the vis map left behind: it is gone, and nothing reads them again
+        try { localStorage.removeItem('netconf-topology-' + wrap.dataset.fabric); localStorage.removeItem('netconf-topology-' + wrap.dataset.fabric + '-view'); } catch (e) {}
 
         wrap.addEventListener('wheel', function (ev) {
             ev.preventDefault();

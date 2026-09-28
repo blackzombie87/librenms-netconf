@@ -17,7 +17,7 @@ MPLS router. Extracted values are stored as native LibreNMS
 sensors (health tab, graphs, alert rules), per-port metrics and custom metrics with their
 own RRDs and graphs. The web UI has a NETCONF status page, a **NETCONF tab on the device
 page** (status, metrics, ESI-LAGs and, for admins, credentials with test connection and
-discover/poll now), a device overview panel, the EVPN fabric pages with topology map and
+discover/poll now), a device overview panel, the EVPN fabric pages with the fabric picture and
 MAC search, a fabric **tracer** (a MAC or IP to the full path through the fabric, with the
 interface on every hop), a port tab with the per-port counters and a "run a show command"
 form. Not in
@@ -558,8 +558,9 @@ of leaving the page, and the selection is in the URL. An ESI panel carries the t
 LAG: one summed graph over the aggregated interface of every PE plus one per PE, and no graph
 image is requested until a panel is opened.
 
-The previous pictures are still there for one release: `?topo=interactive` is the vis-network
-map, `?topo=static` the one-row SVG.
+This is the only overview picture. The two older ones — the vis-network map behind
+`?topo=interactive` and the one-row SVG behind `?topo=static` — are gone; those bookmarks
+render the eagle view, without a redirect.
 
 #### Tracer
 

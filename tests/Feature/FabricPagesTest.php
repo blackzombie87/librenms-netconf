@@ -62,29 +62,22 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertSame('Fabric test', DB::table(TableSchema::tableName('fabric'))->where('id', $fabric)->value('name'));
     }
 
-    public function testTheBareOverviewIsTheEagleViewAndTheOldPicturesStayBehindTopo(): void
+    public function testEveryOverviewUrlIsTheOnePictureAndNoneCarriesAVisPayload(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
         [$fabric] = $this->fabricWithVnis(3);
 
-        // the bookmarked URL: the eagle view, laid out on the server, no vis payload
-        $bare = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
-        $this->assertStringContainsString('id="eagle-svg"', $bare);
-        $this->assertStringContainsString('No spine.', $bare);
-        $this->assertStringNotContainsString('js/vis-network.min.js', $bare);
-        $this->assertStringNotContainsString('id="nt-net"', $bare);
-
-        // the interactive map is still one link away, with the vis-network LibreNMS ships
-        $interactive = $this->get("/plugin/netconf/fabric/$fabric?topo=interactive")->assertOk()->getContent();
-        $this->assertStringContainsString('js/vis-network.min.js', $interactive);
-        $this->assertStringContainsString('id="nt-net"', $interactive);
-        $this->assertStringContainsString('"overlay_pairs"', $interactive);
-        // ... and the one-row SVG with it, for a core without vis and for a picture to paste
-        $this->assertStringContainsString('id="nt-svg"', $interactive);
-        $this->assertStringContainsString('id="nt-static-wrap"', $interactive);
-        $this->assertStringNotContainsString('id="eagle-svg"', $interactive);
-
-        $this->assertStringContainsString('id="nt-svg"', $this->get("/plugin/netconf/fabric/$fabric?topo=static")->assertOk()->getContent());
+        // the bookmarked URL and the two that used to select the older pictures: one view, 200
+        // on each, and no redirect -- `topo` is not read at all any more
+        foreach (['', '?topo=interactive', '?topo=static'] as $query) {
+            $page = $this->get("/plugin/netconf/fabric/$fabric$query")->assertOk()->getContent();
+            $this->assertStringContainsString('id="eagle-svg"', $page);
+            $this->assertStringContainsString('No spine.', $page);
+            $this->assertStringNotContainsString('js/vis-network.min.js', $page);
+            $this->assertStringNotContainsString('id="nt-net"', $page);
+            $this->assertStringNotContainsString('id="nt-svg"', $page);
+            $this->assertStringNotContainsString('id="nt-static-wrap"', $page);
+        }
     }
 
     public function testTheEagleViewRendersBehindItsQueryAndCarriesNoVisPayload(): void
@@ -108,6 +101,8 @@ final class FabricPagesTest extends LibrenmsTestCase
         // the eagle camera stores a viewBox and nothing else
         $this->assertStringContainsString("'-eagle'", $page);
         $this->assertStringContainsString('viewBox:', $page);
+        // ... and the two keys the vis map left in this browser are removed once, on load
+        $this->assertStringContainsString("removeItem('netconf-topology-' + wrap.dataset.fabric)", $page);
     }
 
     public function testTheEagleViewFocusesAMemberFromTheQueryString(): void
@@ -125,7 +120,7 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->assertStringContainsString('<div data-focus="member:192.0.2.1" hidden>', $miss);
     }
 
-    public function testAnAnycastGatewaySegmentIsAPairOnTheOldPictureAndNotOnTheEagleView(): void
+    public function testAnAnycastGatewaySegmentIsNotDrawnAsAnEsiLag(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
         [$fabric, $first] = $this->fabricWithVnis(1);
@@ -141,10 +136,6 @@ final class FabricPagesTest extends LibrenmsTestCase
                 ['device_id' => $device, 'esi' => '01:00:00:00:00:00:00:00:01', 'local_ifname' => 'ae2.0', 'lag_status' => 'Up/Forwarding', 'status' => 'Resolved by IFL ae2.0', 'remote_vtep_ips' => json_encode([$peer]), 'last_seen' => $now],
             ]);
         }
-
-        // the older picture counts both, which is what plan §11 E-F1 is about
-        $old = $this->get("/plugin/netconf/fabric/$fabric?topo=interactive")->assertOk()->getContent();
-        $this->assertStringContainsString('2 ESIs', $old);
 
         // the eagle view draws the LAG and nothing for the gateway segment
         $eagle = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();

@@ -9,24 +9,19 @@ use SafferIt\LibrenmsNetconf\Fabric\EsiLinks;
 use SafferIt\LibrenmsNetconf\Fabric\FabricGraph;
 
 /**
- * The one assembler behind both fabric pictures (plan §11 E4). Every query the overview needs
- * lives here, so the canonical neighbour addresses,
- * the `wan` rule and the "≥2 members peer with this far end" set cannot drift apart between
- * the vis map and the eagle view.
+ * The one assembler behind the overview picture and the tracer (plan §11 E4). Every query the
+ * two need lives here, so the canonical neighbour addresses, the `wan` rule and the
+ * "≥2 members peer with this far end" set are read once and cannot drift apart.
  *
- * `Topology::layout()` and `Topology::graph()` keep receiving exactly the arrays they receive
- * today, type-5 ESI pairs and missing port ids included: moving the queries is allowed,
- * changing the vis payload is not. The eagle path asks for `eagle: true`, which adds the port
- * ids and the `link_key` to every underlay row, filters the ESI pairs down to real LAGs, and
- * loads the per-member figures the cards and the classifier need.
+ * Every underlay row carries `link_key` and the two port ids, which is what the eagle view's
+ * focus grammar, its inspector and a trace hop need. The ESI pairs are filtered down to real
+ * LAGs — the gateway segments are gone before `EagleLayout` sees them — and the per-member
+ * figures the cards and the classifier read are loaded with them.
  */
 final class FabricTopologyInput
 {
     /**
      * @return array{
-     *   layout_nodes: list<array{ip: string, name: string, role: string, device_id: int|null, border: bool, site: string|null, status: bool|null}>,
-     *   layout_underlay: list<array<string, mixed>>,
-     *   layout_esi_pairs: list<array{a: string, b: string, esis: int}>,
      *   overlay: list<array{0: string, 1: string}>,
      *   nodes: list<array<string, mixed>>,
      *   underlay: list<array<string, mixed>>,
@@ -37,20 +32,20 @@ final class FabricTopologyInput
      *   members: list<array{ip: string, device_id: int|null, role: string, collected: bool, irbs: int, lag_esis: int}>
      * }
      */
-    public static function load(int $fabricId, FabricNodes $nodes, bool $eagle = false): array
+    public static function load(int $fabricId, FabricNodes $nodes): array
     {
         $deviceIds = $nodes->deviceIds();
         $locations = DB::table('locations')->pluck('location', 'id')->map(fn ($v) => (string) $v)->all();
         $devices = DB::table('devices')->whereIn('device_id', $deviceIds ?: [0])
             ->get(['device_id', 'status', 'location_id', 'disabled', 'version'])->keyBy('device_id');
 
-        $layoutNodes = [];
+        $members = [];
         foreach ($nodes->all() as $ip => $n) {
             if (! $n['member']) {
                 continue;
             }
             $device = $n['device_id'] === null ? null : $devices->get($n['device_id']);
-            $layoutNodes[] = [
+            $members[] = [
                 'ip' => (string) $ip,
                 'name' => $n['name'],
                 'role' => $n['role'],
@@ -61,42 +56,32 @@ final class FabricTopologyInput
             ];
         }
 
-        [$layoutUnderlay, $eagleUnderlay] = self::underlay($fabricId, $nodes);
+        $underlay = self::underlay($fabricId, $nodes);
         $overlay = Topology::overlayPairs($nodes, DB::table(TableSchema::tableName('neighbor'))
             ->whereIn('device_id', $deviceIds ?: [0])->distinct()->get(['device_id', 'neighbor_ip'])
             ->map(fn ($r) => [(int) $r->device_id, (string) $r->neighbor_ip])->all());
-
-        $out = [
-            'layout_nodes' => $layoutNodes,
-            'layout_underlay' => $layoutUnderlay,
-            'layout_esi_pairs' => self::layoutEsiPairs($nodes),
-            'overlay' => $overlay,
-            'nodes' => [],
-            'underlay' => $eagleUnderlay,
-            'esi_pairs' => [],
-            'esi_rows' => [],
-            'shared_far_ends' => self::sharedFarEnds($layoutUnderlay),
-            'missing' => [],
-            'members' => [],
-        ];
-        if (! $eagle) {
-            return $out;
-        }
 
         $esiRows = EsiMatrix::forFabric($nodes);
         [$pairs, $degradedPerDevice] = self::lagPairs($esiRows, $nodes);
         $stats = DeviceStats::forDevices($deviceIds);
         $sessions = OverlaySessions::forDevices($deviceIds);
 
-        $out['esi_rows'] = $esiRows;
-        $out['esi_pairs'] = $pairs;
-        $out['missing'] = array_map(
-            fn ($m) => ['device_id' => (int) $m['device_id'], 'peer_ip' => (string) $m['peer_ip']],
-            OverlaySessions::missing($sessions, $nodes->deviceNodes(), $nodes->collectedIds()),
-        );
+        $out = [
+            'overlay' => $overlay,
+            'nodes' => [],
+            'underlay' => $underlay,
+            'esi_pairs' => $pairs,
+            'esi_rows' => $esiRows,
+            'shared_far_ends' => self::sharedFarEnds($underlay),
+            'missing' => array_map(
+                fn ($m) => ['device_id' => (int) $m['device_id'], 'peer_ip' => (string) $m['peer_ip']],
+                OverlaySessions::missing($sessions, $nodes->deviceNodes(), $nodes->collectedIds()),
+            ),
+            'members' => [],
+        ];
 
-        $majority = self::majorityVersion($layoutNodes, $devices, $nodes);
-        foreach ($layoutNodes as $n) {
+        $majority = self::majorityVersion($members, $devices, $nodes);
+        foreach ($members as $n) {
             $deviceId = $n['device_id'];
             $device = $deviceId === null ? null : $devices->get($deviceId);
             $version = $device === null || $device->version === null || $device->version === '' ? null : (string) $device->version;
@@ -184,10 +169,10 @@ final class FabricTopologyInput
     }
 
     /**
-     * Underlay rows twice: the array `Topology::layout()` has always had, and the same rows
-     * with `link_key` and the two port ids the eagle view's focus grammar and inspector need.
+     * The fabric's underlay rows, each with the `link_key` and the two port ids the eagle
+     * view's focus grammar, its inspector and a trace hop need.
      *
-     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
+     * @return list<array<string, mixed>>
      */
     private static function underlay(int $fabricId, FabricNodes $nodes): array
     {
@@ -197,8 +182,7 @@ final class FabricTopologyInput
             ? []
             : DB::table('ports')->whereIn('port_id', $portIds)->pluck('ifName', 'port_id')->map(fn ($v) => (string) $v)->all();
 
-        $layout = [];
-        $eagle = [];
+        $rows = [];
         foreach ($links as $l) {
             $a = $nodes->addressOf((int) $l->a_device_id);
             $b = $l->b_device_id !== null ? $nodes->addressOf((int) $l->b_device_id) : null;
@@ -206,7 +190,7 @@ final class FabricTopologyInput
             if ($a === null) {
                 continue;
             }
-            $row = [
+            $rows[] = [
                 'a' => $a,
                 'b' => $b,
                 'b_label' => $b === null ? ($l->b_address ?? null) : null,
@@ -218,9 +202,6 @@ final class FabricTopologyInput
                 'a_port' => $l->a_port_id === null ? null : ($portNames[(int) $l->a_port_id] ?? null),
                 'b_port' => $l->b_port_id === null ? null : ($portNames[(int) $l->b_port_id] ?? null),
                 'network' => $l->network,
-            ];
-            $layout[] = $row;
-            $eagle[] = $row + [
                 'link_key' => (string) $l->link_key,
                 'a_port_id' => $l->a_port_id === null ? null : (int) $l->a_port_id,
                 'b_port_id' => $l->b_port_id === null ? null : (int) $l->b_port_id,
@@ -229,7 +210,7 @@ final class FabricTopologyInput
             ];
         }
 
-        return [$layout, $eagle];
+        return $rows;
     }
 
     /**
@@ -252,33 +233,6 @@ final class FabricTopologyInput
         usort($shared, FabricGraph::compare(...));
 
         return $shared;
-    }
-
-    /**
-     * The ESI pairs the static picture has always drawn: every local ifname, type-5 included,
-     * expanded to pairwise marks. Untouched on purpose — the vis payload must not change.
-     *
-     * @return list<array{a: string, b: string, esis: int}>
-     */
-    private static function layoutEsiPairs(FabricNodes $nodes): array
-    {
-        /** @var array<string, array<string, true>> $byEsi */
-        $byEsi = [];
-        foreach (DB::table(TableSchema::tableName('esi'))->whereIn('device_id', $nodes->deviceIds() ?: [0])->get(['device_id', 'esi', 'local_ifname', 'remote_vtep_ips']) as $r) {
-            $esi = (string) $r->esi;
-            $byEsi[$esi] ??= [];
-            if ($r->local_ifname !== null) {
-                $own = $nodes->addressOf((int) $r->device_id);
-                if ($own !== null) {
-                    $byEsi[$esi][$own] = true;
-                }
-            }
-            foreach ((array) json_decode((string) ($r->remote_vtep_ips ?? '[]'), true) as $ip) {
-                $byEsi[$esi][$nodes->canonical((string) $ip)] = true;
-            }
-        }
-
-        return self::pairwise($byEsi, fn () => 0)[0];
     }
 
     /**
@@ -350,13 +304,13 @@ final class FabricTopologyInput
      * The version a chip is measured against: the one the collected members agree on. A tie
      * has no majority, so every version is skewed; one version everywhere means no chip.
      *
-     * @param  list<array{ip: string, name: string, role: string, device_id: int|null, border: bool, site: string|null, status: bool|null}>  $layoutNodes
+     * @param  list<array{ip: string, name: string, role: string, device_id: int|null, border: bool, site: string|null, status: bool|null}>  $members
      * @param  \Illuminate\Support\Collection<int, \stdClass>  $devices
      */
-    private static function majorityVersion(array $layoutNodes, $devices, FabricNodes $nodes): ?string
+    private static function majorityVersion(array $members, $devices, FabricNodes $nodes): ?string
     {
         $counts = [];
-        foreach ($layoutNodes as $n) {
+        foreach ($members as $n) {
             $deviceId = $n['device_id'];
             if ($deviceId === null || ! $nodes->isCollected($deviceId)) {
                 continue;

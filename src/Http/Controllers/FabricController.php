@@ -21,7 +21,6 @@ use SafferIt\LibrenmsNetconf\Fabric\View\FabricSummary;
 use SafferIt\LibrenmsNetconf\Fabric\View\FabricTopologyInput;
 use SafferIt\LibrenmsNetconf\Fabric\View\MacSearch;
 use SafferIt\LibrenmsNetconf\Fabric\View\OverlaySessions;
-use SafferIt\LibrenmsNetconf\Fabric\View\Topology;
 use SafferIt\LibrenmsNetconf\Support\Pager;
 use SafferIt\LibrenmsNetconf\Fabric\View\TunnelMatrix;
 use SafferIt\LibrenmsNetconf\Fabric\View\VniMatrix;
@@ -33,9 +32,6 @@ use SafferIt\LibrenmsNetconf\Fabric\View\VniMatrix;
  */
 class FabricController extends Controller
 {
-    /** The overview rendering `?topo=` selects; absent is the server default. */
-    public const TOPO_EAGLE = 'eagle';
-
     /** Tab id => label; the order is the tab bar. */
     public const TABS = [
         'overview' => 'Overview',
@@ -132,23 +128,16 @@ class FabricController extends Controller
     }
 
     /**
-     * The overview picture. Absent `topo` is the eagle view; `?topo=interactive` and
-     * `?topo=static` still reach the vis map and the one-row SVG, for one more release.
-     * The two branches share `FabricTopologyInput` and nothing else: the eagle response does
-     * not embed the vis JSON, and the default response does not run `EagleLayout`.
+     * The overview picture: one view, the eagle SVG. `topo` is not read — an `?topo=interactive`
+     * or `?topo=static` bookmark renders this picture rather than 404ing or bouncing through a
+     * redirect, because the two older renderings are gone and the parameter is harmless once
+     * ignored. The response carries no vis payload and no one-row SVG.
      *
      * @return array<string, mixed>
      */
     private function overview(int $fabricId, FabricNodes $nodes, Request $request): array
     {
-        $topo = (string) $request->query('topo', '');
-        if ($topo === 'interactive' || $topo === 'static') {
-            $topology = Topology::forFabric($fabricId, $nodes);
-
-            return ['topo' => $topo, 'topology' => $topology, 'graph' => Topology::graph($topology, $nodes)];
-        }
-
-        $input = FabricTopologyInput::load($fabricId, $nodes, eagle: true);
+        $input = FabricTopologyInput::load($fabricId, $nodes);
         $shape = FabricShape::classify($input['members'], $input['overlay'], $input['shared_far_ends'], $input['missing']);
         $view = [
             'collapse' => self::collapseKeys($request),
@@ -163,7 +152,6 @@ class FabricController extends Controller
         $eagle = EagleLayout::place($shape, $input['nodes'], $input['underlay'], $shape['overlay_edges'], $input['shared_far_ends'], $input['esi_pairs'], $view, $highlight);
 
         return [
-            'topo' => self::TOPO_EAGLE,
             'shape' => $shape,
             'eagle' => $eagle,
             'highlight' => $highlight,
