@@ -227,21 +227,38 @@
         function store() { try { localStorage.setItem(KEY, JSON.stringify({ viewBox: box.x + ' ' + box.y + ' ' + box.w + ' ' + box.h })); } catch (e) {} }
 
         // The CSS size of the SVG, which is not the camera: the viewBox is the camera and the
-        // three functions below only decide how many screen pixels one user unit gets.
+        // rules below only decide how many screen pixels one user unit gets.
         var NARROW = 720;
-        function narrow() { return wrap.clientWidth < NARROW; }
-        function sizeActual() { svg.setAttribute('width', W); svg.setAttribute('height', H); }
-        function sizeFitWidth() {
-            var w = Math.max(1, wrap.clientWidth);
-            svg.setAttribute('width', w);
-            svg.setAttribute('height', Math.max(1, Math.round(H * w / W)));
+        function narrow() { return frameW() < NARROW; }
+        function frameW() { return Math.max(1, wrap.clientWidth); }
+        function frameH() { return Math.max(1, wrap.clientHeight); }
+
+        /**
+         * The element is the window the picture is seen through, so it always covers the frame.
+         * Sized to the drawing instead, it leaves a strip of the frame the picture can never be
+         * panned into and clips against its own edge -- which reads as a border down the middle
+         * of the page. Growing the window does not scale the drawing: `preserveAspectRatio`
+         * fits the viewBox by the smaller of the two ratios, and the axis that decided the
+         * scale is the one already up against the frame.
+         */
+        function setSize(w, h) {
+            svg.setAttribute('width', Math.max(Math.round(w), frameW()));
+            svg.setAttribute('height', Math.max(Math.round(h), frameH()));
         }
+        function sizeActual() {
+            // 1:1 is one user unit per CSS pixel. On a frame wider than the drawing the viewBox
+            // is therefore the window and not the picture, with the picture centred in it
+            setSize(W, H);
+            var w = parseFloat(svg.getAttribute('width')), h = parseFloat(svg.getAttribute('height'));
+            box = { x: (W - w) / 2, y: (H - h) / 2, w: w, h: h };
+            apply();
+        }
+        function sizeFitWidth() { setSize(frameW(), H * frameW() / W); }
         function sizeGrow() {
             // smaller than the container: grow by CSS size, never by shrinking the viewBox --
             // that is what turns a two-node lab fabric into a postage stamp
-            var scale = Math.min(wrap.clientWidth / W, wrap.clientHeight / H);
-            svg.setAttribute('width', Math.floor(W * scale));
-            svg.setAttribute('height', Math.floor(H * scale));
+            var scale = Math.min(frameW() / W, frameH() / H);
+            setSize(W * scale, H * scale);
         }
         function autoSize() {
             // Under 720 px of frame the whole fabric goes in the frame even though the 11 px
@@ -250,8 +267,10 @@
             // At 720 px and above the rule is the old one: never shrink on first paint.
             if (narrow()) {
                 sizeFitWidth();
-            } else if (W <= wrap.clientWidth && H <= wrap.clientHeight) {
+            } else if (W <= frameW() && H <= frameH()) {
                 sizeGrow();
+            } else {
+                setSize(W, H);
             }
         }
 
@@ -267,7 +286,10 @@
                 restored = true;
             }
         }
-        if (!restored) { autoSize(); }
+        if (restored) { setSize(W, H); } else { autoSize(); }
+
+        // a frame that changes width would leave the same unusable strip
+        window.addEventListener('resize', function () { if (restored) { setSize(W, H); } else { autoSize(); } });
 
         function zoom(factor, cx, cy) {
             var nw = box.w * factor, nh = box.h * factor;

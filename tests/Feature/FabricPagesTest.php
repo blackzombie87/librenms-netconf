@@ -98,8 +98,12 @@ final class FabricPagesTest extends LibrenmsTestCase
         // narrow-frame fit is a clientWidth check in the script, with 1:1 as the way back
         $this->assertStringNotContainsString('max-width: 100%', $page);
         $this->assertStringContainsString('var NARROW = 720;', $page);
-        $this->assertStringContainsString('wrap.clientWidth < NARROW', $page);
+        $this->assertStringContainsString('frameW() < NARROW', $page);
+        $this->assertStringContainsString('Math.max(1, wrap.clientWidth)', $page);
         $this->assertStringContainsString('id="eagle-actual"', $page);
+        // the window the picture is seen through always covers the frame, or the drawing clips
+        // against the element's own edge partway across the page
+        $this->assertStringContainsString("svg.setAttribute('width', Math.max(Math.round(w), frameW()))", $page);
         // the colours are classes with a dark override, not presentation attributes core's
         // `class="dark"` on <html> cannot reach
         $this->assertStringContainsString('html.dark .netconf-eagle', $page);
