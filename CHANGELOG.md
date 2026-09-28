@@ -1,5 +1,84 @@
 # Changelog
 
+## 1.5.0 – 2026-09-28
+
+One picture of an EVPN fabric. The overview offered three renderings, two of them the same
+force-directed cloud, and the one worth keeping had a legend taller than a phone screen, a
+white rectangle in a dark theme, lines through the compounds they were meant to run between,
+and no way to move anything. This release is the plan `docs/PLAN-FABRIC-OVERVIEW.md` in full.
+
+**What changes on an existing installation.** `?topo=interactive` and `?topo=static` render
+the eagle view; those bookmarks return 200 and are not redirected. One migration adds
+`netconf_evpn_fabric_layout`, which is empty until somebody drags something. Nothing else about
+a poll, a check or any other tab changes.
+
+### One view
+
+The vis-network map and the one-row SVG are gone, and with them the 4/8 column split, the vis
+payload on the response and a reset that meant the opposite of this page's reset. `?topo` is
+not read at all any more. `Topology` keeps the session reading, the overlay pairs and the arc
+height that the picture and the tracer still use, and loses the layered layout and the vis
+graph. The two `localStorage` keys the map left behind are removed once, on load.
+
+### What the picture draws
+
+- **A spine-to-leaf link is underlay.** The kind came from the two site strings, and a spine
+  has no compound, so every monitored Clos link was painted cross-site blue.
+- **An unmonitored shared far end trunks.** Rows with no resolved far end were skipped, so one
+  address drew twelve separate lines through both gateways and every leaf. It is one stroke per
+  site now.
+- **A trunk survives one bad session.** It used to need every session up and of one protocol
+  set, so a single down session exploded the pod into a fan across the trunks beside it. The
+  healthy sessions are the trunk; the odd one is a line next to it.
+- **An ESI mark has a band of its own between the rows,** not only under the last one. A
+  four-member site's upper bracket sat on the cards below it. A pair on two rows now walks into
+  the *top* of the lower card instead of running through it, and a label too wide for the span
+  between its anchors is the bare count, with the whole string in the tooltip.
+- **A one-member gateway compound grows to its caption,** up to 480 px, so the two production
+  gateways read their datacentre instead of `NTT/e-shelter Berli…`.
+- **Every null location in a tier is one compound.** A half-collected fabric was thirteen
+  dashed boxes saying the same thing.
+- **A line that would cross a compound it does not terminate on takes the channel between the
+  compounds instead,** or the margin ring when no channel joins them. Every routed segment is
+  horizontal or vertical, sampled every pixel against the boxes rather than checked at its
+  corners, and its label goes on the longest leg — only the first edge in a shared channel
+  draws one, which is what takes the second "ospf full" off a card. Same-site arcs, overlay
+  arcs and faults, stubs, hangers and a clear spine-to-header stroke are exempt on purpose.
+- Every member card carries its site again. `placeSiteContents()` merged the key onto the card
+  with `+`, which keeps the left-hand value, and the card already had a null one.
+
+### How it reads
+
+- **Dark mode reaches the SVG.** Every colour is a class with an `html.dark` override instead
+  of a presentation attribute PHP wrote, and the frame is transparent, so the page surface
+  shows through rather than a white island. The light palette is the one it always had.
+- **The key is in the corner of the frame,** not a paragraph above it. Tailwind's preflight
+  gives every `<svg>` its own row, so eight swatches were 224 px of page on a desktop and the
+  same 224 px on a phone. The swatches are CSS now, there is one for the trunk, and under
+  600 px the key starts closed behind a button.
+- **A narrow frame gets the whole fabric.** Below 720 px the first paint fits it, 11 px labels
+  and all; `1:1` gives back layout pixels and scrolls. At 720 px and above nothing changed: the
+  picture still never shrinks on first paint. A stored camera still wins at any width.
+
+### Moving it
+
+A site compound or a card can be dragged, and the edges re-route with it — the browser runs the
+same router, so a reload does not jump. A member never leaves its site; the compound grows to
+hold it. `EagleLayout::place()` is still the first paint and is exactly what *reset* returns to.
+
+**Gravity** is a toolbar switch, off on every load and never persisted. While it is off a drag
+moves only what was grabbed. While it is on, releasing starts a settle of at most 40 frames
+over the underlay neighbours of what was dropped, with the rest length taken from the home
+positions and a pull back toward each node's own tier band; the node that was released is
+pinned. No solver runs on load, and none runs on reset.
+
+The arrangement is **one per fabric**, shown to everyone who opens the page, with a line naming
+who saved it and when. Last write wins. Saving and resetting need the same `global-read` the
+page needs — a deliberate exception to this plugin's admin-only writes, because the people who
+read this page are the people who arrange it. The camera stays per browser. A stored
+arrangement whose member list no longer matches the fabric is ignored and **kept**: a transient
+read must not wipe what someone arranged.
+
 ## 1.4.2 – 2026-09-28
 
 The two bugs and the two loose ends of the external review of 2026-09-25 (internal plan §15).

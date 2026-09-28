@@ -9,7 +9,7 @@ the values onto native LibreNMS objects (sensors, per-port metrics, custom metri
 YAML definitions. Built for things SNMP cannot deliver on Junos, first of all
 EVPN-VXLAN state (duplicate MACs, ESI status, MAC/route counts).
 
-**Status: 1.4.2 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
+**Status: 1.5.0 on Packagist** (`lnms plugin:add saffer-it/librenms-netconf`). Transports,
 credentials and the settings page, the YAML definition engine and the `netconf`
 poller/discovery module are verified against an EX4650 (Junos 23.4R2); the LDP, RPKI and
 VRRP definitions against recorded replies of a Junos 22.2
@@ -529,7 +529,10 @@ inside site compounds (the device's location, inherited by ESI partners, else th
 cluster), stacked in tiers. A compound holds up to four cards per row with one or two sites
 and two per row beyond that, and the compounds pack into rows no wider than 1,120 px, so 26
 members are two rows rather than a 3,780 px strip. Pan and zoom move a viewBox; the camera is
-remembered per fabric in the browser, and *reset* forgets it.
+remembered per fabric in the browser. Below 720 px of frame the first paint fits the whole
+fabric into it, and *1:1* draws it at layout size again and scrolls. The colours follow the
+LibreNMS theme, dark included, and the key sits in the corner of the frame rather than in a
+row above it (collapsed under 600 px, where it would cover the cards it explains).
 
 Above the picture, one sentence names the shape and says what it was concluded from:
 
@@ -548,7 +551,12 @@ On the cards: SNMP down, not monitored, monitored but without EVPN data, a degra
 and a version that is not the fabric's majority. Between them, underlay links coloured **and**
 dashed by state (up solid, down dashed, no session state dotted, WAN its own pattern,
 cross-site solid in its own colour), and orange ESI-LAG brackets — anycast gateway segments on
-an `irb` unit are not ESI-LAGs and are not drawn as one.
+an `irb` unit are not ESI-LAGs and are not drawn as one. A link between two sites runs in the
+channel between the compounds and never across one it does not terminate on, and where several
+share a channel only the first labels it. Sessions from one spine — a stored one, or an
+unmonitored address several members peer with — to every member of a site are one stroke
+labelled "N up", with any session that is down or runs a different protocol set drawn beside
+it rather than exploding the site into a fan.
 
 The toolbar collapses sites (a collapsed compound keeps its label and takes the worst state of
 what it hides), turns on the sessions out of the fabric (a border router's transit and IX
@@ -557,6 +565,13 @@ discovery rows. Clicking a card, a link or an ESI opens an inspector under the p
 of leaving the page, and the selection is in the URL. An ESI panel carries the traffic of that
 LAG: one summed graph over the aggregated interface of every PE plus one per PE, and no graph
 image is requested until a panel is opened.
+
+A site compound or a card can be dragged, and the edges re-route as it moves; a member never
+leaves its site, and the compound grows to hold it. The arrangement is saved for the fabric and
+is what the next person sees, with a line naming who saved it — any account that can read the
+page can save or reset it. *Reset* deletes it and returns to the layout the server computes.
+The **gravity** switch, off unless it is turned on and off again on every reload, eases the
+underlay neighbours of whatever was dropped; nothing runs the solver on load or on reset.
 
 This is the only overview picture. The two older ones — the vis-network map behind
 `?topo=interactive` and the one-row SVG behind `?topo=static` — are gone; those bookmarks
@@ -766,7 +781,7 @@ version, run `plugin:add` again, then the migrations:
 
 ```bash
 ./lnms plugin:add saffer-it/librenms-netconf            # newest release within the constraint
-./lnms plugin:add saffer-it/librenms-netconf 1.4.2      # a specific version
+./lnms plugin:add saffer-it/librenms-netconf 1.5.0      # a specific version
 ./lnms migrate
 ./lnms route:cache                                      # new routes reach a cached installation
 ./lnms view:clear                                       # new pages replace the compiled old ones
