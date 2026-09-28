@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.1 – 2026-09-28
+
+One fix. The SVG was sized to the drawing and the drawing is often narrower than the frame
+it sits in, so the rest of the frame was dead: the picture clipped against the element's own
+right edge partway across the page, which reads as a border down the middle, and panning could
+not move anything past it. On a 1,406 px frame the window was 764 px wide and 658 px of it
+could not be reached.
+
+The window now always covers the frame. The scale is untouched — `preserveAspectRatio` fits the
+viewBox by the smaller of the two ratios and the axis that decided the scale is the one already
+up against the frame — so first paint still never shrinks, the narrow-frame fit is still the
+frame's width, and `1:1` is still one user unit per pixel (its viewBox is the window rather
+than the drawing, with the picture centred in it). Resizing the window re-applies the rule
+instead of leaving the strip behind.
+
 ## 1.5.0 – 2026-09-28
 
 One picture of an EVPN fabric. The overview offered three renderings, two of them the same
