@@ -104,6 +104,18 @@ final class FabricPagesTest extends LibrenmsTestCase
         // `class="dark"` on <html> cannot reach
         $this->assertStringContainsString('html.dark .netconf-eagle', $page);
         $this->assertStringContainsString('background: transparent;', $page);
+        // the key is pinned to the frame and is the view's sibling, not a child of the scroller:
+        // inside it, frame scroll would carry it away
+        $this->assertStringContainsString('#eagle-frame { position: relative;', $page);
+        $this->assertMatchesRegularExpression('~#eagle-key \{[^}]*position: absolute~', $page);
+        $this->assertStringContainsString('#eagle-view { overflow: auto;', $page);
+        $this->assertMatchesRegularExpression(
+            '~id="eagle-view"[\s\S]*id="eagle-svg"[\s\S]*</svg>\s*</div>\s*<div id="eagle-key"~',
+            $page,
+        );
+        // no SVG in the key: Tailwind preflight sets `svg { display: block }` and stacked the
+        // old swatch paragraph into 224 px
+        $this->assertStringNotContainsString('<svg width="26"', $page);
         // and no graph image is requested before one is asked for
         $this->assertStringNotContainsString('class="graph-image"', $page);
         // the eagle camera stores a viewBox and nothing else

@@ -26,17 +26,6 @@
         </span>
     </div>
 
-    <p class="text-muted" style="margin: 4px 0;"><small>
-        <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#5cb85c" stroke-width="3"/></svg> underlay up (solid)
-        <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#d9534f" stroke-width="3" stroke-dasharray="5 3"/></svg> down (dashed)
-        <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#999" stroke-width="2" stroke-dasharray="1 4"/></svg> no session state (dotted)
-        <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#3d5a80" stroke-width="3"/></svg> cross-site
-        <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#8e6bbf" stroke-width="2" stroke-dasharray="7 3"/></svg> via WAN
-        <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#337ab7" stroke-width="1" stroke-dasharray="3 3"/></svg> overlay
-        <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#d9534f" stroke-width="1.5" stroke-dasharray="6 2 2 2"/></svg> overlay fault
-        <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#f0ad4e" stroke-width="2"/></svg> ESI-LAG
-    </small></p>
-
     {{-- Every colour in the picture is a class here, because core sets class="dark" on <html>
          and a presentation attribute written by PHP cannot follow that. Dashes and widths are
          not theme and stay attributes. The frame is transparent, so the page surface shows
@@ -50,8 +39,21 @@
         .eg-edge { cursor: pointer; }
         .eg-hl { stroke: #337ab7 !important; stroke-width: 4 !important; }
         .eg-sel rect { stroke: #337ab7 !important; stroke-width: 3 !important; }
+        {{-- the zoom group is pull-right, and an uncleared float escapes the bar: the frame
+             below then wraps beside it and measures 172 px on a phone --}}
         .netconf-eagle .nt-bar { margin-bottom: 6px; }
+        .netconf-eagle .nt-bar::after { content: ''; display: table; clear: both; }
 
+        .netconf-eagle {
+            --eg-up: #5cb85c; --eg-down: #d9534f; --eg-unknown: #999999; --eg-cross: #3d5a80;
+            --eg-wan: #8e6bbf; --eg-overlay: #337ab7; --eg-fault: #d9534f; --eg-esi: #f0ad4e;
+            --eg-attached: #999999;
+        }
+        html.dark .netconf-eagle {
+            --eg-up: #7dca7a; --eg-down: #e87a76; --eg-unknown: #aaaaaa; --eg-cross: #8fb4d9;
+            --eg-wan: #b794e0; --eg-overlay: #6aaee0; --eg-fault: #e87a76; --eg-esi: #f0c36a;
+            --eg-attached: #aaaaaa;
+        }
         .netconf-eagle .eg-gateway { fill: #dbe9f6; }
         .netconf-eagle .eg-spine { fill: #e3f1fa; }
         .netconf-eagle .eg-leaf { fill: #e6f4e6; }
@@ -76,17 +78,39 @@
         .netconf-eagle .eg-chip-muted { fill: #eeeeee; }
         .netconf-eagle .eg-down-dot { fill: #d9534f; }
         .netconf-eagle .eg-outside-dot { fill: #8e6bbf; }
-        .netconf-eagle .eg-stroke-up { stroke: #5cb85c; }
-        .netconf-eagle .eg-stroke-down { stroke: #d9534f; }
-        .netconf-eagle .eg-stroke-unknown { stroke: #999999; }
-        .netconf-eagle .eg-stroke-cross { stroke: #3d5a80; }
-        .netconf-eagle .eg-stroke-wan { stroke: #8e6bbf; }
-        .netconf-eagle .eg-stroke-overlay { stroke: #337ab7; }
-        .netconf-eagle .eg-stroke-fault { stroke: #d9534f; }
-        .netconf-eagle .eg-stroke-esi { stroke: #f0ad4e; }
-        .netconf-eagle .eg-stroke-attached { stroke: #999999; }
+        .netconf-eagle .eg-stroke-up { stroke: var(--eg-up); }
+        .netconf-eagle .eg-stroke-down { stroke: var(--eg-down); }
+        .netconf-eagle .eg-stroke-unknown { stroke: var(--eg-unknown); }
+        .netconf-eagle .eg-stroke-cross { stroke: var(--eg-cross); }
+        .netconf-eagle .eg-stroke-wan { stroke: var(--eg-wan); }
+        .netconf-eagle .eg-stroke-overlay { stroke: var(--eg-overlay); }
+        .netconf-eagle .eg-stroke-fault { stroke: var(--eg-fault); }
+        .netconf-eagle .eg-stroke-esi { stroke: var(--eg-esi); }
+        .netconf-eagle .eg-stroke-attached { stroke: var(--eg-attached); }
+
+        {{-- The key is pinned to the frame, not to the scroller and not to the viewBox: inside
+             `#eagle-view` it would scroll away with the picture, and inside the SVG it would
+             zoom with it, which is the failure the viewport was added to prevent. Swatches are
+             CSS borders and gradients, because Tailwind's preflight sets `svg { display: block }`
+             and stacked each of the old <svg> swatches onto its own row -- 224 px of them. --}}
+        #eagle-frame { position: relative; }
+        #eagle-key { position: absolute; left: 8px; bottom: 8px; z-index: 2; font-size: 11px; line-height: 1.7; }
+        #eagle-key-body { background: rgba(255, 255, 255, 0.92); border: 1px solid #ddd; border-radius: 4px; padding: 4px 8px; margin-top: 4px; max-width: 280px; }
+        #eagle-key-body span { white-space: nowrap; margin-right: 8px; }
+        #eagle-key .eg-swatch { display: inline-block; width: 26px; height: 0; border-top: 3px solid var(--eg-key); vertical-align: middle; margin-right: 2px; }
+        #eagle-key .eg-swatch-dash { display: inline-block; width: 26px; vertical-align: middle; margin-right: 2px; }
+        #eagle-key .eg-key-up { --eg-key: var(--eg-up); }
+        #eagle-key .eg-key-down { --eg-key: var(--eg-down); height: 3px; background: repeating-linear-gradient(to right, var(--eg-key) 0 5px, transparent 5px 8px); }
+        #eagle-key .eg-key-unknown { --eg-key: var(--eg-unknown); height: 2px; background: repeating-linear-gradient(to right, var(--eg-key) 0 1px, transparent 1px 5px); }
+        #eagle-key .eg-key-cross { --eg-key: var(--eg-cross); }
+        #eagle-key .eg-key-wan { --eg-key: var(--eg-wan); height: 3px; background: repeating-linear-gradient(to right, var(--eg-key) 0 7px, transparent 7px 10px); }
+        #eagle-key .eg-key-overlay { --eg-key: var(--eg-overlay); height: 1px; background: repeating-linear-gradient(to right, var(--eg-key) 0 3px, transparent 3px 6px); }
+        #eagle-key .eg-key-fault { --eg-key: var(--eg-fault); height: 2px; background: repeating-linear-gradient(to right, var(--eg-key) 0 6px, transparent 6px 8px, var(--eg-key) 8px 10px, transparent 10px 12px); }
+        #eagle-key .eg-key-esi { --eg-key: var(--eg-esi); border-top-width: 2px; }
+        #eagle-key .eg-key-trunk { --eg-key: var(--eg-up); border-top-width: 4px; }
 
         html.dark #eagle-view { border-color: #555; }
+        html.dark #eagle-key-body { background: rgba(39, 43, 48, 0.92); border-color: #555; }
         html.dark .netconf-eagle .eg-gateway { fill: #24384a; }
         html.dark .netconf-eagle .eg-spine { fill: #1e3344; }
         html.dark .netconf-eagle .eg-leaf { fill: #1e3324; }
@@ -111,17 +135,9 @@
         html.dark .netconf-eagle .eg-chip-muted { fill: #33373d; }
         html.dark .netconf-eagle .eg-down-dot { fill: #e87a76; }
         html.dark .netconf-eagle .eg-outside-dot { fill: #b794e0; }
-        html.dark .netconf-eagle .eg-stroke-up { stroke: #7dca7a; }
-        html.dark .netconf-eagle .eg-stroke-down { stroke: #e87a76; }
-        html.dark .netconf-eagle .eg-stroke-unknown { stroke: #aaaaaa; }
-        html.dark .netconf-eagle .eg-stroke-cross { stroke: #8fb4d9; }
-        html.dark .netconf-eagle .eg-stroke-wan { stroke: #b794e0; }
-        html.dark .netconf-eagle .eg-stroke-overlay { stroke: #6aaee0; }
-        html.dark .netconf-eagle .eg-stroke-fault { stroke: #e87a76; }
-        html.dark .netconf-eagle .eg-stroke-esi { stroke: #f0c36a; }
-        html.dark .netconf-eagle .eg-stroke-attached { stroke: #aaaaaa; }
-    </style>
+                                                                            </style>
 
+    <div id="eagle-frame">
     <div id="eagle-view" data-fabric="{{ $fabric['id'] }}" data-w="{{ $eg['width'] }}" data-h="{{ $eg['height'] }}">
         <svg id="eagle-svg" width="{{ $eg['width'] }}" height="{{ $eg['height'] }}" viewBox="0 0 {{ $eg['width'] }} {{ $eg['height'] }}" xmlns="http://www.w3.org/2000/svg">
             @foreach ($eg['groups'] as $g)
@@ -172,6 +188,21 @@
                 </g>
             @endforeach
         </svg>
+    </div>
+    <div id="eagle-key">
+        <button type="button" class="btn btn-default btn-xs" id="eagle-key-toggle" aria-expanded="true">key</button>
+        <div id="eagle-key-body">
+            <span><i class="eg-swatch eg-key-up"></i> underlay up</span>
+            <span><i class="eg-swatch-dash eg-key-down"></i> down</span>
+            <span><i class="eg-swatch-dash eg-key-unknown"></i> no session state</span>
+            <span><i class="eg-swatch eg-key-cross"></i> cross-site</span>
+            <span><i class="eg-swatch-dash eg-key-wan"></i> via WAN</span>
+            <span><i class="eg-swatch-dash eg-key-overlay"></i> overlay</span>
+            <span><i class="eg-swatch-dash eg-key-fault"></i> overlay fault</span>
+            <span><i class="eg-swatch eg-key-esi"></i> ESI-LAG</span>
+            <span><i class="eg-swatch eg-key-trunk"></i> trunk</span>
+        </div>
+    </div>
     </div>
 </div>
 @once
@@ -297,6 +328,13 @@
             history.replaceState(null, '', url.toString());
             select('');
         });
+
+        // collapsed by default on a phone, where an open key would cover the cards it explains
+        var keyBody = document.getElementById('eagle-key-body');
+        var keyToggle = document.getElementById('eagle-key-toggle');
+        function showKey(open) { keyBody.hidden = !open; keyToggle.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+        showKey(!window.matchMedia || window.matchMedia('(min-width: 600px)').matches);
+        keyToggle.addEventListener('click', function () { showKey(keyBody.hidden); });
 
         var initial = new URL(window.location.href).searchParams.get('focus');
         if (initial) { select(initial); }
