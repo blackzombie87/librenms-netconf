@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+The two bugs and the two loose ends of the external review of 2026-09-25 (internal plan §15).
+Both bugs are in code 1.4.x added, and both are the class of defect a suite that asserts
+coordinates and controller returns does not see, which is why each carries a regression that
+fails without its fix and a browser check besides.
+
+- **An ESI-LAG pair that crosses two sites is drawn as a segment, not a bracket.** 1.4.1 said
+  it already was. Only half of that was true: the box was not widened, but the mark was still
+  a bracket, because the draw path compared the two cards' row and column numbers — and those
+  restart inside every compound. On a fabric of two-member sites (the shape the view is built
+  for) every site puts its members at row 0, columns 0 and 1, so a pair running from one site's
+  right-hand card to the next site's left-hand card passed the test, drew its horizontal leg
+  across the gap between the two boxes, and hung it two pixels below both.
+- **"Trace live" walks the pair that is in the boxes.** The button submits a hidden form, whose
+  fields were rendered from the query string of the page that had just been drawn — so a first
+  click posted an empty pair and failed validation, and a later one posted the pair before the
+  one just typed. The pair is now copied across on submit, and the redirect brings it back on
+  the query string, so the boxes still show what was walked and the next click repeats it. The
+  tab no longer also runs the stored-table trace while a live result is on the page. Graph mode
+  is still a bookmarkable GET and live mode still an admin POST.
+- `FabricNodes::collectedNodes()` is gone. It had no caller: the one place that looks like it
+  built that set by hand passes the full node map *and* the collected ids on purpose.
+- The docblock on `IssueStore::countForDevice()` said the sensor counts everything but info.
+  It has counted criticals alone since 1.3.0.
+
+Nothing else changed: no data, no setting, no schema, and no change to what a poll does.
+
 ## 1.4.1 – 2026-09-25
 
 Two rendering fixes on the eagle view. Both were found by driving the page in a browser, which
