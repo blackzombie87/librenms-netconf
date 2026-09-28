@@ -52,7 +52,10 @@
         @foreach ($eagle['edges'] as $e)
             @continue($e['layer'] === 'attached')
             <div data-focus="{{ $e['id'] }}"{{ $focus === $e['id'] ? '' : ' hidden' }}>
-                <h5 style="margin-top: 0;">{{ $nodes->name($e['a']) }} &harr; {{ $e['layer'] === 'underlay' && $e['kind'] === 'trunk' ? $e['b'] : $nodes->name($e['b']) }}
+                {{-- FabricNodes::name() echoes an unknown key back, so an unmonitored far end
+                     would head the panel as the literal string `far:198.19.9.254` --}}
+                @php($endpoint = fn (string $id) => str_starts_with($id, 'far:') ? substr($id, 4) . ' (unmonitored)' : $nodes->name($id))
+                <h5 style="margin-top: 0;">{{ $endpoint($e['a']) }} &harr; {{ $e['layer'] === 'underlay' && $e['kind'] === 'trunk' ? $e['b'] : $endpoint($e['b']) }}
                     <small class="text-muted">{{ $e['kind'] }}</small>
                 </h5>
                 <p class="text-muted" style="margin: 0;"><small>

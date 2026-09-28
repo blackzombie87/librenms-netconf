@@ -166,7 +166,7 @@ it('gives every edge state its own dash pattern, not only its own colour class',
         ->and($unknown['state'])->toBe('unknown');   // an `ip` edge is unknown, never down
 });
 
-it('trunks a site only when every leaf has an up session of the same protocol set', function () {
+it('trunks the healthy sessions of a site and draws the odd one beside them', function () {
     $spine = eagleNode('10.0.0.1', 'spine', ['device_id' => 1]);
     $leaves = [];
     for ($i = 0; $i < 5; $i++) {
@@ -180,15 +180,24 @@ it('trunks a site only when every leaf has an up session of the same protocol se
     expect(array_filter($trunk['edges'], fn ($e) => $e['kind'] === 'trunk'))->toHaveCount(1)
         ->and(array_filter($trunk['edges'], fn ($e) => $e['kind'] === 'underlay'))->toBe([]);
 
-    // one down session: five lines and no trunk, so the broken one stays visible
+    // one down session: a trunk of the four that are up plus one line for the broken one. Five
+    // lines and no trunk was the old rule, and it exploded the pod into a fan that crossed the
+    // trunks of the pods beside it
     $oneDown = $uniform;
     $oneDown[4] = eagleLink('10.0.0.1', $leaves[4]['ip'], ['state' => 'Init', 'up' => false]);
     $noTrunk = EagleLayout::place($shape, $nodes, $oneDown, [], [], [], []);
-    expect(array_filter($noTrunk['edges'], fn ($e) => $e['kind'] === 'trunk'))->toBe([])
-        ->and(array_filter($noTrunk['edges'], fn ($e) => $e['layer'] === 'underlay'))->toHaveCount(5);
+    $trunks = array_values(array_filter($noTrunk['edges'], fn ($e) => $e['kind'] === 'trunk'));
+    $lines = array_values(array_filter($noTrunk['edges'], fn ($e) => $e['layer'] === 'underlay' && $e['kind'] !== 'trunk'));
+
+    expect($trunks)->toHaveCount(1)
+        ->and($trunks[0]['label'])->toBe('4 up')
+        ->and($lines)->toHaveCount(1)
+        // the exception is underlay, not cross-site: the spine has no compound to be across from
+        ->and($lines[0]['kind'])->toBe('underlay')
+        ->and($lines[0]['up'])->toBeFalse();
 });
 
-it('does not trunk a BGP-only leaf in with four that also run OSPF', function () {
+it('trunks the four bgp sessions and leaves the one that also runs OSPF beside them', function () {
     // plan §12.4a: the underlay protocol is read off the row. `bgp` is not `bgp,ospf`
     $spine = eagleNode('10.0.0.1', 'spine', ['device_id' => 1]);
     $leaves = [];
@@ -202,11 +211,19 @@ it('does not trunk a BGP-only leaf in with four that also run OSPF', function ()
     $pureBgp = array_map(fn ($n) => eagleLink('10.0.0.1', $n['ip'], ['protocol' => 'bgp', 'state' => 'Established']), $leaves);
     expect(array_filter(EagleLayout::place($shape, $nodes, $pureBgp, [], [], [], [])['edges'], fn ($e) => $e['kind'] === 'trunk'))->toHaveCount(1);
 
+    // four `bgp` links and one `bgp,ospf`: the largest up set is the four, and the odd session
+    // is its own line. `bgp` and `bgp,ospf` are still different sets and are never merged
     $mixed = $pureBgp;
     $mixed[4] = eagleLink('10.0.0.1', $leaves[4]['ip'], ['protocol' => 'bgp,ospf', 'state' => 'Established/Full']);
     $out = EagleLayout::place($shape, $nodes, $mixed, [], [], [], []);
-    expect(array_filter($out['edges'], fn ($e) => $e['kind'] === 'trunk'))->toBe([])
-        ->and(array_filter($out['edges'], fn ($e) => $e['layer'] === 'underlay'))->toHaveCount(5)
+    $trunks = array_values(array_filter($out['edges'], fn ($e) => $e['kind'] === 'trunk'));
+    $lines = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'underlay' && $e['kind'] !== 'trunk'));
+
+    expect($trunks)->toHaveCount(1)
+        ->and($trunks[0]['label'])->toBe('4 up')
+        ->and($trunks[0]['title'])->toContain('bgp session')
+        ->and($lines)->toHaveCount(1)
+        ->and($lines[0]['protocol'])->toBe('bgp,ospf')
         ->and(EagleLayout::protocolSet('ospf,bgp'))->toBe('bgp,ospf')
         ->and(EagleLayout::protocolSet('bgp'))->not->toBe(EagleLayout::protocolSet('bgp,ospf'))
         ->and(EagleLayout::protocolSet('lldp-only'))->toBe('');
@@ -437,6 +454,190 @@ it('keeps a single-member compound and a null-location compound deliberate rathe
     expect($out['groups'])->toHaveCount(2)
         ->and($out['groups'][0]['label'])->toBe('RZ BER1 - a very long facility name')
         ->and($out['groups'][1]['label'])->toBeNull()
-        ->and($out['groups'][1]['key'])->toBe('pair:10.0.0.12')
+        ->and($out['groups'][1]['key'])->toBe('noloc')
         ->and($out['groups'][0]['header']['h'])->toBe(EagleLayout::SITE_HEADER);
+});
+
+it('draws a spine-to-leaf link as underlay even when the two locations differ', function () {
+    // the Clos bug: `kind` was decided from the site key alone, and a spine has no compound at
+    // all, so every monitored spine-to-leaf link came out cross-site blue
+    $nodes = [
+        eagleNode('10.0.0.1', 'spine', ['site' => 'CLOS-CORE', 'device_id' => 1]),
+        eagleNode('10.0.0.11', 'leaf', ['site' => 'POD-A', 'device_id' => 11]),
+    ];
+    $shape = eagleShape($nodes, FabricShape::UNDERLAY_SPINE_LEAF);
+    $out = EagleLayout::place($shape, $nodes, [eagleLink('10.0.0.1', '10.0.0.11')], [], [], [], []);
+    $edge = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'underlay'))[0];
+
+    // a site of one member is never trunked, so this is the single line, and it is green
+    expect($edge['kind'])->toBe('underlay')
+        ->and($edge['strokeClass'])->toBe('eg-stroke-up');
+});
+
+it('gives every null location in a tier one compound, not one each', function () {
+    $nodes = [
+        eagleNode('10.0.0.11', 'leaf', ['site' => null, 'device_id' => 11]),
+        eagleNode('10.0.0.12', 'leaf', ['site' => null, 'device_id' => 12]),
+        eagleNode('10.0.0.13', 'leaf', ['site' => null, 'device_id' => 13]),
+        eagleNode('10.0.0.21', 'leaf', ['site' => 'BER1', 'device_id' => 21]),
+    ];
+    $out = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], [], []);
+    $noloc = array_values(array_filter($out['groups'], fn ($g) => $g['label'] === null));
+
+    expect($out['groups'])->toHaveCount(2)
+        ->and($noloc)->toHaveCount(1)
+        ->and($noloc[0]['key'])->toBe('noloc')
+        ->and($noloc[0]['members'])->toHaveCount(3)
+        ->and($noloc[0]['caption'])->toBe('no location (3)')
+        // a member that does have a location is not pulled into it
+        ->and(array_values(array_filter($out['groups'], fn ($g) => $g['label'] === 'BER1'))[0]['members'])->toBe(['10.0.0.21']);
+});
+
+it('grows a one-member gateway compound to its caption, up to the cap', function () {
+    $long = 'IPB/CarrierColo Rechenzentrum Berlin - RZ BER2';
+    $nodes = [
+        eagleNode('10.0.0.1', 'gateway', ['site' => $long, 'device_id' => 1, 'irbs' => 57]),
+        eagleNode('10.0.0.11', 'leaf', ['site' => 'BER1', 'device_id' => 11]),
+    ];
+    $out = EagleLayout::place(eagleShape($nodes, FabricShape::UNDERLAY_LEAF_MESH, FabricShape::ROUTING_CRB), $nodes, [], [], [], [], []);
+    $gateway = array_values(array_filter($out['groups'], fn ($g) => $g['label'] === $long))[0];
+    $leaf = array_values(array_filter($out['groups'], fn ($g) => $g['label'] === 'BER1'))[0];
+
+    expect($gateway['w'])->toBeGreaterThan(EagleLayout::CARD_W + 2 * EagleLayout::SITE_PAD)
+        ->and($gateway['w'])->toBeLessThanOrEqual(EagleLayout::GATEWAY_CAPTION_CAP)
+        // the whole location, no ellipsis, and the card centred in the box it grew to
+        ->and($gateway['caption'])->toBe($long . ' (1)')
+        ->and($out['nodes']['10.0.0.1']['x'])->toBeGreaterThan($gateway['x'] + EagleLayout::SITE_PAD)
+        ->and($out['nodes']['10.0.0.1']['x'] + EagleLayout::CARD_W)->toBeLessThanOrEqual($gateway['x'] + $gateway['w'])
+        // a one-member leaf site stays on the card grid
+        ->and($leaf['w'])->toBe(EagleLayout::CARD_W + 2 * EagleLayout::SITE_PAD);
+});
+
+it('reserves a band between two rows of a compound, not only under the last one', function () {
+    // BER1 on the production fabric: four members, two columns by two rows. The upper pair's
+    // bracket used to be drawn into ROW_GAP (16 px) and landed on the cards of the row below.
+    $nodes = [];
+    foreach (['11', '12', '13', '14'] as $i => $last) {
+        $nodes[] = eagleNode('10.0.0.' . $last, 'leaf', ['site' => 'BER1', 'device_id' => 10 + $i]);
+    }
+    // three sites, so the cap is 2 columns and the site is two rows of two
+    $nodes[] = eagleNode('10.0.1.1', 'leaf', ['site' => 'BER2', 'device_id' => 21]);
+    $nodes[] = eagleNode('10.0.2.1', 'leaf', ['site' => 'BER4', 'device_id' => 31]);
+    $upper = ['a' => '10.0.0.11', 'b' => '10.0.0.12', 'esis' => 2, 'degraded' => 0, 'id' => 'upper'];
+
+    $out = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], [$upper], []);
+    $topRow = $out['nodes']['10.0.0.11'];
+    $nextRow = $out['nodes']['10.0.0.13'];
+    $edge = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'esi'))[0];
+
+    expect($topRow['row'])->toBe(0)
+        ->and($nextRow['row'])->toBe(1)
+        // the gap between the two rows is the ESI band, not ROW_GAP
+        ->and($nextRow['y'] - ($topRow['y'] + EagleLayout::CARD_H))->toBe(EagleLayout::ESI_BAND)
+        ->and($edge['shape'])->toBe('bracket')
+        // ... and the bracket's horizontal leg is inside it, above the next row of cards
+        ->and($edge['ly'] + 3)->toBe($topRow['y'] + EagleLayout::CARD_H + 12)
+        ->and($edge['ly'] + 3)->toBeLessThan($nextRow['y']);
+});
+
+it('walks a same-site pair on two rows into the top of the lower card, not through it', function () {
+    $nodes = [];
+    foreach (['11', '12', '13', '14'] as $i => $last) {
+        $nodes[] = eagleNode('10.0.0.' . $last, 'leaf', ['site' => 'BER1', 'device_id' => 10 + $i]);
+    }
+    $nodes[] = eagleNode('10.0.1.1', 'leaf', ['site' => 'BER2', 'device_id' => 21]);
+    $nodes[] = eagleNode('10.0.2.1', 'leaf', ['site' => 'BER4', 'device_id' => 31]);
+    // a three-PE segment in a two-column site: ordering keeps the block together, so the third
+    // member wraps onto the next row and that pair is the one with no single row to sit under
+    $pairs = [
+        ['a' => '10.0.0.11', 'b' => '10.0.0.12', 'esis' => 1, 'degraded' => 0, 'id' => 'a-b'],
+        ['a' => '10.0.0.11', 'b' => '10.0.0.13', 'esis' => 1, 'degraded' => 0, 'id' => 'a-c'],
+    ];
+
+    $out = EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], $pairs, []);
+    $upper = $out['nodes']['10.0.0.11'];
+    $lower = $out['nodes']['10.0.0.13'];
+    $edge = array_values(array_filter($out['edges'], fn ($e) => $e['id'] === 'edge:esi:a-c'))[0];
+    preg_match_all('/-?\d+/', $edge['path'], $m);
+    $points = array_map('intval', $m[0]);
+
+    expect($upper['row'])->toBe(0)
+        ->and($lower['row'])->toBe(1)
+        ->and($edge['shape'])->toBe('segment')
+        // the same 22 px band opens between the two rows
+        ->and($lower['y'] - ($upper['y'] + EagleLayout::CARD_H))->toBe(EagleLayout::ESI_BAND)
+        ->and($points)->toHaveCount(8)
+        // down from the upper card's bottom, across the band, into the lower card's **top**
+        ->and($points[1])->toBe($upper['y'] + EagleLayout::CARD_H)
+        ->and($points[3])->toBe($upper['y'] + EagleLayout::CARD_H + 12)
+        ->and($points[5])->toBe($upper['y'] + EagleLayout::CARD_H + 12)
+        ->and($points[7])->toBe($lower['y'])
+        ->and($points[3])->toBeLessThan($lower['y']);
+});
+
+it('shortens an ESI label that does not fit between its two anchors', function () {
+    $nodes = [eagleNode('10.0.0.11', 'leaf', ['site' => 'A']), eagleNode('10.0.0.12', 'leaf', ['site' => 'A'])];
+    $short = [['a' => '10.0.0.11', 'b' => '10.0.0.12', 'esis' => 2, 'degraded' => 0, 'id' => 'p']];
+    $long = [['a' => '10.0.0.11', 'b' => '10.0.0.12', 'esis' => 22, 'degraded' => 5, 'id' => 'p']];
+
+    $fits = array_values(array_filter(EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], $short, [])['edges'], fn ($e) => $e['layer'] === 'esi'))[0];
+    $wide = array_values(array_filter(EagleLayout::place(eagleShape($nodes), $nodes, [], [], [], $long, [])['edges'], fn ($e) => $e['layer'] === 'esi'))[0];
+
+    // the anchors are one column apart (168 px), which holds "22 ESIs, 5 degraded" at 4.8 px
+    // a character; the assertion is the rule, not this one string
+    expect($fits['label'])->toBe('2 ESIs')
+        ->and($wide['label'])->toBe(mb_strlen('22 ESIs, 5 degraded') * EagleLayout::EDGE_CHAR_W <= 168 - 8 ? '22 ESIs, 5 degraded' : '22')
+        // whatever is drawn, the whole string is in the title
+        ->and($wide['title'])->toContain('22 shared ESI-LAG segments')
+        ->and($wide['title'])->toContain('5 degraded');
+});
+
+it('trunks an unmonitored far end to each site instead of fanning a line per leaf', function () {
+    // fabric 16: one shared far end above two multi-member sites. `trunks()` skipped every row
+    // with `b === null`, so this drew one line per leaf straight through the gateway tier.
+    $nodes = [];
+    foreach ([['11', 'A'], ['12', 'A'], ['21', 'B'], ['22', 'B']] as $i => [$last, $site]) {
+        $nodes[] = eagleNode('10.0.0.' . $last, 'leaf', ['site' => $site, 'device_id' => 10 + $i]);
+    }
+    $shape = eagleShape($nodes, FabricShape::UNDERLAY_SPINE_LEAF);
+    $links = [];
+    foreach ($nodes as $n) {
+        $links[] = eagleLink($n['ip'], null, ['b_label' => '10.9.9.1', 'link_key' => 'k-' . $n['ip']]);
+    }
+
+    $out = EagleLayout::place($shape, $nodes, $links, [], ['10.9.9.1'], [], []);
+    $trunks = array_values(array_filter($out['edges'], fn ($e) => $e['kind'] === 'trunk'));
+    $lines = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'underlay' && $e['kind'] !== 'trunk'));
+
+    expect($out['nodes'])->toHaveKey('far:10.9.9.1')
+        ->and($trunks)->toHaveCount(2)
+        ->and($lines)->toBe([])
+        // both name the placed card, not the bare address
+        ->and(array_column($trunks, 'a'))->toBe(['far:10.9.9.1', 'far:10.9.9.1'])
+        ->and(array_column($trunks, 'label'))->toBe(['2 up', '2 up'])
+        // and the title reads as an address, not as an internal id
+        ->and($trunks[0]['title'])->toContain('10.9.9.1')
+        ->and($trunks[0]['title'])->not->toContain('far:');
+});
+
+it('names the placed far card on an untrunked line to the same far end', function () {
+    // one site of two, but only one of them peers with the far end: no trunk, and the line that
+    // is drawn still has to name the card it lands on
+    $nodes = [
+        eagleNode('10.0.0.11', 'leaf', ['site' => 'A', 'device_id' => 11]),
+        eagleNode('10.0.0.12', 'leaf', ['site' => 'A', 'device_id' => 12]),
+        eagleNode('10.0.0.21', 'leaf', ['site' => 'B', 'device_id' => 21]),
+    ];
+    $shape = eagleShape($nodes, FabricShape::UNDERLAY_SPINE_LEAF);
+    $links = [
+        eagleLink('10.0.0.11', null, ['b_label' => '10.9.9.1', 'link_key' => 'a']),
+        eagleLink('10.0.0.21', null, ['b_label' => '10.9.9.1', 'link_key' => 'b']),
+    ];
+
+    $out = EagleLayout::place($shape, $nodes, $links, [], ['10.9.9.1'], [], []);
+    $lines = array_values(array_filter($out['edges'], fn ($e) => $e['layer'] === 'underlay'));
+
+    expect($lines)->toHaveCount(2)
+        ->and(array_column($lines, 'kind'))->toBe(['underlay', 'underlay'])
+        ->and(array_column($lines, 'b'))->toBe(['far:10.9.9.1', 'far:10.9.9.1']);
 });

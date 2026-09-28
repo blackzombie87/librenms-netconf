@@ -54,6 +54,16 @@ final class EagleLayout
     /** Roughly one character of the 11 px label font, for fitting a caption to its box. */
     public const LABEL_CHAR_W = 5.9;
 
+    /** … and of the 9 px edge-label font, for fitting an ESI label between two anchors. */
+    public const EDGE_CHAR_W = 4.8;
+
+    /**
+     * How wide a one-member gateway compound may grow to hold its caption. Two of these plus a
+     * gutter and the outer margins still fit TARGET_WIDTH, so the two production gateways stay
+     * on one row instead of ellipsizing `IPB/CarrierColo Rechenzentrum Berlin - RZ BER2`.
+     */
+    public const GATEWAY_CAPTION_CAP = 480;
+
     public const ATTACHED_BAND = 44;
 
     /** Cards per row inside a site: roomier while there are one or two sites to place. */
@@ -172,11 +182,11 @@ final class EagleLayout
 
         // ---- compound tiers: site boxes, wrapped inside and packed into rows of TARGET_WIDTH
         $groups = [];
-        foreach ([$gatewaySites, $leafSites] as $tierSites) {
+        foreach ([[$gatewaySites, true], [$leafSites, false]] as [$tierSites, $gatewayTier]) {
             if ($tierSites === []) {
                 continue;
             }
-            [$y, $tierGroups, $tierRows] = self::packTier($tierSites, $collapsed, $cap, $usable, $y, $outsideOn, $outsideOf, $attachedOf, $attached, count($groups), $esiPairs);
+            [$y, $tierGroups, $tierRows] = self::packTier($tierSites, $collapsed, $cap, $usable, $y, $outsideOn, $outsideOf, $attachedOf, $attached, count($groups), $esiPairs, $gatewayTier);
             $groups = array_merge($groups, $tierGroups);
             $rows = array_merge($rows, $tierRows);
             $y += self::TIER_GAP;
@@ -319,7 +329,11 @@ final class EagleLayout
         $sites = [];
         foreach ($ips as $ip) {
             $label = $byIp[$ip]['site'] ?? $clusterSite[$find($ip)] ?? null;
-            $key = $prefix . ($label !== null ? 'site:' . $label : 'pair:' . $find($ip));
+            // every member of this tier whose location is still null shares one compound: a
+            // half-collected fabric was a field of thirteen dashed boxes, which is the same
+            // fact repeated as geometry. A member that does have a location is not pulled in,
+            // and one that inherits a location from an ESI partner joins that location above.
+            $key = $prefix . ($label !== null ? 'site:' . $label : 'noloc');
             $sites[$key] ??= ['key' => $key, 'label' => $label === null ? null : (string) $label, 'members' => []];
             $sites[$key]['members'][] = $ip;
             $siteOf[$ip] = $key;
@@ -341,7 +355,7 @@ final class EagleLayout
      * @param  list<array{a: string, b: string, esis: int, degraded: int, id: string}>  $esiPairs
      * @return array{0: int, 1: list<array<string, mixed>>, 2: list<array{width: int, cards: list<string>, groups: list<int>}>}
      */
-    private static function packTier(array $sites, array $collapsed, int $cap, int $usable, int $y, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached, int $offset, array $esiPairs): array
+    private static function packTier(array $sites, array $collapsed, int $cap, int $usable, int $y, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached, int $offset, array $esiPairs, bool $gatewayTier = false): array
     {
         $groups = [];
         $rows = [];
@@ -350,7 +364,7 @@ final class EagleLayout
         $rowHeight = 0;
         $rowWidth = 0;
         foreach ($sites as $site) {
-            $box = self::siteBox($site, isset($collapsed[$site['key']]), $cap, $outsideOn, $outsideOf, $attachedOf, $attached, $esiPairs);
+            $box = self::siteBox($site, isset($collapsed[$site['key']]), $cap, $outsideOn, $outsideOf, $attachedOf, $attached, $esiPairs, $gatewayTier);
             if ($rowWidth > 0 && $rowWidth + self::SITE_GAP + $box['w'] > $usable) {
                 $rows[] = ['width' => $rowWidth, 'cards' => [], 'groups' => $rowIndices];
                 $rowIndices = [];
@@ -485,46 +499,52 @@ final class EagleLayout
      * @param  list<array{a: string, b: string, esis: int, degraded: int, id: string}>  $esiPairs
      * @return array<string, mixed>
      */
-    private static function siteBox(array $site, bool $collapsed, int $cap, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached, array $esiPairs = []): array
+    private static function siteBox(array $site, bool $collapsed, int $cap, bool $outsideOn, array $outsideOf, array $attachedOf, ?array $attached, array $esiPairs = [], bool $gatewayTier = false): array
     {
         $count = count($site['members']);
         $cols = $collapsed ? 1 : max(1, min($cap, $count));
         $rows = $collapsed ? 1 : (int) ceil($count / $cols);
         $innerW = $cols * self::CARD_W + ($cols - 1) * self::COL_GAP;
-        $innerH = $rows * self::CARD_H + ($rows - 1) * self::ROW_GAP;
+
+        [$gaps, $bottomBand] = self::esiBands($site['members'], $collapsed ? 1 : $cols, $rows, $collapsed ? [] : $esiPairs);
+        $innerH = $rows * self::CARD_H + array_sum($gaps);
 
         $hasOutside = false;
         $hasAttached = false;
-        $hasBracket = false;
         if (! $collapsed) {
-            $inSite = array_fill_keys($site['members'], true);
             foreach ($site['members'] as $ip) {
                 $hasOutside = $hasOutside || ($outsideOn && ($outsideOf[$ip] ?? []) !== []);
                 $hasAttached = $hasAttached || ($attached !== null && ($attachedOf[$ip] ?? []) !== []);
             }
-            foreach ($esiPairs as $pair) {
-                // a bracket between two members of this site is drawn under the cards, so the
-                // box has to own that strip or the mark lands outside its own compound. This is
-                // the superset: the wrap can still put a same-site pair on two rows, which draws
-                // a segment and leaves the band unused. edges() must never draw a bracket for a
-                // pair this test would not have reserved for.
-                $hasBracket = $hasBracket || (isset($inSite[$pair['a']], $inSite[$pair['b']]));
-            }
         }
-        $extra = ($hasBracket ? self::ESI_BAND : 0) + ($hasOutside ? self::OUTSIDE_BAND : 0) + ($hasAttached ? self::ATTACHED_BAND : 0);
+        $hasBracket = $bottomBand > 0 || in_array(self::ESI_BAND, $gaps, true);
+        $extra = $bottomBand + ($hasOutside ? self::OUTSIDE_BAND : 0) + ($hasAttached ? self::ATTACHED_BAND : 0);
+
+        // A gateway alone in its own facility string is a 176 px box under a 304 px caption, and
+        // the ellipsis then hides which datacentre it is. Let that one box grow to its caption,
+        // capped so two of them still share a row. Leaf compounds stay on the card grid: growing
+        // every singleton would fight the packing rule for no operator benefit.
+        $boxW = $innerW + 2 * self::SITE_PAD;
+        if ($gatewayTier && $count === 1 && ! $collapsed) {
+            $captionPx = (int) ceil(mb_strlen(($site['label'] ?? 'no location') . ' (1)') * self::LABEL_CHAR_W) + 2 * self::SITE_PAD + 16;
+            $boxW = max($boxW, min($captionPx, self::GATEWAY_CAPTION_CAP));
+        }
 
         return [
             'key' => $site['key'],
             'label' => $site['label'],
-            'caption' => self::fitLabel($site['label'], $count, $innerW + 2 * self::SITE_PAD),
+            'caption' => self::fitLabel($site['label'], $count, $boxW),
             'members' => $site['members'],
             'collapsed' => $collapsed,
             'cols' => $cols,
             'x' => 0,
             'y' => 0,
-            'w' => $innerW + 2 * self::SITE_PAD,
+            'w' => $boxW,
             'h' => self::SITE_HEADER + $innerH + 2 * self::SITE_PAD + $extra,
-            'header' => ['x' => 0, 'y' => 0, 'w' => $innerW + 2 * self::SITE_PAD, 'h' => self::SITE_HEADER],
+            'header' => ['x' => 0, 'y' => 0, 'w' => $boxW, 'h' => self::SITE_HEADER],
+            'inner_w' => $innerW,
+            'gaps' => $gaps,
+            'band' => $bottomBand,
             'bracket' => $hasBracket,
             'summary' => null,
             'state' => 'ok',
@@ -533,6 +553,50 @@ final class EagleLayout
             'degraded' => 0,
             'highlight' => false,
         ];
+    }
+
+    /**
+     * The vertical gaps inside one compound, so an ESI mark has a strip of its own instead of
+     * landing on the next row of cards.
+     *
+     * A bracket is drawn 12 px under its row and a cross-row segment runs from the upper card's
+     * bottom to the lower card's top, so the band a pair needs is **between** its two rows and
+     * not only under the last one. `ESI_BAND` (22) leaves 10 px between the horizontal leg and
+     * the next row; `ROW_GAP` (16) did not, which is why a four-member site's upper "2 ESIs"
+     * sat on the cards below it.
+     *
+     * `edges()` must stay a subset of this: every bracket it draws is a pair this reserved for.
+     *
+     * @param  list<string>  $members
+     * @param  list<array{a: string, b: string, esis: int, degraded: int, id: string}>  $esiPairs
+     * @return array{0: list<int>, 1: int} the gap under each row but the last, and the bottom band
+     */
+    private static function esiBands(array $members, int $cols, int $rows, array $esiPairs): array
+    {
+        $rowOf = [];
+        foreach (array_values($members) as $i => $ip) {
+            $rowOf[$ip] = intdiv($i, max(1, $cols));
+        }
+        $band = array_fill(0, max(1, $rows), false);
+        foreach ($esiPairs as $pair) {
+            if (! isset($rowOf[$pair['a']], $rowOf[$pair['b']])) {
+                continue;
+            }
+            $upper = min($rowOf[$pair['a']], $rowOf[$pair['b']]);
+            $lower = max($rowOf[$pair['a']], $rowOf[$pair['b']]);
+            for ($r = 0; $r < $rows; $r++) {
+                // a bracket under the row both ends share, else a band under every row the pair
+                // has to cross -- which is one band for the usual neighbouring rows
+                $band[$r] = $band[$r] || ($upper === $lower ? $upper === $r : ($upper <= $r && $r < $lower));
+            }
+        }
+
+        $gaps = [];
+        for ($r = 0; $r < $rows - 1; $r++) {
+            $gaps[] = $band[$r] ? self::ESI_BAND : self::ROW_GAP;
+        }
+
+        return [$gaps, $band[$rows - 1] ? self::ESI_BAND : 0];
     }
 
     /**
@@ -557,20 +621,30 @@ final class EagleLayout
         }
 
         $top = $group['y'] + self::SITE_HEADER + self::SITE_PAD;
+        // the rows sit on the gaps siteBox() sized the box with, so a reserved ESI band is the
+        // same strip in both passes; a grown gateway box centres its one card
+        /** @var list<int> $gaps */
+        $gaps = $group['gaps'];
+        $rowTop = [];
+        $y = $top;
+        for ($r = 0; $r <= count($gaps); $r++) {
+            $rowTop[$r] = $y;
+            $y += self::CARD_H + ($gaps[$r] ?? 0);
+        }
+        $left = $group['x'] + (int) max(self::SITE_PAD, ($group['w'] - (int) $group['inner_w']) / 2);
+
         $index = 0;
         /** @var list<string> $siteMembers */
         $siteMembers = $group['members'];
         foreach ($siteMembers as $ip) {
             $col = $index % $group['cols'];
             $row = intdiv($index, $group['cols']);
-            $x = $group['x'] + self::SITE_PAD + $col * (self::CARD_W + self::COL_GAP);
-            $y = $top + $row * (self::CARD_H + self::ROW_GAP);
-            $placed[$ip] = self::memberNode($byIp[$ip], $tier[$ip] ?? FabricShape::TIER_LEAF, $x, $y, $hlNodes) + ['site' => $group['key'], 'row' => $row, 'col' => $col];
+            $x = $left + $col * (self::CARD_W + self::COL_GAP);
+            $placed[$ip] = self::memberNode($byIp[$ip], $tier[$ip] ?? FabricShape::TIER_LEAF, $x, $rowTop[$row] ?? $top, $hlNodes) + ['site' => $group['key'], 'row' => $row, 'col' => $col];
             $index++;
         }
 
-        $bandY = $top + (int) ceil(count($siteMembers) / (int) $group['cols']) * (self::CARD_H + self::ROW_GAP)
-            + ((bool) ($group['bracket'] ?? false) ? self::ESI_BAND : 0);
+        $bandY = $rowTop[count($gaps)] + self::CARD_H + (int) $group['band'];
         foreach ($siteMembers as $ip) {
             if ($outsideOn) {
                 foreach (array_values($outsideOf[$ip] ?? []) as $i => $stub) {
@@ -786,7 +860,7 @@ final class EagleLayout
     private static function edges(array $underlay, array $overlayEdges, array $esiPairs, array $placed, array $groups, array $anchorOf, array $siteOf, array $collapsed, array $sharedSet, bool $outsideOn, array $hlEdges, array $tier): array
     {
         $edges = [];
-        $trunked = self::trunks($underlay, $groups, $siteOf, $tier, $anchorOf, $hlEdges, $edges);
+        $trunked = self::trunks($underlay, $groups, $siteOf, $tier, $anchorOf, $sharedSet, $hlEdges, $edges);
 
         foreach ($underlay as $e) {
             $a = (string) $e['a'];
@@ -797,7 +871,7 @@ final class EagleLayout
             if ($e['b'] === null) {
                 $far = (string) ($e['b_label'] ?? '');
                 if (isset($sharedSet[$far]) && isset($anchorOf['far:' . $far], $anchorOf[$a])) {
-                    $edges[] = self::lineEdge('underlay', 'edge:underlay:' . $key, $anchorOf[$a], $anchorOf['far:' . $far], $e, $hlEdges);
+                    $edges[] = self::lineEdge('underlay', 'edge:underlay:' . $key, $anchorOf[$a], $anchorOf['far:' . $far], $e, $hlEdges, 'far:' . $far);
                 } elseif ($outsideOn && isset($anchorOf[$a])) {
                     $edges[] = self::lineEdge('wan', 'edge:underlay:' . $key, $anchorOf[$a], ['x' => $anchorOf[$a]['x'], 'y' => $anchorOf[$a]['bottom'] + 20, 'bottom' => $anchorOf[$a]['bottom'] + 20, 'id' => 'outside', 'collapsed' => false], $e, $hlEdges);
                 }
@@ -812,8 +886,13 @@ final class EagleLayout
             if ($anchorOf[$a]['id'] === $anchorOf[$b]['id']) {
                 continue;
             }
+            // cross-site is a relation between two leaf or gateway compounds. A spine has no
+            // compound at all, so deciding from $siteOf alone painted every Clos spine-to-leaf
+            // link blue and called a fabric's own underlay an inter-site link.
+            $spineEnd = ($tier[$a] ?? '') === FabricShape::TIER_SPINE || ($tier[$b] ?? '') === FabricShape::TIER_SPINE;
             $kind = match (true) {
                 (bool) ($e['wan'] ?? false) => 'wan',
+                $spineEnd => 'underlay',
                 ($siteOf[$a] ?? null) !== ($siteOf[$b] ?? null) => 'cross-site',
                 default => 'underlay',
             };
@@ -864,7 +943,34 @@ final class EagleLayout
                 && ($na['row'] ?? -1) === ($nb['row'] ?? -2) && abs((int) ($na['col'] ?? 0) - (int) ($nb['col'] ?? 0)) === 1;
             $style = self::edgeStyle('esi', null);
             $id = 'edge:esi:' . $p['id'];
+
+            // the horizontal leg sits 12 px under the card it hangs from, inside the 22 px band
+            // siteBox() reserved: 10 px still separate it from the row below
             $y = max($pa['bottom'], $pb['bottom']) + 12;
+            if ($bracket) {
+                $path = sprintf('M%d %d L%d %d L%d %d L%d %d', $pa['x'], $pa['bottom'], $pa['x'], $y, $pb['x'], $y, $pb['x'], $pb['bottom']);
+                $labelY = $y - 3;
+            } elseif ($sameSite && $na !== null && $nb !== null && abs((int) ($na['row'] ?? 0) - (int) ($nb['row'] ?? 0)) === 1) {
+                // consecutive rows of one compound: down from the upper card, across the band
+                // between the rows, and into the **top** of the lower card. The old straight
+                // segment ran from card bottom to card bottom, straight through the lower card.
+                [$upper, $lower] = ($na['y'] <= $nb['y']) ? [$pa, $pb] : [$pb, $pa];
+                $y = $upper['bottom'] + 12;
+                $path = sprintf('M%d %d L%d %d L%d %d L%d %d', $upper['x'], $upper['bottom'], $upper['x'], $y, $lower['x'], $y, $lower['x'], $lower['y']);
+                $labelY = $y - 3;
+            } else {
+                // a cross-site pair, and a same-site pair more than one row apart: no single band
+                // reaches the far card, so this stays a straight segment until the gutter router
+                $path = sprintf('M%d %d L%d %d', $pa['x'], $pa['bottom'], $pb['x'], $pb['bottom']);
+                $labelY = $y - 3;
+            }
+
+            // the label has to fit between the two anchors or it runs across the cards it names.
+            // RLG1's "22 ESIs, 5 degraded" fits between its pair; a long one on a short span is
+            // the bare count, and the whole string stays in the title
+            $long = sprintf('%d ESI%s', $p['esis'], $p['esis'] === 1 ? '' : 's') . ($p['degraded'] > 0 ? sprintf(', %d degraded', $p['degraded']) : '');
+            $fits = mb_strlen($long) * self::EDGE_CHAR_W <= abs($pa['x'] - $pb['x']) - 8;
+
             $edges[] = [
                 'kind' => 'esi',
                 'layer' => 'esi',
@@ -874,13 +980,12 @@ final class EagleLayout
                 'b' => $p['b'],
                 'esis' => $p['esis'],
                 'degraded' => $p['degraded'],
-                'path' => $bracket
-                    ? sprintf('M%d %d L%d %d L%d %d L%d %d', $pa['x'], $pa['bottom'], $pa['x'], $y, $pb['x'], $y, $pb['x'], $pb['bottom'])
-                    : sprintf('M%d %d L%d %d', $pa['x'], $pa['bottom'], $pb['x'], $pb['bottom']),
-                'label' => sprintf('%d ESI%s', $p['esis'], $p['esis'] === 1 ? '' : 's') . ($p['degraded'] > 0 ? sprintf(', %d degraded', $p['degraded']) : ''),
+                'path' => $path,
+                'label' => $fits ? $long : (string) $p['esis'],
                 'lx' => (int) (($pa['x'] + $pb['x']) / 2),
-                'ly' => $y - 3,
-                'title' => sprintf('%d shared ESI-LAG segment%s', $p['esis'], $p['esis'] === 1 ? '' : 's'),
+                'ly' => $labelY,
+                'title' => sprintf('%d shared ESI-LAG segment%s', $p['esis'], $p['esis'] === 1 ? '' : 's')
+                    . ($p['degraded'] > 0 ? sprintf(', %d degraded', $p['degraded']) : ''),
                 'highlight' => isset($hlEdges[$id]),
             ] + $style;
         }
@@ -902,28 +1007,43 @@ final class EagleLayout
     }
 
     /**
-     * One line from a spine-tier card to a site header, but only for the uniform case: every
-     * leaf of the site has an **up** session of the **same** routing-protocol set. Four up
-     * sessions and one down session are five lines and no trunk, and so are four `bgp`
-     * sessions beside one `bgp,ospf` — the odd session has to stay visible.
+     * One stroke from a spine-tier card to a site header, for the sessions of that site that
+     * are healthy and agree on a routing-protocol set. The ones that do not are drawn beside
+     * it, one line each.
+     *
+     * A trunk used to need every session of the site to be up and of one set, so a single down
+     * session exploded the pod into a fan that crossed the trunks that did draw — which is the
+     * opposite of what an operator needs to see. The odd session stays visible as its own line;
+     * the healthy ones stay one stroke.
+     *
+     * The spine may be an unmonitored address several members peer with (`far:{address}`).
+     * Those rows carry `b === null`, and skipping them is what drew twelve separate lines from
+     * one fake spine straight through the gateway cards.
      *
      * @param  list<array<string, mixed>>  $underlay
      * @param  list<array<string, mixed>>  $groups
      * @param  array<string, string>  $siteOf
      * @param  array<string, string>  $tier
      * @param  array<string, array{x: int, y: int, bottom: int, id: string, collapsed: bool}>  $anchorOf
+     * @param  array<string, true>  $sharedSet
      * @param  array<string, true>  $hlEdges
      * @param  list<array<string, mixed>>  $edges
      * @return array<string, true> link_keys the trunk swallowed
      */
-    private static function trunks(array $underlay, array $groups, array $siteOf, array $tier, array $anchorOf, array $hlEdges, array &$edges): array
+    private static function trunks(array $underlay, array $groups, array $siteOf, array $tier, array $anchorOf, array $sharedSet, array $hlEdges, array &$edges): array
     {
         $bySpineSite = [];
         foreach ($underlay as $e) {
+            $a = (string) $e['a'];
             if ($e['b'] === null) {
+                // an unmonitored far end that got a card on the spine tier is a spine here
+                $far = 'far:' . (string) ($e['b_label'] ?? '');
+                if (isset($sharedSet[(string) ($e['b_label'] ?? '')], $anchorOf[$far], $siteOf[$a])) {
+                    $bySpineSite[$far][$siteOf[$a]][$a][] = $e;
+                }
+
                 continue;
             }
-            $a = (string) $e['a'];
             $b = (string) $e['b'];
             foreach ([[$a, $b], [$b, $a]] as [$spine, $leaf]) {
                 if (($tier[$spine] ?? '') === FabricShape::TIER_SPINE && isset($siteOf[$leaf])) {
@@ -941,34 +1061,49 @@ final class EagleLayout
         foreach ($bySpineSite as $spine => $sites) {
             foreach ($sites as $siteKey => $byLeaf) {
                 $group = $members[$siteKey] ?? null;
-                if ($group === null || count($group['members']) < 2 || count($byLeaf) !== count($group['members'])) {
+                // a member of the site with no session to this spine has to stay a visible gap,
+                // so the whole group is drawn session by session
+                if ($group === null || count($group['members']) < 2 || count($byLeaf) !== count($group['members']) || ! isset($anchorOf[$spine])) {
                     continue;
                 }
-                $sets = [];
-                $allUp = true;
                 $sessions = [];
                 foreach ($byLeaf as $rows) {
                     foreach ($rows as $row) {
-                        $allUp = $allUp && ($row['up'] ?? null) === true;
-                        $sets[self::protocolSet((string) $row['protocol'])] = true;
                         $sessions[] = $row;
                     }
                 }
-                if (! $allUp || count($sets) !== 1) {
+                // the largest set of up sessions that agree on a protocol set; `bgp` is not
+                // `bgp,ospf`, so a leaf that also runs OSPF does not join a BGP-only trunk
+                $upSets = [];
+                foreach ($sessions as $row) {
+                    if (($row['up'] ?? null) === true) {
+                        $upSets[self::protocolSet((string) $row['protocol'])][] = $row;
+                    }
+                }
+                $best = '';
+                foreach ($upSets as $set => $rows) {
+                    if (count($rows) > count($upSets[$best] ?? [])) {
+                        $best = (string) $set;
+                    }
+                }
+                $trunked = $upSets[$best] ?? [];
+                if (count($trunked) < 2) {
                     continue;
                 }
+
                 $id = 'edge:trunk:' . $spine . '|' . $siteKey;
                 $edges[] = [
                     'kind' => 'trunk', 'layer' => 'underlay', 'id' => $id,
-                    'a' => $spine, 'b' => $siteKey,
+                    'a' => (string) $spine, 'b' => $siteKey,
                     'path' => sprintf('M%d %d L%d %d', $anchorOf[$spine]['x'], $anchorOf[$spine]['bottom'], (int) ($group['header']['x'] + $group['header']['w'] / 2), (int) $group['header']['y']),
-                    'label' => sprintf('%d up', count($sessions)),
+                    'label' => sprintf('%d up', count($trunked)),
                     'lx' => (int) (($anchorOf[$spine]['x'] + $group['header']['x'] + $group['header']['w'] / 2) / 2),
                     'ly' => (int) (($anchorOf[$spine]['bottom'] + $group['header']['y']) / 2),
-                    'title' => sprintf('%d up %s sessions from %s to every member of this site', count($sessions), array_key_first($sets), $spine),
+                    // a trunk is never one session, so the plural is not a choice
+                    'title' => sprintf('%d up %s sessions from %s to every member of this site', count($trunked), $best, str_starts_with((string) $spine, 'far:') ? substr((string) $spine, 4) : $spine),
                     'highlight' => isset($hlEdges[$id]),
                 ] + self::edgeStyle('trunk', true);
-                foreach ($sessions as $row) {
+                foreach ($trunked as $row) {
                     $taken[(string) ($row['link_key'] ?? '')] = true;
                 }
             }
@@ -984,7 +1119,7 @@ final class EagleLayout
      * @param  array<string, true>  $hlEdges
      * @return array<string, mixed>
      */
-    private static function lineEdge(string $kind, string $id, array $pa, array $pb, array $row, array $hlEdges): array
+    private static function lineEdge(string $kind, string $id, array $pa, array $pb, array $row, array $hlEdges, ?string $bId = null): array
     {
         $up = $row['up'] ?? null;
         $sameRow = $pa['y'] === $pb['y'];
@@ -997,7 +1132,10 @@ final class EagleLayout
             'layer' => 'underlay',
             'id' => $id,
             'a' => (string) $row['a'],
-            'b' => $row['b'] === null ? (string) ($row['b_label'] ?? '') : (string) $row['b'],
+            // a placed node id on both ends, so the inspector and the client name one node: a
+            // shared far end is `far:{address}`. A degree-1 outside session has no card and
+            // keeps its label
+            'b' => $bId ?? ($row['b'] === null ? (string) ($row['b_label'] ?? '') : (string) $row['b']),
             'protocol' => (string) $row['protocol'],
             'state' => $row['state'] ?? null,
             'up' => $up,
@@ -1117,7 +1255,8 @@ final class EagleLayout
                 'id' => $id, 'kind' => 'summary', 'ip' => '', 'name' => $group['label'] ?? 'no location',
                 'role' => 'site', 'tier' => FabricShape::TIER_LEAF, 'device_id' => null, 'border' => false,
                 'status' => $state === 'down' ? false : null, 'collected' => true, 'version' => null, 'site' => $group['key'],
-                'x' => $group['x'] + self::SITE_PAD, 'y' => $group['y'] + self::SITE_HEADER + self::SITE_PAD,
+                'x' => $group['x'] + (int) max(self::SITE_PAD, ($group['w'] - (int) $group['inner_w']) / 2),
+                'y' => $group['y'] + self::SITE_HEADER + self::SITE_PAD,
                 'w' => self::CARD_W, 'h' => self::CARD_H,
                 'fillClass' => 'eg-unknown',
                 'strokeClass' => match ($state) { 'down' => 'eg-card-down', 'warning' => 'eg-card-stale', default => 'eg-card-ok' },
