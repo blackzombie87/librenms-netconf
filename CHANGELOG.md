@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.2 – 2026-09-28
 
 The two bugs and the two loose ends of the external review of 2026-09-25 (internal plan §15).
 Both bugs are in code 1.4.x added, and both are the class of defect a suite that asserts
