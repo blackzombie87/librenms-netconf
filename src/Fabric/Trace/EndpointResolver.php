@@ -45,6 +45,15 @@ final class EndpointResolver
                 'moves' => (int) $row['moves'],
             ];
         }
+        $macIp = array_map(fn ($r) => [
+            'device_id' => (int) $r['device_id'],
+            'mac' => (string) $r['mac_address'],
+            'ip' => (string) $r['ip_address'],
+            'vni' => $r['vni'] === null ? null : (int) $r['vni'],
+            'bridge_domain' => (string) $r['bridge_domain'],
+            'ifname' => $r['ifname'] === null ? null : (string) $r['ifname'],
+            'port_id' => $r['port_id'] === null ? null : (int) $r['port_id'],
+        ], $search['mac_ip'] ?? []);
         $fdb = array_map(fn ($r) => [
             'device_id' => (int) $r['device_id'],
             'mac' => (string) $r['mac_address'],
@@ -67,7 +76,7 @@ final class EndpointResolver
             }
         }
 
-        return self::select(MacSearch::classify($query), ['plugin' => $plugin, 'fdb' => $fdb, 'arp' => $arp], $members, $search['opted_in']);
+        return self::select(MacSearch::classify($query), ['plugin' => $plugin, 'mac_ip' => $macIp, 'fdb' => $fdb, 'arp' => $arp], $members, $search['opted_in']);
     }
 
     /**
@@ -172,7 +181,7 @@ final class EndpointResolver
      * The pure half: rank what the three sources returned, and say what was consulted.
      *
      * @param  array{kind: string|null, value: string, q: string}  $query
-     * @param  array{plugin: list<array<string, mixed>>, fdb: list<array<string, mixed>>, arp: list<array<string, mixed>>}  $rows
+     * @param  array{plugin: list<array<string, mixed>>, mac_ip?: list<array<string, mixed>>, fdb: list<array<string, mixed>>, arp: list<array<string, mixed>>}  $rows
      * @param  array<int, array{address: string, name: string}>  $members
      * @param  array{devices: int, candidates: int, rows: int, global: bool, fabric: bool}|array<string, mixed>  $macCollection
      * @return array{candidates: list<Endpoint>, consulted: list<array{source: string, rows: int, note: string|null}>, notes: list<string>}
@@ -181,6 +190,29 @@ final class EndpointResolver
     {
         $candidates = [];
         $seen = [];
+
+        // The device's own IP/MAC table first. It is the only source that states all four of
+        // address, MAC, bridge domain and access interface in one row, so it needs no
+        // inference at all — and on a multihomed segment each PE reports its own leg, which
+        // is exactly the answer the ESI detour has to reconstruct.
+        foreach ($rows['mac_ip'] ?? [] as $row) {
+            $member = $members[$row['device_id']] ?? null;
+            $candidates[] = new Endpoint(
+                query: $query['q'], kind: $query['kind'], mac: (string) $row['mac'], ips: [(string) $row['ip']],
+                vni: $row['vni'], deviceId: $row['device_id'],
+                address: $member['address'] ?? null, name: $member['name'] ?? null,
+                ifname: $row['ifname'], portId: $row['port_id'], esi: null,
+                source: Endpoint::SOURCE_EVPN_MAC_IP,
+                evidence: [sprintf(
+                    'IP/MAC table on %s: %s is %s in %s%s, on %s',
+                    $member['name'] ?? ('device ' . $row['device_id']),
+                    (string) $row['ip'], Mac::readable((string) $row['mac']), (string) $row['bridge_domain'],
+                    $row['vni'] === null ? ' (VNI not polled yet)' : sprintf(' (VNI %d)', $row['vni']),
+                    $row['ifname'] ?? 'an unnamed interface',
+                )],
+            );
+        }
+
         foreach ($rows['plugin'] as $row) {
             $member = $members[$row['device_id']] ?? null;
             $ips = array_values(array_map(strval(...), (array) ($row['ips'] ?? [])));
@@ -255,6 +287,7 @@ final class EndpointResolver
         usort($candidates, fn (Endpoint $a, Endpoint $b) => [$a->rank(), ! $a->df, $a->address ?? '', $a->ifname ?? ''] <=> [$b->rank(), ! $b->df, $b->address ?? '', $b->ifname ?? '']);
 
         $consulted = [
+            ['source' => 'IP/MAC table (netconf_evpn_mac_ip)', 'rows' => count($rows['mac_ip'] ?? []), 'note' => self::macNote($macCollection)],
             ['source' => 'EVPN MAC database (netconf_evpn_mac)', 'rows' => count($rows['plugin']), 'note' => self::macNote($macCollection)],
             ['source' => 'core bridge tables (ports_fdb)', 'rows' => count($rows['fdb']), 'note' => null],
             ['source' => 'core ARP (ipv4_mac)', 'rows' => count($rows['arp']), 'note' => null],

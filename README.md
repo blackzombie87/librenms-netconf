@@ -293,7 +293,7 @@ Shipped (Junos):
 | `junos-rpki` | `show validation session`, `show validation statistics` | state sensor per cache session, sessions not up (`limit: 0`), invalid origin count; metrics per session (flaps, prefixes) and the validation statistics |
 | `junos-vrrp` | `show vrrp summary` | state sensor per interface/group (master, backup, init), groups neither master nor backup (`limit: 0`) |
 | `junos-evpn-fabric` | `show evpn instance extensive`, `show mac-vrf forwarding vxlan-tunnel-end-point source` / `remote` / `esi` / `remote mac-table` (every 3rd poll), `show interfaces vtep` | rows for the EVPN fabric tables (`netconf_evpn_neighbor`, `_esi`, `_vni`, `_vni_vtep`, `_tunnel`); only with the *EVPN fabric view* setting |
-| `junos-evpn-fabric-mac` | `show evpn database` (every 3rd poll) | `netconf_evpn_mac`: the EVPN MAC database with active source (ESI / remote VTEP / local IFL) and IPs; on by default with the *EVPN fabric view* setting, switchable globally (*EVPN MAC database*) and per device (attribute `netconf_evpn_mac`) |
+| `junos-evpn-fabric-mac` | `show evpn database`, `show mac-vrf forwarding mac-ip-table` (every 3rd poll) | `netconf_evpn_mac`: the EVPN MAC database with active source (ESI / remote VTEP / local IFL) and IPs. `netconf_evpn_mac_ip`: IP &rarr; MAC &rarr; bridge domain &rarr; access interface, **locally owned entries only** (a `vtep-`/`esi.` entry is another leaf's row seen through a tunnel). Both on by default with the *EVPN fabric view* setting, switchable globally (*EVPN MAC database*) and per device (attribute `netconf_evpn_mac`) |
 
 Commands whose subsystem is not running ("LDP instance is not running", "vrrp subsystem
 not running") are recognised and skipped without creating sensors, so every definition can
@@ -592,10 +592,16 @@ The **Trace** tab and `lnms netconf:trace` answer "how does this address reach t
 IP-A (ge-0/0/38)[LEAF-A](et-0/0/52) <-> (et-0/0/53)[LEAF-B](ge-0/0/28) IP-B
 ```
 
-Each endpoint is looked up in the EVPN MAC database, then in core's bridge tables, then in
-core ARP, and the answer names every source with what it returned — including the empty ones,
-and including whether MAC collection is off on the devices in scope. A leaf that only learnt
-the MAC from the fabric is corroboration, not an attachment.
+Each endpoint is looked up in the device's own IP/MAC table, then in the EVPN MAC database,
+then in core's bridge tables, then in core ARP, and the answer names every source with what it
+returned — including the empty ones, and including whether MAC collection is off on the devices
+in scope. A leaf that only learnt the MAC from the fabric is corroboration, not an attachment.
+
+The IP/MAC table (`netconf_evpn_mac_ip`) ranks first because it is the only source that infers
+nothing: one row carries the address, the MAC, the bridge domain and the access interface, on
+the leaf that owns them. It matters most where a MAC is multihomed onto an ESI-LAG — the MAC
+database reports such a MAC with the Ethernet Segment as its source and no port at all, and one
+firewall MAC can carry dozens of addresses across dozens of bridge domains in a single row.
 
 The path is every minimum-hop path through the stored underlay (parallel links stay separate;
 no routing protocol's edge is preferred). **Trace live** (admin only) instead asks each device

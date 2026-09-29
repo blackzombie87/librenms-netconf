@@ -29,39 +29,47 @@ final class MacSearch
     public static function run(string $q, ?array $deviceIds = null, int $limit = self::LIMIT): array
     {
         $query = self::classify($q);
-        $result = $query + ['rows' => [], 'fdb' => [], 'arp' => [], 'truncated' => false, 'opted_in' => self::optedIn($deviceIds)];
+        $result = $query + ['rows' => [], 'mac_ip' => [], 'fdb' => [], 'arp' => [], 'truncated' => false, 'opted_in' => self::optedIn($deviceIds)];
         if ($query['kind'] === null) {
             return $result;
         }
 
         $macTable = TableSchema::tableName('mac');
         $plugin = DB::table($macTable)->when($deviceIds !== null, fn ($b) => $b->whereIn('device_id', $deviceIds ?: [0]));
+        // the device's own IP/MAC table: only leaves that own the address locally have a row
+        $macIp = DB::table(TableSchema::tableName('mac_ip'))->when($deviceIds !== null, fn ($b) => $b->whereIn('device_id', $deviceIds ?: [0]));
         $fdb = DB::table('ports_fdb')->when($deviceIds !== null, fn ($b) => $b->whereIn('ports_fdb.device_id', $deviceIds ?: [0]));
         $arp = DB::table('ipv4_mac')->when($deviceIds !== null, fn ($b) => $b->whereIn('ipv4_mac.device_id', $deviceIds ?: [0]));
 
         switch ($query['kind']) {
             case 'mac':
                 $plugin->where('mac_address', $query['value']);
+                $macIp->where('mac_address', $query['value']);
                 $fdb->where('ports_fdb.mac_address', $query['value']);
                 $arp->where('ipv4_mac.mac_address', $query['value']);
                 break;
             case 'mac-prefix':
                 $plugin->where('mac_address', 'like', $query['value'] . '%');
+                $macIp->where('mac_address', 'like', $query['value'] . '%');
                 $fdb->where('ports_fdb.mac_address', 'like', $query['value'] . '%');
                 $arp->where('ipv4_mac.mac_address', 'like', $query['value'] . '%');
                 break;
             case 'ip':
                 $plugin->where('ip_addresses', 'like', '%"' . $query['value'] . '"%');
+                // exact, unlike the LIKE over the MAC row's json list: this column is the address
+                $macIp->where('ip_address', $query['value']);
                 $arp->where('ipv4_mac.ipv4_address', $query['value']);
                 $fdb = null;
                 break;
             case 'vni':
                 $plugin->where('vni', (int) $query['value']);
+                $macIp = null;   // the IP/MAC table names a bridge domain, not a VNI
                 $fdb = null;
                 $arp = null;
                 break;
             default:
                 $plugin->where('ip_addresses', 'like', '%' . $query['value'] . '%');
+                $macIp = null;
                 $fdb = null;
                 $arp = null;
         }
@@ -73,6 +81,14 @@ final class MacSearch
         }
         $result['rows'] = self::resolve($rows);
 
+        if ($macIp !== null) {
+            $result['mac_ip'] = self::withVnis(
+                $macIp->orderBy('ip_address')->orderBy('device_id')->limit($limit)
+                    ->get(['device_id', 'bridge_domain', 'ip_address', 'mac_address', 'instance', 'ifname', 'port_id', 'flags'])
+                    ->map(fn ($r) => (array) $r)->all(),
+                $deviceIds,
+            );
+        }
         if ($fdb !== null) {
             $result['fdb'] = $fdb->join('ports', 'ports.port_id', '=', 'ports_fdb.port_id')
                 ->leftJoin('vlans', 'vlans.vlan_id', '=', 'ports_fdb.vlan_id')
@@ -100,6 +116,52 @@ final class MacSearch
         }
 
         return $result;
+    }
+
+    /**
+     * Give the IP/MAC rows their VNI and their port.
+     *
+     * The device names a bridge domain (`VX91`), not a VNI, and only `netconf_evpn_vni`
+     * knows which number that name carries on this leaf. Joining here rather than at collect
+     * time is what keeps `VX<vni>` a convention of one fabric instead of an assumption in the
+     * collector: a leaf whose VNI table has not been polled yet gets a null VNI and says so,
+     * which is still a better answer than a guessed number.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<int>|null  $deviceIds
+     * @return list<array<string, mixed>>
+     */
+    private static function withVnis(array $rows, ?array $deviceIds): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $vnis = [];
+        $names = array_values(array_unique(array_column($rows, 'bridge_domain')));
+        $devices = array_values(array_unique(array_map('intval', array_column($rows, 'device_id'))));
+        foreach (DB::table(TableSchema::tableName('vni'))->whereIn('device_id', $devices ?: [0])
+            ->whereIn('vlan_name', $names ?: [''])->get(['device_id', 'vlan_name', 'vni', 'vlan_id']) as $row) {
+            $vnis[(int) $row->device_id][(string) $row->vlan_name] = ['vni' => (int) $row->vni, 'vlan_id' => $row->vlan_id === null ? null : (int) $row->vlan_id];
+        }
+
+        $portIds = array_values(array_filter(array_map(fn ($r) => $r['port_id'] === null ? null : (int) $r['port_id'], $rows)));
+        /** @var \Illuminate\Support\Collection<int, Port> $ports */
+        $ports = Port::query()->whereIn('port_id', $portIds ?: [0])->get()->keyBy('port_id');
+        /** @var \Illuminate\Support\Collection<int, Device> $devs */
+        $devs = Device::query()->whereIn('device_id', $devices ?: [0])->get()->keyBy('device_id');
+
+        foreach ($rows as &$row) {
+            $found = $vnis[(int) $row['device_id']][(string) $row['bridge_domain']] ?? null;
+            $row['vni'] = $found['vni'] ?? null;
+            $row['vlan_id'] = $found['vlan_id'] ?? null;
+            $row['port'] = $row['port_id'] === null ? null : $ports->get((int) $row['port_id']);
+            $row['device'] = $devs->get((int) $row['device_id']);
+            $row['mac'] = Mac::readable((string) $row['mac_address']);
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**

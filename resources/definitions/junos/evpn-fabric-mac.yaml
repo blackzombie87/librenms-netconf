@@ -14,6 +14,11 @@ commands:
     cli: show evpn database
     optional: true
     every: 3
+  mac_ip_table:
+    cli: show mac-vrf forwarding mac-ip-table
+    optional: true                             # VXLAN leaves only
+    every: 3
+    description: IP/MAC bindings per bridge domain with the local interface that owns them
 
 tables:
   - id: mac
@@ -28,3 +33,24 @@ tables:
       source:       string(active-source)
       source_type:  { xpath: string(active-source), transform: evpn_source }
       active_since: { xpath: string(active-source-timestamp), transform: timestamp }
+
+  # IP -> MAC -> bridge domain -> local interface, stated by the device instead of inferred
+  # from the MAC database (plan §12.10 T7). Only what this leaf owns locally is kept: a
+  # `vtep-N.M` or `esi.N` entry is another leaf's local row arriving through a tunnel, and
+  # storing it would multiply the table by the number of leaves without adding an answer.
+  # The bridge domain is a name (`VX91`); vni.vlan_name carries the same name, so the VNI is
+  # joined on read rather than assuming `VX<vni>` holds on every fabric.
+  - id: mac-ip
+    table: mac_ip
+    command: mac_ip_table
+    rows: >-
+      //l2ng-l2-mac-ip-entry[l2ng-l2-ip-address][l2ng-l2-mac-logical-interface]
+        [not(starts-with(l2ng-l2-mac-logical-interface, 'vtep-'))]
+        [not(starts-with(l2ng-l2-mac-logical-interface, 'esi.'))]
+    columns:
+      bridge_domain: string(../l2ng-l2-mac-ip-bridging-domain)
+      ip_address:    string(l2ng-l2-ip-address)
+      mac_address:   string(l2ng-l2-mac-address)
+      instance:      string(../l2ng-l2-mac-ip-routing-instance)
+      ifname:        string(l2ng-l2-mac-logical-interface)
+      flags:         string(l2ng-l2-mac-ip-flags)

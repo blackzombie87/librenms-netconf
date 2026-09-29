@@ -198,6 +198,57 @@ it('says so when a MAC is only known from the fabric and no leaf claims it', fun
         ->and($trace['warnings'][0])->toContain('no local attachment');
 });
 
+it('answers an IP from the device\'s own IP/MAC table, above every inferred source', function () {
+    // the live report's first half: one address, one MAC, and a dozen leaves that all report
+    // the MAC on its Ethernet Segment. The two PEs that own the segment each have a row of
+    // their own here, and the row carries the access interface outright - nothing has to be
+    // reconstructed from an ESI, and nothing depends on which leaf sorted first.
+    $result = EndpointResolver::select(
+        ['kind' => 'ip', 'value' => '203.0.113.4', 'q' => '203.0.113.4'],
+        [
+            'mac_ip' => [
+                ['device_id' => 1, 'mac' => '02000000001a', 'ip' => '203.0.113.4', 'vni' => 91, 'bridge_domain' => 'VX91', 'ifname' => 'ae36.0', 'port_id' => 12788],
+                ['device_id' => 9, 'mac' => '02000000001a', 'ip' => '203.0.113.4', 'vni' => 91, 'bridge_domain' => 'VX91', 'ifname' => 'ae36.0', 'port_id' => 12810],
+            ],
+            // the same MAC as the fabric sees it: the segment, with no interface at all
+            'plugin' => [
+                ['device_id' => 5, 'mac' => '02000000001a', 'vni' => 91, 'ips' => ['203.0.113.4'], 'source_type' => 'esi', 'source' => '00:11:22:33:44:55:00:00:24:00', 'ifname' => null, 'port_id' => null, 'esi' => '00:11:22:33:44:55:00:00:24:00', 'peers' => [], 'is_duplicate' => false, 'moves' => 0],
+            ],
+            'fdb' => [],
+            'arp' => [['device_id' => 5, 'mac' => '02000000001a', 'ip' => '203.0.113.4', 'port_id' => null, 'ifname' => null]],
+        ],
+        [1 => ['address' => '192.0.2.61', 'name' => 'BER1'], 5 => ['address' => '192.0.2.62', 'name' => 'BER2'], 9 => ['address' => '192.0.2.63', 'name' => 'HRO1']],
+    );
+
+    expect(array_map(fn ($c) => $c->source, $result['candidates']))
+        ->toBe([Endpoint::SOURCE_EVPN_MAC_IP, Endpoint::SOURCE_EVPN_MAC_IP, Endpoint::SOURCE_ARP, Endpoint::SOURCE_EVPN_ESI_UNKNOWN])
+        ->and($result['candidates'][0]->address)->toBe('192.0.2.61')
+        ->and($result['candidates'][0]->ifname)->toBe('ae36.0')
+        ->and($result['candidates'][0]->portId)->toBe(12788)
+        ->and($result['candidates'][0]->vni)->toBe(91)
+        ->and($result['candidates'][0]->evidence[0])->toContain('203.0.113.4 is 02:00:00:00:00:1a in VX91 (VNI 91), on ae36.0')
+        // both PEs of the segment, not one of them chosen by address order
+        ->and($result['candidates'][1]->address)->toBe('192.0.2.63')
+        ->and(array_column($result['consulted'], 'rows'))->toBe([2, 1, 0, 1]);
+});
+
+it('says the bridge domain and withholds the VNI when the VNI table has not been polled', function () {
+    // a leaf collected for IP/MAC but not yet for VNIs: `VX91` is what the device said, and
+    // 91 is a guess about a naming convention. The row still locates the endpoint.
+    $result = EndpointResolver::select(
+        ['kind' => 'ip', 'value' => '203.0.113.4', 'q' => '203.0.113.4'],
+        [
+            'mac_ip' => [['device_id' => 1, 'mac' => '02000000001a', 'ip' => '203.0.113.4', 'vni' => null, 'bridge_domain' => 'VX91', 'ifname' => 'ae36.0', 'port_id' => null]],
+            'plugin' => [], 'fdb' => [], 'arp' => [],
+        ],
+        [1 => ['address' => '192.0.2.61', 'name' => 'BER1']],
+    );
+
+    expect($result['candidates'][0]->vni)->toBeNull()
+        ->and($result['candidates'][0]->isAttachment())->toBeTrue()
+        ->and($result['candidates'][0]->evidence[0])->toContain('in VX91 (VNI not polled yet), on ae36.0');
+});
+
 it('ranks a local EVPN row over the bridge table and names every source it consulted', function () {
     $result = EndpointResolver::select(
         ['kind' => 'mac', 'value' => '020000001140', 'q' => '02:00:00:00:11:40'],
@@ -218,8 +269,8 @@ it('ranks a local EVPN row over the bridge table and names every source it consu
         ->and($result['candidates'][0]->address)->toBe('192.0.2.61')
         ->and($result['candidates'][0]->portId)->toBe(77)
         ->and($result['candidates'][3]->isAttachment())->toBeFalse()
-        ->and(array_column($result['consulted'], 'rows'))->toBe([2, 1, 1])
-        ->and($result['consulted'][0]['note'])->toBe('collected on 2 of 3 devices here')
+        ->and(array_column($result['consulted'], 'rows'))->toBe([0, 2, 1, 1])   // IP/MAC table, MAC database, fdb, arp
+        ->and($result['consulted'][1]['note'])->toBe('collected on 2 of 3 devices here')
         ->and($result['notes'])->toBe([]);
 });
 

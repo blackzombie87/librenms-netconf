@@ -109,6 +109,21 @@ final class TableSchema
                 'mac_count' => self::TYPE_INT,
             ],
         ],
+        // IP -> MAC -> bridge domain -> local interface, straight from the device. The
+        // bridge domain is a name here (`VX91`), not a VNI: only `vni.vlan_name` knows which
+        // number it carries, so the join happens on read rather than baking a naming
+        // convention into the collector.
+        'mac_ip' => [
+            'key' => ['bridge_domain', 'ip_address'],
+            'columns' => [
+                'bridge_domain' => self::TYPE_STRING,
+                'ip_address' => self::TYPE_IP,
+                'mac_address' => self::TYPE_MAC,
+                'instance' => self::TYPE_STRING,
+                'ifname' => self::TYPE_STRING,
+                'flags' => self::TYPE_STRING,
+            ],
+        ],
         'mac' => [
             'key' => ['vni', 'mac_address'],
             'first_seen' => true,

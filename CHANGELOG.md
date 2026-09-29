@@ -66,6 +66,41 @@ fabric rather than from whichever address sorts lower. A segment no monitored PE
 is no longer claimed by anyone: the MAC exists, where it attaches is unknown, and the trace
 says that instead of pointing at a leaf.
 
+### The device says where an address lives, instead of the tracer working it out
+
+The same live pass showed the other half of the problem. Fixing the segment attribution above
+gets the right leaf and the right interface, but only by *reconstruction*: an `esi` row in the
+MAC database says which segment a MAC is on, and the access interface has to be fetched from
+the ESI table afterwards. And a MAC row keys on `(vni, mac)` with the addresses in one list,
+which on the fabric that reported this means a single firewall MAC carrying sixty-odd addresses
+across forty-odd bridge domains — with nothing to say which address belongs to which.
+
+`show mac-vrf forwarding mac-ip-table` states all four facts in one row, on the leaf that owns
+the address: bridge domain, IP, MAC, and the interface behind it. It is now collected into
+`netconf_evpn_mac_ip` and is the highest-ranked endpoint source there is, because it is the
+only one that infers nothing.
+
+- **Only locally owned entries are stored.** An entry pointing at `vtep-7.32771` or `esi.1856`
+  is another leaf's local row arriving through a tunnel; keeping it would multiply the table by
+  the number of leaves without adding an answer. On the fabric this came from that is roughly
+  400 rows per leaf instead of 3,000.
+- **The bridge domain is a name, not a VNI.** The device says `VX91`, and only the VNI table
+  knows which number that name carries there. The two are joined when a trace is run, so
+  `VX<vni>` stays a convention of one fabric rather than an assumption baked into the
+  collector. A leaf whose VNI table has not been polled yet gives the bridge domain and says
+  the VNI is not known — which still locates the endpoint.
+- It collects with the MAC database: the same opt-in, the same every-third-poll schedule.
+
+**What changes on an existing installation.** One migration adds `netconf_evpn_mac_ip`, empty
+until the next poll of a device that has the MAC database switched on. Until then every trace
+answers exactly as before; the new source simply reports zero rows in the *sources consulted*
+list, like any other source that has nothing to say.
+
+**Still ends at the fabric edge.** The rows now name the access port (`ae36`, `ae48`); walking
+past it — LLDP to the neighbour, then that device's bridge table for the final port, with the
+interface description as a clearly-labelled fallback where LLDP is empty — is not in this
+release.
+
 ### Asking for one
 
 `netconf:trace` takes `--vni-to=`, and the Trace tab has a destination-VNI box beside the

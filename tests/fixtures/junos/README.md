@@ -80,3 +80,16 @@ the capture from a leaf of the production fabric is the open half of T2, and the
 these until it happens. `show-evpn-database-mac-address.xml` is the single-MAC form of
 `show evpn database`, cut from the existing `show-evpn-database.xml` capture (same element shape, one
 entry, a local IFL source with an `ip-address`).
+
+IP/MAC table sample (2026-09-29, owner-supplied from the production EVPN core, Junos 23.4R2-S3.9;
+plan §12.10 T11): `show-mac-vrf-forwarding-mac-ip-table.xml`, the positive case beside the existing
+`show-evpn-mac-ip-table-empty.xml`. Two of ~90 bridge domains kept, and each retained row is there
+for a reason: three addresses on **one MAC on one ESI-LAG** (`ae36.0` — the shape that makes an
+IP/MAC row worth collecting at all, since the MAC database keeps those three in a single
+`ip_addresses` list with no way back to the bridge domain), a plain access port (`xe-0/0/19.0`), a
+dual-stack IFL with a global v6 address and a link-local (`ae34.0`), and one `vtep-N.M` plus one
+`esi.N` entry, which the shipped mapping filters out — a remote row is another leaf's local row
+seen through a tunnel. Anonymised to the conventions above: hosts → 203.0.113.N / 2001:db8::N,
+MACs → 02:00:00:00:00:NN, VTEPs → 192.0.2.N, ESIs → 00:11:22:33:44:55:00:00:NN:00. The bridge
+domain names are `VX10` and `VX100` so they join `vlan_name` in the VNI fixture beside them;
+element structure, flags and the `l2ng-l2-mac-svlbnh-venh` element are original.

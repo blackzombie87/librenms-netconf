@@ -10,6 +10,13 @@ namespace SafferIt\LibrenmsNetconf\Fabric\Trace;
  */
 final class Endpoint
 {
+    /**
+     * The device's own IP/MAC table: it states the bridge domain and the access interface for
+     * an address instead of leaving them to be inferred from a MAC row, so it outranks even a
+     * local EVPN-database row when both are present.
+     */
+    public const SOURCE_EVPN_MAC_IP = 'evpn-mac-ip';
+
     public const SOURCE_EVPN_LOCAL = 'evpn-local';
 
     public const SOURCE_EVPN_ESI = 'evpn-esi';
@@ -24,7 +31,7 @@ final class Endpoint
     public const SOURCE_ARP = 'arp';
 
     /** Most trustworthy first; the resolver ranks candidates by this order. */
-    public const RANK = [self::SOURCE_EVPN_LOCAL, self::SOURCE_EVPN_ESI, self::SOURCE_FDB, self::SOURCE_ARP, self::SOURCE_EVPN_ESI_UNKNOWN, self::SOURCE_EVPN_REMOTE];
+    public const RANK = [self::SOURCE_EVPN_MAC_IP, self::SOURCE_EVPN_LOCAL, self::SOURCE_EVPN_ESI, self::SOURCE_FDB, self::SOURCE_ARP, self::SOURCE_EVPN_ESI_UNKNOWN, self::SOURCE_EVPN_REMOTE];
 
     /**
      * @param  list<string>  $ips

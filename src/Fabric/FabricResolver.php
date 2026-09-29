@@ -501,7 +501,8 @@ class FabricResolver
 
     /**
      * Fill the port links of the per-leaf rows: tunnel.port_id from the vtep.N snmp-index,
-     * esi.local_port_id from the ESI-LAG name, mac.source_device_id from the remote VTEP.
+     * esi.local_port_id from the ESI-LAG name, mac_ip.port_id from the access IFL and
+     * mac.source_device_id from the remote VTEP.
      *
      * @param  list<int>  $deviceIds
      * @param  array<string, int>  $ipDevice
@@ -531,6 +532,15 @@ class FabricResolver
             $ports = $byName[(int) $esi->device_id] ?? [];
 
             return $ports[$name] ?? $ports[preg_replace('/\.0$/', '', $name) ?? $name] ?? null;
+        });
+
+        // the access port behind an IP/MAC binding; `ae36.0` is an IFL, `ae36` the port row
+        $macIps = DB::table(TableSchema::tableName('mac_ip'))->whereIn('device_id', $deviceIds)->whereNotNull('ifname')->get(['id', 'device_id', 'ifname', 'port_id']);
+        $this->setPortIds('mac_ip', 'port_id', $macIps, function ($row) use ($byName) {
+            $name = (string) $row->ifname;
+            $ports = $byName[(int) $row->device_id] ?? [];
+
+            return $ports[$name] ?? $ports[preg_replace('/\.\d+$/', '', $name) ?? $name] ?? null;
         });
 
         // remote MAC sources: only the addresses whose device changed are written

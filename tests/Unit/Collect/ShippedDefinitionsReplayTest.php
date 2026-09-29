@@ -68,7 +68,7 @@ it('replays every shipped definition without errors or warnings', function () {
 
     expect($result->ok())->toBeTrue()
         ->and($result->warnings())->toBe([])
-        ->and($result->summary()['commands_ok'])->toBe(28) // distinct commands across the shipped definitions
+        ->and($result->summary()['commands_ok'])->toBe(29) // distinct commands across the shipped definitions
         ->and($result->summary()['commands_skipped'])->toBe(0)
         ->and($result->summary()['commands_failed'])->toBe(0)
         ->and(count($result->sensors()))->toBeGreaterThanOrEqual(33)
@@ -235,4 +235,26 @@ it('fills the EVPN fabric tables of the leaf', function () {
         ->and($mac['1001/02000000000c']->values['source_type'])->toBe('local')
         ->and($mac['10/020000000001']->values['source_type'])->toBe('esi')
         ->and($mac['10/020000000001']->values['active_since'])->toEndWith('-09-18 14:15:11');
+
+    // IP -> MAC -> bridge domain -> local interface: only what this leaf owns. The two
+    // remote rows of the capture (a vtep-N.M and an esi.N) are the same bindings arriving
+    // from the leaves that do own them, and are dropped rather than stored 14 times over.
+    $macIp = tablesOf('junos-evpn-fabric-mac', 'mac-ip');
+    expect(array_keys($macIp))->toBe([
+        'VX10/203.0.113.4', 'VX10/203.0.113.5', 'VX10/203.0.113.6', 'VX10/203.0.113.20',
+        'VX100/203.0.113.68', 'VX100/2001:db8::4', 'VX100/fe80::ff:fe00:1e',
+    ])
+        // the multihomed case the MAC database alone cannot answer: three addresses, one
+        // MAC, and the access interface stated outright instead of an ESI to chase
+        ->and($macIp['VX10/203.0.113.4']->values)->toBe([
+            'bridge_domain' => 'VX10', 'ip_address' => '203.0.113.4', 'mac_address' => '02000000001a',
+            'instance' => 'default-switch', 'ifname' => 'ae36.0', 'flags' => 'DRLp,K,AD',
+        ])
+        ->and($macIp['VX10/203.0.113.20']->values['ifname'])->toBe('xe-0/0/19.0')
+        // v6 and link-local survive the ip coercion, and the bridge domain is the name that
+        // vni.vlan_name carries - never a VNI number guessed out of "VX100"
+        ->and($macIp['VX100/2001:db8::4']->values['mac_address'])->toBe('02000000001e')
+        ->and($macIp['VX100/fe80::ff:fe00:1e']->values['ifname'])->toBe('ae34.0')
+        ->and(array_column(array_map(fn ($t) => $t->values, $macIp), 'bridge_domain'))
+        ->each->toBeIn(array_column(array_map(fn ($t) => $t->values, tablesOf('junos-evpn-fabric', 'vni')), 'vlan_name'));
 });
