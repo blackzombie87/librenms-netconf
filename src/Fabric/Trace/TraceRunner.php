@@ -14,6 +14,11 @@ use SafferIt\LibrenmsNetconf\Transport\TransportFactory;
  * Graph mode is the default and needs nothing but the stored tables. Live mode asks each
  * device on the way what its own FIB says; it is admin-only and manual on purpose, and it
  * falls back to the stored graph for whatever it could not walk rather than stopping.
+ *
+ * When the two endpoints land in different VNIs the flow is routed, and `RoutedPath` turns
+ * it into two legs through the gateway that owns both IRBs (plan §12.9 T6a). Both legs are
+ * walked and both are checked; the only thing that changes here is that the question is
+ * asked twice.
  */
 final class TraceRunner
 {
@@ -24,16 +29,19 @@ final class TraceRunner
     }
 
     /**
+     * `$vniFrom` restricts the source endpoint and, unless `$vniTo` says otherwise, the
+     * destination too — so one `--vni` still means what it always did.
+     *
      * @return array<string, mixed>
      */
-    public function run(string $from, string $to, ?int $vni = null, bool $live = false, ?LiveNextHop $walker = null): array
+    public function run(string $from, string $to, ?int $vniFrom = null, ?int $vniTo = null, bool $live = false, ?LiveNextHop $walker = null): array
     {
         $context = TraceContext::forFabric($this->fabricId, $this->nodes);
         $a = EndpointResolver::resolve($from, $this->nodes);
         $b = EndpointResolver::resolve($to, $this->nodes);
 
-        $pickA = self::pick($a['candidates'], $vni);
-        $pickB = self::pick($b['candidates'], $vni);
+        $pickA = self::pick($a['candidates'], $vniFrom);
+        $pickB = self::pick($b['candidates'], $vniTo ?? $vniFrom);
         if ($pickA === null || $pickB === null) {
             return [
                 'ok' => false,
@@ -45,9 +53,12 @@ final class TraceRunner
             ];
         }
 
+        $routed = $this->routed($pickA, $pickB, $context);
         $paths = [];
         $walk = null;
-        if ($pickA->address !== null && $pickB->address !== null && $pickA->address !== $pickB->address) {
+        if ($routed !== null) {
+            $walk = $live && $walker !== null ? $this->liveLegs($walker, $routed, $context) : null;
+        } elseif ($pickA->address !== null && $pickB->address !== null && $pickA->address !== $pickB->address) {
             $paths = UnderlayPath::between($context['edges'], $pickA->address, $pickB->address);
             if ($live && $walker !== null) {
                 $walk = $this->live($walker, $pickA->address, $pickB->address, $context);
@@ -59,7 +70,7 @@ final class TraceRunner
             }
         }
 
-        $trace = FabricTrace::build($pickA, $pickB, $paths, $context);
+        $trace = FabricTrace::build($pickA, $pickB, $paths, $context, $routed);
 
         return $trace + [
             'ok' => true,
@@ -70,6 +81,56 @@ final class TraceRunner
             'walk' => $walk,
             'mode' => $live ? 'live' : 'graph',
         ];
+    }
+
+    /**
+     * The routed decision, or null for a bridged flow. Two endpoints in different VNIs are
+     * always a routed flow, even when no gateway can be found for them — the trace then says
+     * so instead of drawing a bridged path that would never carry the traffic.
+     *
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>|null
+     */
+    private function routed(Endpoint $a, Endpoint $b, array $context): ?array
+    {
+        if ($a->vni === null || $b->vni === null || $a->vni === $b->vni || $a->address === null || $b->address === null) {
+            return null;
+        }
+
+        return RoutedPath::through($context['irbs'], $context['edges'], $a->address, $a->vni, $b->address, $b->vni);
+    }
+
+    /**
+     * Live mode for a routed flow: walk each leg, and fill whatever a leg could not walk
+     * from the stored graph. The legs share one session budget, because the device's own
+     * connection limit does not care which leg a session belongs to.
+     *
+     * @param  array<string, mixed>  $routed
+     * @param  array<string, mixed>  $context
+     * @return array{hops: list<array<string, mixed>>, complete: bool, stopped: string|null}
+     */
+    private function liveLegs(LiveNextHop $walker, array &$routed, array $context): array
+    {
+        $hops = [];
+        $complete = true;
+        $stopped = null;
+        foreach ($routed['legs'] as $i => $leg) {
+            if ($leg['from'] === $leg['to']) {
+                continue;
+            }
+            $walk = $this->live($walker, (string) $leg['from'], (string) $leg['to'], $context);
+            if ($walk['hops'] !== []) {
+                $routed['legs'][$i]['path'] = $walk['complete']
+                    ? $walk['hops']
+                    : array_merge($walk['hops'], self::remainder($context, $walk, (string) $leg['to']));
+                $routed['legs'][$i]['paths'] = [$routed['legs'][$i]['path']];
+            }
+            $hops = array_merge($hops, $walk['hops']);
+            $complete = $complete && $walk['complete'];
+            $stopped ??= $walk['stopped'];
+        }
+
+        return ['hops' => $hops, 'complete' => $complete, 'stopped' => $stopped];
     }
 
     /**

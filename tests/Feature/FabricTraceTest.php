@@ -133,6 +133,70 @@ final class FabricTraceTest extends LibrenmsTestCase
         $this->assertStringContainsString('core ARP (ipv4_mac)', \Illuminate\Support\Facades\Artisan::output());
     }
 
+    public function testTheTabRoutesBetweenTwoVnisThroughTheGatewayThatOwnsBothIrbs(): void
+    {
+        $fabric = $this->routedFabric();
+
+        $this->actingAs(User::factory()->read()->create(['enabled' => 1]));
+
+        $page = $this->get("/plugin/netconf/fabric/$fabric/trace?from=02:00:00:00:11:40&to=02:00:00:00:11:41")->assertOk()->getContent();
+
+        // the one-liner names the routing step on the gateway it happens on, and the two
+        // legs are checked against their own VNIs
+        $this->assertStringContainsString(
+            '(ge-0/0/38)[leaf-1](et-0/0/52.2121) &lt;-&gt; (et-0/0/52.2121)[leaf-2: irb.10 → irb.20](et-0/0/50.2261) &lt;-&gt; (et-0/0/53.2261)[leaf-3](ge-0/0/28)',
+            $page,
+        );
+        $this->assertStringContainsString('routed on leaf-2', $page);
+        $this->assertStringContainsString('L3 context master', $page);
+        $this->assertStringContainsString('Routed between VNI 10010 and VNI 10020', $page);
+        $this->assertStringNotContainsString('local switching', $page);
+    }
+
+    public function testTheCommandRoutesBetweenTwoVnisAndNamesTheGateway(): void
+    {
+        $fabric = $this->routedFabric();
+
+        $code = \Illuminate\Support\Facades\Artisan::call('netconf:trace', ['from' => '02:00:00:00:11:40', 'to' => '02:00:00:00:11:41', '--fabric' => (string) $fabric]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('[leaf-2: irb.10 → irb.20]', $output);
+        $this->assertStringContainsString('routed on leaf-2: irb.10 → irb.20 in L3 context master', $output);
+    }
+
+    /**
+     * The same three leaves, with the middle one turned into the anycast gateway: it has an
+     * IRB in both VNIs, in one L3 context, and the destination MAC moves to the second VNI.
+     * The routed shape of plan §12.9 T6a, which is what a centrally-routed fabric looks like.
+     */
+    private function routedFabric(): int
+    {
+        $fabric = $this->threeLeafFabric();
+        $now = now();
+        $gateway = (int) DB::table(TableSchema::tableName('vtep'))->where('vtep_ip', '192.0.2.62')->value('device_id');
+        $leaf3 = (int) DB::table(TableSchema::tableName('vtep'))->where('vtep_ip', '192.0.2.63')->value('device_id');
+
+        // the destination lives in a second VNI, so the flow is routed and not bridged
+        DB::table(TableSchema::tableName('mac'))->where('device_id', $leaf3)->update(['vni' => 10020]);
+        DB::table(TableSchema::tableName('vni'))->insert(['device_id' => $leaf3, 'vni' => 10020, 'instance' => 'MACVRF-A', 'source_vtep' => '192.0.2.63', 'last_seen' => $now]);
+
+        foreach ([[10010, 'irb.10'], [10020, 'irb.20']] as [$vni, $ifname]) {
+            DB::table(TableSchema::tableName('vni'))->updateOrInsert(
+                ['device_id' => $gateway, 'vni' => $vni],
+                ['instance' => 'MACVRF-A', 'source_vtep' => '192.0.2.62', 'irb_ifname' => $ifname, 'irb_status' => 'Up', 'irb_l3_context' => 'master', 'last_seen' => $now],
+            );
+            DB::table('ports')->insert(['device_id' => $gateway, 'ifName' => $ifname, 'ifIndex' => 700 + $vni, 'deleted' => 0]);
+        }
+
+        // the second VNI is flooded between the gateway and the leaf that owns the endpoint
+        foreach ([[$gateway, '192.0.2.63'], [$leaf3, '192.0.2.62']] as [$deviceId, $remote]) {
+            DB::table(TableSchema::tableName('vni_vtep'))->insert(['device_id' => $deviceId, 'vni' => 10020, 'remote_vtep_ip' => $remote, 'last_seen' => $now]);
+        }
+
+        return $fabric;
+    }
+
     /**
      * Three leaves in a row with one MAC at each end: BER1 — BER2 — RLG1, the shape §12.1
      * verified on the production fabric.

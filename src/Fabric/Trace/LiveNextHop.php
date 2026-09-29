@@ -20,7 +20,8 @@ use SafferIt\LibrenmsNetconf\Transport\TransportFactory;
  * Static and Direct all read the same way.
  *
  * Bounded, because ten rapid sessions once tripped an EX4650's SSH connection rate limit:
- * at most 8 hops and 12 sessions per trace, one session per device, opened serially and
+ * at most 8 hops per walk and 12 sessions per trace — the budget belongs to the walker, so
+ * the two legs of a routed trace share it — one session per device, opened serially and
  * closed on every path. It degrades instead of guessing — a device without NETCONF, without
  * credentials or that times out ends the walk *there*, and the caller continues with the
  * stored graph for the remainder and says so. It never writes anything.
@@ -42,6 +43,13 @@ final class LiveNextHop
     /** @var list<string> */
     public array $log = [];
 
+    /**
+     * Sessions spent by this walker, not by this call: a routed trace walks two legs and the
+     * device's own connection limit does not care which leg a session belonged to. One
+     * walker is built per trace, so the budget is per trace.
+     */
+    private int $spent = 0;
+
     public function __construct(
         private readonly DeviceCredentials $credentials,
         private readonly TransportFactory $transports,
@@ -59,12 +67,11 @@ final class LiveNextHop
     public function walk(string $from, string $target, array $owners, array $addressOwner, array $edges): array
     {
         $hops = [];
-        $sessions = 0;
         $current = $from;
         $seen = [$from => true];
 
         while ($current !== $target) {
-            if (count($hops) >= self::MAX_HOPS || $sessions >= self::MAX_SESSIONS) {
+            if (count($hops) >= self::MAX_HOPS || $this->spent >= self::MAX_SESSIONS) {
                 return ['hops' => $hops, 'complete' => false, 'stopped' => 'the hop or session budget of one trace is spent'];
             }
             $device = $owners[$current]['device'] ?? null;
@@ -76,7 +83,7 @@ final class LiveNextHop
                 return ['hops' => $hops, 'complete' => false, 'stopped' => sprintf('no next-hop command is defined for os "%s"', (string) $device->os)];
             }
 
-            $sessions++;
+            $this->spent++;
             try {
                 $reply = $this->ask($device, sprintf($command, $target));
             } catch (TransportException $e) {

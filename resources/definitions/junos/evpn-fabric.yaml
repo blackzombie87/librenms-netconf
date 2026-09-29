@@ -114,6 +114,7 @@ tables:
       instance:   string(ancestor::evpn-instance/evpn-instance-name)
       irb_ifname: string(irb-interface-name)
       irb_status: string(irb-interface-status)
+      irb_l3_context: string(irb-interface-l3-context)   # master, or the VRF: two VNIs route only inside one context
 
   # flood list: which remote VTEP the leaf has for which VNI
   - id: vni-vtep

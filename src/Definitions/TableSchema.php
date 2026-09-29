@@ -84,6 +84,7 @@ final class TableSchema
                 'mac_sync' => self::TYPE_BOOL,
                 'irb_ifname' => self::TYPE_STRING,
                 'irb_status' => self::TYPE_STRING,
+                'irb_l3_context' => self::TYPE_STRING,
                 'remote_macs' => self::TYPE_INT,
             ],
         ],

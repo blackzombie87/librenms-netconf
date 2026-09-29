@@ -94,8 +94,11 @@ it('fills the fabric tables of an L3 gateway: IRB per VNI, leaf ESIs only, overl
 
     $irb = gatewayTables('vni-irb');
     expect(array_keys($irb))->toBe([101, 102, 12])
-        ->and($irb['12']->values)->toBe(['vni' => 12, 'instance' => 'EVPN-FABRIC', 'irb_ifname' => 'irb.12', 'irb_status' => 'Up'])
-        ->and($irb['101']->values['irb_ifname'])->toBe('irb.101');
+        ->and($irb['12']->values)->toBe(['vni' => 12, 'instance' => 'EVPN-FABRIC', 'irb_ifname' => 'irb.12', 'irb_status' => 'Up', 'irb_l3_context' => 'master'])
+        ->and($irb['101']->values['irb_ifname'])->toBe('irb.101')
+        // the L3 context the routed tracer ranks gateways by (plan §12.9 T6a): this gateway
+        // routes in the default instance, which is what centrally-routed bridging looks like
+        ->and($irb['101']->values['irb_l3_context'])->toBe('master');
 
     // type-5 gateway ESIs (05:…, local interface irb.N) are not ESI-LAGs and stay out of the esi table
     $esi = gatewayTables('esi');

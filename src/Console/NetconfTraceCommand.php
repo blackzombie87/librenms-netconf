@@ -23,6 +23,7 @@ class NetconfTraceCommand extends Command
         {to : Destination MAC address or IP}
         {--fabric= : Fabric id (default: the only one, or the one both endpoints are in)}
         {--vni= : Restrict both endpoints to this VNI}
+        {--vni-to= : Restrict the destination to this VNI instead (a routed, inter-VNI trace)}
         {--live : Read each device\'s own forwarding table instead of the stored graph}
         {--json : Print the whole result as JSON}';
 
@@ -37,12 +38,14 @@ class NetconfTraceCommand extends Command
 
         $nodes = FabricNodes::forFabric($fabricId);
         $vni = $this->option('vni');
+        $vniTo = $this->option('vni-to');
         $runner = new TraceRunner($fabricId, $nodes);
         $walker = $this->option('live') ? TraceRunner::walker() : null;
         $result = $runner->run(
             (string) $this->argument('from'),
             (string) $this->argument('to'),
             is_numeric($vni) ? (int) $vni : null,
+            is_numeric($vniTo) ? (int) $vniTo : null,
             live: (bool) $this->option('live'),
             walker: $walker,
         );
@@ -71,18 +74,33 @@ class NetconfTraceCommand extends Command
         $this->line('<info>' . $result['line'] . '</info>');
         $this->line('');
 
+        if (($result['routed']['gateway'] ?? null) !== null) {
+            $this->line(sprintf(
+                '  <comment>routed</comment> on %s: %s → %s in L3 context %s',
+                (string) $result['routed']['gateway_name'],
+                (string) ($result['routed']['irb_a']['ifname'] ?? 'irb?'),
+                (string) ($result['routed']['irb_b']['ifname'] ?? 'irb?'),
+                (string) ($result['routed']['context'] ?? 'unknown'),
+            ));
+            $this->line('');
+        }
+
         if ($result['path'] !== []) {
-            $this->table(
-                ['Hop', 'Out', 'In', 'Protocol', 'State', 'Source'],
-                array_map(fn ($hop) => [
-                    $nodes->name((string) $hop['a']) . ' → ' . $nodes->name((string) $hop['b']),
-                    (string) ($hop['a_ifname'] ?? '?'),
-                    (string) ($hop['b_ifname'] ?? '?'),
-                    (string) $hop['protocol'],
-                    (string) ($hop['state'] ?? 'no session state'),
-                    ($hop['live'] ?? false) ? 'device FIB' : 'stored graph',
-                ], $result['path']),
-            );
+            $rows = [];
+            foreach ($result['legs'] as $leg) {
+                foreach ($leg['path'] as $hop) {
+                    $rows[] = [
+                        $leg['vni'] === null ? '' : (string) $leg['vni'],
+                        $nodes->name((string) $hop['a']) . ' → ' . $nodes->name((string) $hop['b']),
+                        (string) ($hop['a_ifname'] ?? '?'),
+                        (string) ($hop['b_ifname'] ?? '?'),
+                        (string) $hop['protocol'],
+                        (string) ($hop['state'] ?? 'no session state'),
+                        ($hop['live'] ?? false) ? 'device FIB' : 'stored graph',
+                    ];
+                }
+            }
+            $this->table(['VNI', 'Hop', 'Out', 'In', 'Protocol', 'State', 'Source'], $rows);
             if ($result['equal_paths'] > 1) {
                 $this->line(sprintf('<comment>%d paths of the same hop count exist; the FIB decides which one carries the traffic.</comment>', $result['equal_paths']));
             }

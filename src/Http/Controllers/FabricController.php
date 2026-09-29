@@ -364,6 +364,7 @@ class FabricController extends Controller
         $from = trim((string) $request->query('from', ''));
         $to = trim((string) $request->query('to', ''));
         $vni = $request->query('vni');
+        $vniTo = $request->query('vni_to');
         $live = $request->session()->get('netconf_trace');
 
         $result = null;
@@ -371,13 +372,19 @@ class FabricController extends Controller
         // keep it — but the stored tables have nothing to add to a walk that just asked the
         // devices themselves, and the blade would not show it. Do not pay for that query.
         if ($from !== '' && $to !== '' && ! is_array($live)) {
-            $result = (new TraceRunner($fabricId, $nodes))->run($from, $to, is_numeric($vni) ? (int) $vni : null);
+            $result = (new TraceRunner($fabricId, $nodes))->run(
+                $from,
+                $to,
+                is_numeric($vni) ? (int) $vni : null,
+                is_numeric($vniTo) ? (int) $vniTo : null,
+            );
         }
 
         return [
             'trace_from' => $from,
             'trace_to' => $to,
             'trace_vni' => is_numeric($vni) ? (string) $vni : '',
+            'trace_vni_to' => is_numeric($vniTo) ? (string) $vniTo : '',
             'trace' => $result,
             'trace_live' => is_array($live) ? $live : null,
         ];
@@ -392,13 +399,14 @@ class FabricController extends Controller
             'from' => 'required|string|max:64',
             'to' => 'required|string|max:64',
             'vni' => 'nullable|integer|min:0',
+            'vni_to' => 'nullable|integer|min:0',
         ]);
         $nodes = FabricNodes::forFabric($fabric);
         abort_if($nodes->deviceIds() === [], 404, 'No such fabric');
 
         $runner = new TraceRunner($fabric, $nodes);
         $walker = TraceRunner::walker();
-        $result = $runner->run(trim($data['from']), trim($data['to']), $data['vni'] ?? null, live: true, walker: $walker);
+        $result = $runner->run(trim($data['from']), trim($data['to']), $data['vni'] ?? null, $data['vni_to'] ?? null, live: true, walker: $walker);
         $result['log'] = $walker->log;
 
         // the pair goes back on the query string, not into flashed input: the boxes are filled
@@ -409,6 +417,7 @@ class FabricController extends Controller
             'from' => trim($data['from']),
             'to' => trim($data['to']),
             'vni' => $data['vni'] ?? null,
+            'vni_to' => $data['vni_to'] ?? null,
         ], fn ($v) => $v !== null && $v !== ''))
             ->with('netconf_trace', $result);
     }

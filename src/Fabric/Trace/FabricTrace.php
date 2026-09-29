@@ -17,6 +17,11 @@ use SafferIt\LibrenmsNetconf\Fabric\View\Topology;
  * *no* — an `ip` or `lldp-only` hop has no session state, and a hop that is half up
  * (`bgp,ospf` with the OSPF down) is said out loud rather than folded into one word.
  *
+ * A **routed** flow (plan §12.9 T6a) is the same thing twice: `RoutedPath` picks the gateway
+ * whose IRBs bridge the two VNIs and the trace becomes two legs with a routing step between
+ * them, each leg checked against its own VNI. Every overlay question below is therefore asked
+ * per leg, not per trace — a bridged trace is simply the one-leg case.
+ *
  * It never writes and never opens an issue. If a trace disagrees with the Checks tab, the
  * Checks tab is right.
  */
@@ -24,10 +29,11 @@ final class FabricTrace
 {
     /**
      * @param  list<list<array<string, mixed>>>  $paths  UnderlayPath::between(), or a live walk
-     * @param  array{names?: array<string, string>, members?: array<string, array<string, mixed>>, tunnels?: array<string, array<string, array<string, mixed>>>, flood?: array<string, array<int, list<string>>>, neighbours?: array<string, list<string>>, irb_vnis?: array<string, list<int>>, esis?: array<string, array<string, mixed>>}  $context
+     * @param  array{names?: array<string, string>, members?: array<string, array<string, mixed>>, tunnels?: array<string, array<string, array<string, mixed>>>, flood?: array<string, array<int, list<string>>>, neighbours?: array<string, list<string>>, irbs?: array<string, array<int, array<string, mixed>>>, esis?: array<string, array<string, mixed>>}  $context
+     * @param  array<string, mixed>|null  $routed  RoutedPath::through(), when the two endpoints are in different VNIs
      * @return array<string, mixed>
      */
-    public static function build(Endpoint $a, Endpoint $b, array $paths, array $context = []): array
+    public static function build(Endpoint $a, Endpoint $b, array $paths, array $context = [], ?array $routed = null): array
     {
         $names = $context['names'] ?? [];
         $members = $context['members'] ?? [];
@@ -35,38 +41,34 @@ final class FabricTrace
         $warnings = [];
 
         $sameLeaf = $a->address !== null && $a->address === $b->address;
-        $path = $paths[0] ?? [];
+        $legs = self::legs($a, $b, $paths, $routed);
+        $path = array_merge(...array_column($legs, 'path')) ?: [];
 
         if (! $a->isAttachment() || ! $b->isAttachment()) {
             $warnings[] = 'At least one endpoint has no local attachment, so the path below is what the fabric would do if it had one.';
         }
 
         if ($a->vni !== null && $b->vni !== null) {
-            $sameVni = $a->vni === $b->vni;
-            $gateways = $sameVni ? [] : self::gatewaysFor($context['irb_vnis'] ?? [], [$a->vni, $b->vni], $names);
-            $checks[] = [
-                'id' => 'same-vni',
-                'label' => 'Both endpoints are in the same VNI',
-                'ok' => $sameVni,
-                'detail' => $sameVni
-                    ? sprintf('VNI %d', $a->vni)
-                    : sprintf(
-                        'VNI %d and VNI %d: this is a routed flow, not a bridged one.%s Inter-VNI tracing is not implemented (plan §12 T6).',
-                        $a->vni, $b->vni,
-                        $gateways === [] ? ' No member has an IRB in both VNIs.' : ' Both VNIs have an IRB on ' . implode(', ', $gateways) . '.',
-                    ),
-            ];
+            $checks[] = $a->vni === $b->vni
+                ? ['id' => 'same-vni', 'label' => 'Both endpoints are in the same VNI', 'ok' => true, 'detail' => sprintf('VNI %d', $a->vni)]
+                : self::routedCheck($a->vni, $b->vni, $routed, $names);
+            if ($routed !== null && ($routed['gateway'] ?? null) !== null) {
+                $checks[] = self::irbCheck($routed, $names);
+            }
         }
 
-        if (! $sameLeaf && $a->address !== null && $b->address !== null) {
-            $checks[] = self::tunnelCheck($context['tunnels'] ?? [], $a->address, $b->address, $names);
-            $checks[] = self::tunnelCheck($context['tunnels'] ?? [], $b->address, $a->address, $names);
-            $vni = $a->vni ?? $b->vni;
-            if ($vni !== null) {
-                $checks[] = self::floodCheck($context['flood'] ?? [], $a->address, $b->address, $vni, $names);
-                $checks[] = self::floodCheck($context['flood'] ?? [], $b->address, $a->address, $vni, $names);
+        foreach ($legs as $leg) {
+            foreach (self::overlayChecks($leg, $context, $names) as $check) {
+                $checks[] = $check;
             }
-            $checks[] = self::sessionCheck($context['neighbours'] ?? [], $a->address, $b->address, $names);
+            if ($leg['from'] !== $leg['to'] && $leg['path'] === []) {
+                $warnings[] = sprintf(
+                    'No underlay path between %s and %s is stored, so only the overlay hop is shown%s.',
+                    $names[$leg['from']] ?? $leg['from'],
+                    $names[$leg['to']] ?? $leg['to'],
+                    $leg['vni'] === null ? '' : sprintf(' for VNI %d', $leg['vni']),
+                );
+            }
         }
 
         foreach ([$a, $b] as $endpoint) {
@@ -119,22 +121,159 @@ final class FabricTrace
             }
         }
 
-        if (! $sameLeaf && $a->address !== null && $b->address !== null && $paths === []) {
-            $warnings[] = 'No underlay path between the two leaves is stored, so only the overlay hop is shown.';
+        if ($routed !== null && ($routed['gateway'] ?? null) === null) {
+            $warnings[] = sprintf('This is a routed flow and no gateway could be found for it: %s.', (string) ($routed['reason'] ?? 'reason unknown'));
+        }
+
+        $equal = 1;
+        foreach ($legs as $leg) {
+            $equal *= max(1, count($leg['paths']));
         }
 
         return [
             'a' => $a->toArray(),
             'b' => $b->toArray(),
             'same_leaf' => $sameLeaf,
-            'local_switching' => $sameLeaf,
+            'local_switching' => $sameLeaf && $routed === null,
+            'routed' => $routed === null ? null : [
+                'gateway' => $routed['gateway'] ?? null,
+                'gateway_name' => ($routed['gateway'] ?? null) === null ? null : ($names[(string) $routed['gateway']] ?? (string) $routed['gateway']),
+                'context' => $routed['context'] ?? null,
+                'irb_a' => $routed['irb_a'] ?? null,
+                'irb_b' => $routed['irb_b'] ?? null,
+                'candidates' => $routed['candidates'] ?? [],
+                'reason' => $routed['reason'] ?? null,
+            ],
+            'legs' => $legs,
             'paths' => $paths,
             'path' => $path,
-            'equal_paths' => count($paths),
+            'equal_paths' => $equal,
             'live' => $path !== [] && ($path[0]['live'] ?? false),
             'checks' => array_values(array_filter($checks)),
             'warnings' => array_values(array_unique($warnings)),
-            'line' => TraceLine::render($a, $b, $path, $names, $sameLeaf),
+            'line' => TraceLine::render($a, $b, $legs, $names),
+        ];
+    }
+
+    /**
+     * The trace as legs: one for a bridged flow, two for a routed one with the routing step
+     * in between. Everything downstream — the checks, the one-liner, the hop table — reads
+     * this and not the flat path, so the two cases are one code path.
+     *
+     * @param  list<list<array<string, mixed>>>  $paths
+     * @param  array<string, mixed>|null  $routed
+     * @return list<array{vni: int|null, from: string|null, to: string|null, paths: list<list<array<string, mixed>>>, path: list<array<string, mixed>>, pivot: string|null}>
+     */
+    private static function legs(Endpoint $a, Endpoint $b, array $paths, ?array $routed): array
+    {
+        if ($routed !== null && ($routed['gateway'] ?? null) !== null) {
+            /** @var list<array{vni: int|null, from: string|null, to: string|null, paths: list<list<array<string, mixed>>>, path: list<array<string, mixed>>, pivot: string|null}> $legs */
+            $legs = $routed['legs'];
+
+            return $legs;
+        }
+
+        return [[
+            'vni' => $a->vni ?? $b->vni,
+            'from' => $a->address,
+            'to' => $b->address,
+            'paths' => $paths,
+            'path' => $paths[0] ?? [],
+            'pivot' => null,
+        ]];
+    }
+
+    /**
+     * The overlay questions for one leg: a tunnel each way, the leg's VNI in both flood
+     * lists, and the EVPN session. Asked with the leg's own VNI, which is the whole point of
+     * splitting a routed flow in two — VNI A is never in the gateway's flood list for VNI B.
+     *
+     * @param  array{vni: int|null, from: string|null, to: string|null, paths: list<list<array<string, mixed>>>, path: list<array<string, mixed>>, pivot: string|null}  $leg
+     * @param  array<string, mixed>  $context
+     * @param  array<string, string>  $names
+     * @return list<array<string, mixed>>
+     */
+    private static function overlayChecks(array $leg, array $context, array $names): array
+    {
+        $from = $leg['from'];
+        $to = $leg['to'];
+        if ($from === null || $to === null || $from === $to) {
+            return [];
+        }
+
+        $checks = [
+            self::tunnelCheck($context['tunnels'] ?? [], $from, $to, $names),
+            self::tunnelCheck($context['tunnels'] ?? [], $to, $from, $names),
+        ];
+        if ($leg['vni'] !== null) {
+            $checks[] = self::floodCheck($context['flood'] ?? [], $from, $to, $leg['vni'], $names);
+            $checks[] = self::floodCheck($context['flood'] ?? [], $to, $from, $leg['vni'], $names);
+        }
+        $checks[] = self::sessionCheck($context['neighbours'] ?? [], $from, $to, $names);
+
+        return $checks;
+    }
+
+    /**
+     * The routed verdict: which gateway bridges the two VNIs, in which L3 context, or why
+     * none does. `ok` is false only when the fabric answers *no* — an unpolled context is
+     * unknown, and unknown is not a failure.
+     *
+     * @param  array<string, mixed>|null  $routed
+     * @param  array<string, string>  $names
+     * @return array<string, mixed>
+     */
+    private static function routedCheck(int $vniA, int $vniB, ?array $routed, array $names): array
+    {
+        $label = sprintf('Routed between VNI %d and VNI %d', $vniA, $vniB);
+        $gateway = $routed === null ? null : ($routed['gateway'] ?? null);
+        if ($gateway === null) {
+            return [
+                'id' => 'routed',
+                'label' => $label,
+                'ok' => false,
+                'detail' => sprintf(
+                    'this is a routed flow, not a bridged one, and %s.',
+                    $routed === null ? 'no IRB data was loaded for this fabric' : (string) ($routed['reason'] ?? 'no gateway was found'),
+                ),
+            ];
+        }
+
+        $context = $routed['context'] ?? null;
+        $name = $names[(string) $gateway] ?? (string) $gateway;
+
+        return [
+            'id' => 'routed',
+            'label' => $label,
+            'ok' => $context === null ? null : true,
+            'detail' => $context === null
+                ? sprintf('%s has an IRB in both VNIs, but their L3 context has not been polled yet — re-poll it to confirm the two can reach each other.', $name)
+                : sprintf('%s routes between them in L3 context %s.', $name, (string) $context),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $routed
+     * @param  array<string, string>  $names
+     * @return array<string, mixed>
+     */
+    private static function irbCheck(array $routed, array $names): array
+    {
+        $a = $routed['irb_a'] ?? [];
+        $b = $routed['irb_b'] ?? [];
+        $status = fn (array $irb) => $irb['status'] === null ? null : strtolower((string) $irb['status']) === 'up';
+        $both = [$status($a), $status($b)];
+
+        return [
+            'id' => 'irb-up',
+            'label' => sprintf('Both IRBs on %s are up', $names[(string) $routed['gateway']] ?? (string) $routed['gateway']),
+            'ok' => in_array(null, $both, true) ? null : ! in_array(false, $both, true),
+            'detail' => sprintf(
+                '%s %s, %s %s',
+                (string) ($a['ifname'] ?? 'irb?'), (string) ($a['status'] ?? 'status unknown'),
+                (string) ($b['ifname'] ?? 'irb?'), (string) ($b['status'] ?? 'status unknown'),
+            ),
+            'port_ids' => array_values(array_filter([$a['port_id'] ?? null, $b['port_id'] ?? null])),
         ];
     }
 
@@ -197,23 +336,5 @@ final class FabricTrace
                 default => 'neither side lists the other',
             },
         ];
-    }
-
-    /**
-     * @param  array<string, list<int>>  $irbVnis
-     * @param  list<int>  $vnis
-     * @param  array<string, string>  $names
-     * @return list<string>
-     */
-    private static function gatewaysFor(array $irbVnis, array $vnis, array $names): array
-    {
-        $out = [];
-        foreach ($irbVnis as $address => $carried) {
-            if (array_diff($vnis, $carried) === []) {
-                $out[] = $names[(string) $address] ?? (string) $address;
-            }
-        }
-
-        return $out;
     }
 }

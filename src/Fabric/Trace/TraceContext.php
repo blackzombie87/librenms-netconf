@@ -15,7 +15,7 @@ use SafferIt\LibrenmsNetconf\Fabric\View\FabricTopologyInput;
 final class TraceContext
 {
     /**
-     * @return array{names: array<string, string>, members: array<string, array<string, mixed>>, tunnels: array<string, array<string, array<string, mixed>>>, flood: array<string, array<int, list<string>>>, neighbours: array<string, list<string>>, irb_vnis: array<string, list<int>>, esis: array<string, array<string, mixed>>, edges: list<array<string, mixed>>, addresses: array<string, string>}
+     * @return array{names: array<string, string>, members: array<string, array<string, mixed>>, tunnels: array<string, array<string, array<string, mixed>>>, flood: array<string, array<int, list<string>>>, neighbours: array<string, list<string>>, irbs: array<string, array<int, array{ifname: string|null, status: string|null, context: string|null, port_id: int|null}>>, esis: array<string, array<string, mixed>>, edges: list<array<string, mixed>>, addresses: array<string, string>}
      */
     public static function forFabric(int $fabricId, FabricNodes $nodes): array
     {
@@ -60,13 +60,7 @@ final class TraceContext
             }
         }
 
-        $irbVnis = [];
-        foreach (DB::table(TableSchema::tableName('vni'))->whereIn('device_id', $deviceIds)->whereNotNull('irb_ifname')->get(['device_id', 'vni']) as $row) {
-            $own = $nodes->addressOf((int) $row->device_id);
-            if ($own !== null) {
-                $irbVnis[$own][] = (int) $row->vni;
-            }
-        }
+        $irbs = self::irbs($deviceIds, $nodes);
 
         $esis = [];
         foreach (DB::table(TableSchema::tableName('esi'))->whereIn('device_id', $deviceIds)->get(['esi', 'mode', 'df_ip', 'aliasing']) as $row) {
@@ -89,11 +83,58 @@ final class TraceContext
             'tunnels' => $tunnels,
             'flood' => $flood,
             'neighbours' => $neighbours,
-            'irb_vnis' => $irbVnis,
+            'irbs' => $irbs,
             'esis' => $esis,
             'edges' => $input['underlay'],
             'addresses' => self::interfaceAddresses($deviceIds, $nodes),
         ];
+    }
+
+    /**
+     * The anycast IRBs of every member, by VNI: the interface, its status, the **L3 context**
+     * it sits in and the core port behind it (plan §12.9 T6a).
+     *
+     * The context is what makes a routed trace answerable rather than plausible. Two VNIs
+     * can only route to one another where a gateway has an IRB in both *and both IRBs are in
+     * the same routing instance* — `master` on a centrally-routed fabric, a VRF name where
+     * type-5 is configured. A null context is an IRB polled before the column existed, and
+     * the tracer reads it as unknown, never as a match.
+     *
+     * @param  list<int>  $deviceIds
+     * @return array<string, array<int, array{ifname: string|null, status: string|null, context: string|null, port_id: int|null}>>
+     */
+    private static function irbs(array $deviceIds, FabricNodes $nodes): array
+    {
+        $rows = DB::table(TableSchema::tableName('vni'))
+            ->whereIn('device_id', $deviceIds)->whereNotNull('irb_ifname')
+            ->get(['device_id', 'vni', 'irb_ifname', 'irb_status', 'irb_l3_context']);
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        // one query for every IRB port of the fabric, so the hop table can graph the leg
+        // the packet is routed on the same way it graphs an underlay hop
+        $ports = [];
+        foreach (DB::table('ports')->whereIn('device_id', $deviceIds)->where('deleted', 0)->where('ifName', 'like', 'irb.%')->get(['device_id', 'ifName', 'port_id']) as $port) {
+            $ports[(int) $port->device_id . '|' . (string) $port->ifName] = (int) $port->port_id;
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $own = $nodes->addressOf((int) $row->device_id);
+            if ($own === null) {
+                continue;
+            }
+            $ifname = (string) $row->irb_ifname;
+            $out[$own][(int) $row->vni] = [
+                'ifname' => $ifname,
+                'status' => $row->irb_status === null ? null : (string) $row->irb_status,
+                'context' => $row->irb_l3_context === null ? null : (string) $row->irb_l3_context,
+                'port_id' => $ports[(int) $row->device_id . '|' . $ifname] ?? null,
+            ];
+        }
+
+        return $out;
     }
 
     /**

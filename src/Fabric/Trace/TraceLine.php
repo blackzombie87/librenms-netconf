@@ -7,40 +7,77 @@ namespace SafferIt\LibrenmsNetconf\Fabric\Trace;
  *
  *   IP-A (ge-0/0/38)[LEAF-A](et-0/0/52) <-> (et-0/0/53)[LEAF-B](ge-0/0/28) IP-B
  *
+ * A routed flow (plan §12.9 T6a) is the same line with the routing step named on the gateway
+ * it happens on, because that is the node the two legs share:
+ *
+ *   IP-A (ge-0/0/38)[LEAF-A](et-0/0/52) <-> (et-0/0/53)[GW1: irb.10 → irb.20](et-0/0/1) <-> …
+ *
  * One function, so the Blade, the CLI and the tests print the same string.
  */
 final class TraceLine
 {
     /**
-     * @param  list<array<string, mixed>>  $path
+     * @param  list<array{vni: int|null, from: string|null, to: string|null, path: list<array<string, mixed>>, pivot: string|null}>  $legs
      * @param  array<string, string>  $names
      */
-    public static function render(Endpoint $a, Endpoint $b, array $path, array $names = [], bool $sameLeaf = false): string
+    public static function render(Endpoint $a, Endpoint $b, array $legs, array $names = []): string
     {
-        $labelA = self::endpointLabel($a);
-        $labelB = self::endpointLabel($b);
         $name = fn (?string $address) => $address === null ? '?' : ($names[$address] ?? $address);
+        $out = self::endpointLabel($a);
 
-        if ($path === []) {
-            // same leaf, or two leaves with no stored underlay between them: one node in the middle
-            $node = $sameLeaf || $a->address === $b->address
-                ? sprintf('(%s)[%s](%s)', $a->ifname ?? '?', $name($a->address), $b->ifname ?? '?')
-                : sprintf('(%s)[%s] … [%s](%s)', $a->ifname ?? '?', $name($a->address), $name($b->address), $b->ifname ?? '?');
-
-            return trim("$labelA $node $labelB");
-        }
-
-        $out = sprintf('%s (%s)[%s]', $labelA, $a->ifname ?? '?', $name($path[0]['a'] ?? $a->address));
-        foreach ($path as $i => $hop) {
-            $out .= sprintf('(%s) <-> (%s)', (string) ($hop['a_ifname'] ?? '?'), (string) ($hop['b_ifname'] ?? '?'));
-            $out .= sprintf('[%s]', $name((string) $hop['b']));
-            if ($i < count($path) - 1) {
-                continue;
+        foreach (self::chain($a, $b, $legs) as $i => $node) {
+            if ($i > 0) {
+                $out .= $node['gap'] ? ' … ' : ' <-> ';
+            } else {
+                $out .= ' ';
             }
-            $out .= sprintf('(%s) %s', $b->ifname ?? '?', $labelB);
+            $out .= ($node['in'] === false ? '' : sprintf('(%s)', $node['in'] ?? '?'))
+                . sprintf('[%s%s]', $name($node['address']), $node['pivot'] === null ? '' : ': ' . $node['pivot'])
+                . ($node['out'] === false ? '' : sprintf('(%s)', $node['out'] ?? '?'));
         }
 
-        return trim($out);
+        return trim($out . ' ' . self::endpointLabel($b));
+    }
+
+    /**
+     * The nodes of a trace in the order they are traversed, each with the interface the
+     * packet comes in on and the one it leaves by.
+     *
+     * A gateway is one node, not two: it ends the first leg and begins the second, so the
+     * legs are walked into a single chain and the routing step becomes that node's pivot.
+     * `false` for an interface means *do not print one* (the two sides of a gap where no
+     * path is stored); `null` means *unknown*, which prints as `?`.
+     *
+     * @param  list<array{vni: int|null, from: string|null, to: string|null, path: list<array<string, mixed>>, pivot: string|null}>  $legs
+     * @return list<array{address: string|null, in: string|false|null, out: string|false|null, pivot: string|null, gap: bool}>
+     */
+    private static function chain(Endpoint $a, Endpoint $b, array $legs): array
+    {
+        $chain = [];
+        $current = ['address' => $legs[0]['from'] ?? $a->address, 'in' => $a->ifname, 'out' => null, 'pivot' => null, 'gap' => false];
+
+        foreach ($legs as $i => $leg) {
+            foreach ($leg['path'] as $hop) {
+                $current['out'] = $hop['a_ifname'] ?? null;
+                $chain[] = $current;
+                $current = ['address' => (string) $hop['b'], 'in' => $hop['b_ifname'] ?? null, 'out' => null, 'pivot' => null, 'gap' => false];
+            }
+            if ($leg['path'] === [] && $leg['from'] !== $leg['to']) {
+                // two known nodes with nothing stored between them: say so rather than
+                // drawing a hop that was never seen
+                $current['out'] = false;
+                $chain[] = $current;
+                $current = ['address' => $leg['to'], 'in' => false, 'out' => null, 'pivot' => null, 'gap' => true];
+            }
+            if ($i < count($legs) - 1) {
+                $current['pivot'] = $leg['pivot'];
+            }
+        }
+
+        $current['out'] = $b->ifname;
+        $chain[] = $current;
+
+        return $chain;
     }
 
     /**

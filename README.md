@@ -584,6 +584,7 @@ The **Trace** tab and `lnms netconf:trace` answer "how does this address reach t
 ```bash
 ./lnms netconf:trace 02:00:00:00:11:40 203.0.113.41
 ./lnms netconf:trace 203.0.113.40 203.0.113.41 --fabric=1 --vni=10010
+./lnms netconf:trace 203.0.113.40 203.0.113.41 --vni=10010 --vni-to=10020   # routed
 ./lnms netconf:trace 203.0.113.40 203.0.113.41 --live --json
 ```
 
@@ -607,8 +608,17 @@ Under the one-liner: a hop table with both interfaces, the protocol, the session
 traffic graph per hop, and a "what was checked" list — the same VNI on both ends, a tunnel
 each way, the VNI in both flood lists, the EVPN session listed by both sides, the DF and
 aliasing of a multihomed attachment, and whether either MAC is suppressed or has been moving.
-A question that cannot be answered reads *unknown*, never *no*. A trace between two VNIs stops
-and names the gateways that have an IRB in both; routed traces are not implemented.
+A question that cannot be answered reads *unknown*, never *no*.
+
+**Routed (inter-VNI) traces.** Two endpoints in different VNIs are a routed flow, and the
+trace goes through the gateway that has an anycast IRB in both **and both IRBs in the same L3
+context** — two IRBs on one box in different VRFs cannot reach each other, and the tracer says
+so rather than drawing a path. The result is two legs with the routing step (`irb.10 → irb.20`)
+on the gateway they share, and every overlay question is asked per leg with that leg's own VNI.
+Where several gateways could route, the one with both IRBs up and the fewest hops on the two
+legs together wins. An IRB polled before this release has no L3 context stored, and the trace
+then says the gateway is unconfirmed rather than good. Type-5 / L3VNI prefixes are a separate
+case and are still not collected.
 
 **MAC search** (`/plugin/netconf/evpn/mac?q=`, also linked from the fabric list): a MAC in any
 notation (or a prefix), an IP or a VNI. Results are every opted-in leaf's view from the EVPN

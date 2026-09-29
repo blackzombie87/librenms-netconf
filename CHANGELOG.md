@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased
+
+Routed traces. Two endpoints in different VNIs used to end the trace with the gateways that
+have an IRB in both named and "inter-VNI tracing is not implemented" underneath. The trace now
+goes through one of them.
+
+The plan had this blocked on a capture of `show evpn ip-prefix-database` from a border leaf,
+which no lab here has produced. That premise does not hold: the shipped `show evpn l3-context`
+sample *is* the MX204 gateway's and it is empty, all 53 IRBs in the gateway sample read
+`irb-interface-l3-context master`, and the sensor that sets the `border` flag is 0 on the
+production fabric. That fabric is centrally-routed bridging — no EVPN VRF, no type-5 anywhere,
+so the sample cannot come from it. What it does do is leaf → gateway IRB → leaf, and that
+needed one column and a gateway chooser. Type-5 / L3VNI destinations are still out.
+
+**What changes on an existing installation.** One migration adds
+`netconf_evpn_vni.irb_l3_context`, which is empty until the gateways are polled again. Until
+then a routed trace says the gateway is unconfirmed rather than good — an unpolled context is
+read as unknown, never as a match. Nothing else about a poll, a check or another tab changes,
+and a trace between two endpoints in one VNI is unaffected.
+
+### What it answers
+
+- **The L3 context decides, not the presence of two IRBs.** A gateway with `irb.10` in VRF-A
+  and `irb.20` in VRF-B cannot route between them. That is a refusal naming both contexts, not
+  a path — saying it works would be the one wrong answer this feature could give.
+- **Where several gateways could route, the one with both IRBs up and the fewest hops over the
+  two legs together wins**, and a tie is broken by address so the same question gets the same
+  answer twice. A gateway the underlay does not reach is still listed, ranked last, rather than
+  dropped: "the IRB is there and the underlay is not" is worth printing.
+- The one-liner carries the routing step on the node the two legs share:
+  `… <-> (et-0/0/53)[GW1: irb.10 → irb.20](et-0/0/1) <-> …`. Under it, the hop table gains a
+  VNI column and a row for the routing step itself, and the tab says `routed on <gateway>`.
+- Both endpoints on one leaf that owns both IRBs is routing on that leaf: no VXLAN, no tunnel
+  or flood-list question asked, and it is no longer called local switching.
+
+### A trace is legs now, not one path
+
+A bridged trace is the one-leg case of the same structure, so the path highlight on the fabric
+picture, the per-hop traffic graphs and the rest are unchanged. Splitting it fixed a defect on
+the way: the flood-list checks took the source endpoint's VNI for the whole trace, which is
+right for a bridged flow and wrong for a routed one, because VNI A is never in the gateway's
+flood list for VNI B. Every overlay question — a tunnel each way, the VNI in both flood lists,
+the EVPN session — is now asked per leg with that leg's own VNI.
+
+A live trace walks both legs and they share one trace's twelve sessions, rather than getting
+twelve each: the device's own connection limit does not care which leg a session belongs to.
+
+### Asking for one
+
+`netconf:trace` takes `--vni-to=`, and the Trace tab has a destination-VNI box beside the
+existing one; a single `--vni` still restricts both ends as before. Neither is required — two
+endpoints that resolve to different VNIs are a routed flow whether or not anything was typed.
+
 ## 1.5.1 – 2026-09-28
 
 One fix. The SVG was sized to the drawing and the drawing is often narrower than the frame

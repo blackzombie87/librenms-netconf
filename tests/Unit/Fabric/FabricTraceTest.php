@@ -3,6 +3,7 @@
 use SafferIt\LibrenmsNetconf\Fabric\Trace\Endpoint;
 use SafferIt\LibrenmsNetconf\Fabric\Trace\EndpointResolver;
 use SafferIt\LibrenmsNetconf\Fabric\Trace\FabricTrace;
+use SafferIt\LibrenmsNetconf\Fabric\Trace\RoutedPath;
 use SafferIt\LibrenmsNetconf\Fabric\Trace\TraceLine;
 use SafferIt\LibrenmsNetconf\Fabric\Trace\UnderlayPath;
 
@@ -28,6 +29,14 @@ function traceEndpoint(string $mac, ?string $address, ?string $ifname, array $ex
         isDuplicate: $extra['is_duplicate'] ?? false,
         moves: $extra['moves'] ?? 0,
     );
+}
+
+/**
+ * @return array{ifname: string, status: string|null, context: string|null, port_id: int|null}
+ */
+function irb(string $ifname, ?string $status = 'Up', ?string $context = 'master', ?int $portId = null): array
+{
+    return ['ifname' => $ifname, 'status' => $status, 'context' => $context, 'port_id' => $portId];
 }
 
 /**
@@ -59,7 +68,7 @@ function traceContext(): array
         'tunnels' => $tunnels,
         'flood' => $flood,
         'neighbours' => $neighbours,
-        'irb_vnis' => [],
+        'irbs' => [],
         'esis' => [],
     ];
 }
@@ -91,20 +100,21 @@ it('says local switching when both endpoints hang off the same leaf', function (
         ->and($trace['checks'])->toBe([['id' => 'same-vni', 'label' => 'Both endpoints are in the same VNI', 'ok' => true, 'detail' => 'VNI 10010']]);
 });
 
-it('stops at different VNIs and names the gateway that has an IRB in both', function () {
+it('says a routed flow is routed, and why, when no gateway has an IRB in both VNIs', function () {
     $context = traceContext();
-    $context['irb_vnis'] = ['192.0.2.1' => [10010, 10020], '192.0.2.62' => [10010]];
-    $context['names']['192.0.2.1'] = 'GW1';
+    $context['irbs'] = ['192.0.2.62' => [10010 => irb('irb.10')]];
     $a = traceEndpoint('020000001140', '192.0.2.61', 'ge-0/0/38', ['vni' => 10010]);
     $b = traceEndpoint('020000001141', '192.0.2.63', 'ge-0/0/28', ['vni' => 10020]);
 
-    $trace = FabricTrace::build($a, $b, [], $context);
+    $routed = RoutedPath::through($context['irbs'], lineFabric(), '192.0.2.61', 10010, '192.0.2.63', 10020);
+    $trace = FabricTrace::build($a, $b, [], $context, $routed);
     $vniCheck = $trace['checks'][0];
 
     expect($vniCheck['ok'])->toBeFalse()
-        ->and($vniCheck['detail'])->toContain('VNI 10010 and VNI 10020')
-        ->and($vniCheck['detail'])->toContain('IRB on GW1')
-        ->and($vniCheck['detail'])->toContain('T6');
+        ->and($vniCheck['label'])->toBe('Routed between VNI 10010 and VNI 10020')
+        ->and($vniCheck['detail'])->toContain('no member has an IRB in both VNI 10010 and VNI 10020')
+        ->and($trace['routed']['gateway'])->toBeNull()
+        ->and($trace['warnings'])->toContain('This is a routed flow and no gateway could be found for it: no member has an IRB in both VNI 10010 and VNI 10020.');
 });
 
 it('flags a missing tunnel, a flood-list gap and a one-sided EVPN session without guessing', function () {
@@ -224,4 +234,91 @@ it('drops a bridge-table row learnt over a tunnel and reports an empty MAC table
     expect($result['candidates'])->toBe([])
         ->and($result['consulted'][0]['note'])->toBe('collection is off on every device here, so this table is empty')
         ->and($result['notes'])->toBe(['Not found in any source.']);
+});
+
+it('renders a routed trace as two legs with the routing step on the gateway', function () {
+    $context = traceContext();
+    $context['names']['192.0.2.1'] = 'GW1';
+    $context['members']['192.0.2.1'] = ['collected' => true];
+    $context['irbs'] = ['192.0.2.1' => [10010 => irb('irb.10'), 10020 => irb('irb.20')]];
+    // the gateway has a tunnel and a session with both leaves, and floods each VNI to its own leg
+    foreach (['192.0.2.61', '192.0.2.63'] as $leaf) {
+        $context['tunnels']['192.0.2.1'][$leaf] = ['ifname' => 'vtep.32769', 'port_id' => 11, 'mac_count' => 7];
+        $context['tunnels'][$leaf]['192.0.2.1'] = ['ifname' => 'vtep.32769', 'port_id' => 12, 'mac_count' => 7];
+        $context['neighbours']['192.0.2.1'][] = $leaf;
+        $context['neighbours'][$leaf][] = '192.0.2.1';
+    }
+    $context['flood']['192.0.2.1'][10010] = ['192.0.2.61'];
+    $context['flood']['192.0.2.1'][10020] = ['192.0.2.63'];
+    $context['flood']['192.0.2.61'][10010][] = '192.0.2.1';
+    $context['flood']['192.0.2.63'][10020] = ['192.0.2.1'];
+
+    $a = traceEndpoint('020000001140', '192.0.2.61', 'ge-0/0/38', ['vni' => 10010]);
+    $b = traceEndpoint('020000001141', '192.0.2.63', 'ge-0/0/28', ['vni' => 10020]);
+    $routed = RoutedPath::through($context['irbs'], gatewayFabric(), '192.0.2.61', 10010, '192.0.2.63', 10020);
+    $trace = FabricTrace::build($a, $b, [], $context, $routed);
+
+    expect($trace['line'])->toBe(
+        '02:00:00:00:11:40 (ge-0/0/38)[EVPN-CORE01-BER1](et-0/0/52.2121) <-> (et-0/0/52.2121)[EVPN-CORE01-BER2](et-0/0/10)'
+        . ' <-> (et-0/0/11)[GW1: irb.10 → irb.20](et-0/0/11) <-> (et-0/0/10)[EVPN-CORE01-BER2](et-0/0/50.2261)'
+        . ' <-> (et-0/0/53.2261)[EVPN-CORE02-RLG1](ge-0/0/28) 02:00:00:00:11:41',
+    )
+        ->and($trace['routed']['gateway_name'])->toBe('GW1')
+        ->and($trace['routed']['context'])->toBe('master')
+        ->and($trace['local_switching'])->toBeFalse()
+        ->and($trace['warnings'])->toBe([])
+        ->and($trace['checks'][0])->toMatchArray(['id' => 'routed', 'ok' => true])
+        ->and($trace['checks'][1])->toMatchArray(['id' => 'irb-up', 'ok' => true])
+        // the flood list of each leg is asked with that leg's VNI, which is the whole
+        // reason a routed flow is two legs and not one path
+        ->and(array_column($trace['checks'], 'id'))->toContain('flood:192.0.2.61:192.0.2.1:10010')
+        ->and(array_column($trace['checks'], 'id'))->toContain('flood:192.0.2.1:192.0.2.63:10020')
+        ->and(array_filter($trace['checks'], fn ($c) => $c['ok'] === false))->toBe([]);
+});
+
+it('does not claim a routed flow is up when the gateway IRB of one VNI is down', function () {
+    $context = traceContext();
+    $context['names']['192.0.2.1'] = 'GW1';
+    $context['irbs'] = ['192.0.2.1' => [10010 => irb('irb.10'), 10020 => irb('irb.20', status: 'Down')]];
+    $a = traceEndpoint('020000001140', '192.0.2.61', 'ge-0/0/38', ['vni' => 10010]);
+    $b = traceEndpoint('020000001141', '192.0.2.63', 'ge-0/0/28', ['vni' => 10020]);
+
+    $routed = RoutedPath::through($context['irbs'], gatewayFabric(), '192.0.2.61', 10010, '192.0.2.63', 10020);
+    $trace = FabricTrace::build($a, $b, [], $context, $routed);
+    $irbCheck = $trace['checks'][1];
+
+    expect($irbCheck['id'])->toBe('irb-up')
+        ->and($irbCheck['ok'])->toBeFalse()
+        ->and($irbCheck['detail'])->toBe('irb.10 Up, irb.20 Down');
+});
+
+it('says a routed gateway is unconfirmed rather than good when its L3 context was never polled', function () {
+    $context = traceContext();
+    $context['names']['192.0.2.1'] = 'GW1';
+    $context['irbs'] = ['192.0.2.1' => [10010 => irb('irb.10', context: null), 10020 => irb('irb.20', context: null)]];
+    $a = traceEndpoint('020000001140', '192.0.2.61', 'ge-0/0/38', ['vni' => 10010]);
+    $b = traceEndpoint('020000001141', '192.0.2.63', 'ge-0/0/28', ['vni' => 10020]);
+
+    $routed = RoutedPath::through($context['irbs'], gatewayFabric(), '192.0.2.61', 10010, '192.0.2.63', 10020);
+    $trace = FabricTrace::build($a, $b, [], $context, $routed);
+
+    expect($trace['checks'][0]['ok'])->toBeNull()
+        ->and($trace['checks'][0]['detail'])->toContain('has not been polled yet');
+});
+
+it('routes two endpoints on one leaf through that leaf, with no VXLAN and no local-switching claim', function () {
+    $context = traceContext();
+    $context['irbs'] = ['192.0.2.61' => [10010 => irb('irb.10'), 10020 => irb('irb.20')]];
+    $a = traceEndpoint('020000001140', '192.0.2.61', 'ge-0/0/38', ['vni' => 10010]);
+    $b = traceEndpoint('020000001141', '192.0.2.61', 'ae2', ['vni' => 10020]);
+
+    $routed = RoutedPath::through($context['irbs'], gatewayFabric(), '192.0.2.61', 10010, '192.0.2.61', 10020);
+    $trace = FabricTrace::build($a, $b, [], $context, $routed);
+
+    expect($trace['same_leaf'])->toBeTrue()
+        ->and($trace['local_switching'])->toBeFalse()
+        ->and($trace['line'])->toBe('02:00:00:00:11:40 (ge-0/0/38)[EVPN-CORE01-BER1: irb.10 → irb.20](ae2) 02:00:00:00:11:41')
+        ->and($trace['path'])->toBe([])
+        // nothing is encapsulated, so there is no tunnel or flood question to ask
+        ->and(array_column($trace['checks'], 'id'))->toBe(['routed', 'irb-up']);
 });
