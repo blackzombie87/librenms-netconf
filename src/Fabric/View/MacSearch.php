@@ -148,7 +148,7 @@ final class MacSearch
         $esis = [];
         $esiValues = array_values(array_unique(array_map(fn ($r) => (string) $r['source'], array_filter($rows, fn ($r) => $r['source_type'] === 'esi'))));
         if ($esiValues !== []) {
-            foreach (DB::table(TableSchema::tableName('esi'))->whereIn('esi', $esiValues)->get(['device_id', 'esi', 'local_ifname', 'local_port_id', 'remote_vtep_ips']) as $e) {
+            foreach (DB::table(TableSchema::tableName('esi'))->whereIn('esi', $esiValues)->get(['device_id', 'esi', 'local_ifname', 'local_port_id', 'remote_vtep_ips', 'is_df']) as $e) {
                 $esis[(string) $e->esi][] = $e;
             }
         }
@@ -236,6 +236,7 @@ final class MacSearch
                             'device' => $devices->get((int) $e->device_id),
                             'ifname' => (string) $e->local_ifname,
                             'port' => $e->local_port_id === null ? null : $portsById->get((int) $e->local_port_id),
+                            'is_df' => $e->is_df === null ? null : (bool) $e->is_df,
                         ];
                     }
                     // remote PEs of the segment that are not monitored sides
@@ -245,7 +246,7 @@ final class MacSearch
                             if ($target !== null && isset($resolved['peers'][(int) $target])) {
                                 continue;
                             }
-                            $resolved['peers']['ip:' . $ip] ??= ['device' => $target === null ? null : $devices->get((int) $target), 'ifname' => null, 'port' => null, 'name' => $names[(string) $ip] ?? (string) $ip];
+                            $resolved['peers']['ip:' . $ip] ??= ['device' => $target === null ? null : $devices->get((int) $target), 'ifname' => null, 'port' => null, 'is_df' => null, 'name' => $names[(string) $ip] ?? (string) $ip];
                         }
                     }
                     break;

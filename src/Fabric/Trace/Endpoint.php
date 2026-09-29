@@ -14,6 +14,9 @@ final class Endpoint
 
     public const SOURCE_EVPN_ESI = 'evpn-esi';
 
+    /** The fabric knows the MAC is on an Ethernet Segment, but no monitored PE reports a LAG for it. */
+    public const SOURCE_EVPN_ESI_UNKNOWN = 'evpn-esi-unknown';
+
     public const SOURCE_EVPN_REMOTE = 'evpn-remote';
 
     public const SOURCE_FDB = 'fdb';
@@ -21,7 +24,7 @@ final class Endpoint
     public const SOURCE_ARP = 'arp';
 
     /** Most trustworthy first; the resolver ranks candidates by this order. */
-    public const RANK = [self::SOURCE_EVPN_LOCAL, self::SOURCE_EVPN_ESI, self::SOURCE_FDB, self::SOURCE_ARP, self::SOURCE_EVPN_REMOTE];
+    public const RANK = [self::SOURCE_EVPN_LOCAL, self::SOURCE_EVPN_ESI, self::SOURCE_FDB, self::SOURCE_ARP, self::SOURCE_EVPN_ESI_UNKNOWN, self::SOURCE_EVPN_REMOTE];
 
     /**
      * @param  list<string>  $ips
@@ -43,13 +46,24 @@ final class Endpoint
         public readonly array $evidence,
         public readonly bool $isDuplicate = false,
         public readonly int $moves = 0,
+        /** The designated forwarder of the segment, for a multihomed attachment. */
+        public readonly bool $df = false,
     ) {
     }
 
-    /** Whether this candidate says where the endpoint hangs, rather than only that it exists. */
+    /**
+     * Whether this candidate says where the endpoint hangs, rather than only that it exists.
+     *
+     * An `esi` row on a leaf is *not* one: every leaf in the fabric reports a multihomed MAC
+     * with the Ethernet Segment as its active source, so the reporting leaf says nothing about
+     * where the segment is. Only the PEs that own the segment do, and those are separate
+     * candidates the resolver expands to.
+     */
     public function isAttachment(): bool
     {
-        return $this->address !== null && $this->source !== self::SOURCE_EVPN_REMOTE;
+        return $this->address !== null
+            && $this->source !== self::SOURCE_EVPN_REMOTE
+            && $this->source !== self::SOURCE_EVPN_ESI_UNKNOWN;
     }
 
     public function rank(): int
@@ -80,6 +94,7 @@ final class Endpoint
             'evidence' => $this->evidence,
             'is_duplicate' => $this->isDuplicate,
             'moves' => $this->moves,
+            'df' => $this->df,
             'attachment' => $this->isAttachment(),
         ];
     }

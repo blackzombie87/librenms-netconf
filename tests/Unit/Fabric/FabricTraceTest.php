@@ -322,3 +322,53 @@ it('routes two endpoints on one leaf through that leaf, with no VXLAN and no loc
         // nothing is encapsulated, so there is no tunnel or flood question to ask
         ->and(array_column($trace['checks'], 'id'))->toBe(['routed', 'irb-up']);
 });
+
+it('puts a multihomed MAC on the PEs that own the segment, not on the leaf that reported it', function () {
+    // the live defect: every leaf in the fabric reports an ESI-attached MAC with the segment
+    // as its active source, so the old code attributed it to whichever leaf sorted first --
+    // EVPN-CORE01-BER1 for an endpoint that hangs off EVPN-CORE01-HRO1 ae48
+    $members = [
+        1 => ['address' => '192.0.2.61', 'name' => 'EVPN-CORE01-BER1'],
+        2 => ['address' => '192.0.2.62', 'name' => 'EVPN-CORE01-BER2'],
+        3 => ['address' => '192.0.2.63', 'name' => 'EVPN-CORE01-HRO1'],
+    ];
+    $esi = '01:00:50:00:11:00:00:00:30:00';
+    $peers = [
+        ['device_id' => 3, 'ifname' => 'ae48', 'port_id' => 91, 'is_df' => true],
+        ['device_id' => 2, 'ifname' => 'ae48', 'port_id' => 92, 'is_df' => false],
+    ];
+    // BER1, BER2 and HRO1 each report the same segment for the same MAC
+    $plugin = array_map(fn (int $deviceId) => [
+        'device_id' => $deviceId, 'mac' => '7c5a1c78e149', 'vni' => 103, 'ips' => ['185.71.122.244'],
+        'source_type' => 'esi', 'source' => $esi, 'ifname' => null, 'port_id' => null, 'esi' => $esi,
+        'peers' => $peers, 'is_duplicate' => false, 'moves' => 0,
+    ], [1, 2, 3]);
+
+    $result = EndpointResolver::select(['kind' => 'ip', 'value' => '185.71.122.244', 'q' => '185.71.122.244'], ['plugin' => $plugin, 'fdb' => [], 'arp' => []], $members);
+    $best = \SafferIt\LibrenmsNetconf\Fabric\Trace\TraceRunner::pick($result['candidates']);
+
+    expect($best->name)->toBe('EVPN-CORE01-HRO1')
+        ->and($best->ifname)->toBe('ae48')
+        ->and($best->portId)->toBe(91)
+        ->and($best->vni)->toBe(103)
+        ->and($best->isAttachment())->toBeTrue()
+        ->and($best->evidence[0])->toContain('DF')
+        // three reporting leaves and two PEs is two candidates, not six
+        ->and($result['candidates'])->toHaveCount(2)
+        ->and(array_map(fn ($c) => $c->name, $result['candidates']))->toBe(['EVPN-CORE01-HRO1', 'EVPN-CORE01-BER2']);
+});
+
+it('does not claim a segment is on the reporting leaf when no PE has a LAG for it', function () {
+    $members = [1 => ['address' => '192.0.2.61', 'name' => 'EVPN-CORE01-BER1']];
+    $plugin = [[
+        'device_id' => 1, 'mac' => '7c5a1c78e149', 'vni' => 103, 'ips' => [],
+        'source_type' => 'esi', 'source' => '01:00:50:00:11:00:00:00:30:00', 'ifname' => null, 'port_id' => null,
+        'esi' => '01:00:50:00:11:00:00:00:30:00', 'peers' => [], 'is_duplicate' => false, 'moves' => 0,
+    ]];
+
+    $result = EndpointResolver::select(['kind' => 'mac', 'value' => '7c5a1c78e149', 'q' => '7c5a1c78e149'], ['plugin' => $plugin, 'fdb' => [], 'arp' => []], $members);
+
+    expect($result['candidates'][0]->isAttachment())->toBeFalse()
+        ->and($result['candidates'][0]->evidence[0])->toContain('where it attaches is unknown')
+        ->and($result['notes'])->toContain('Learnt from the fabric, but no leaf claims it locally: no access port anywhere.');
+});

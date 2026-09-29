@@ -47,6 +47,25 @@ the EVPN session — is now asked per leg with that leg's own VNI.
 A live trace walks both legs and they share one trace's twelve sessions, rather than getting
 twelve each: the device's own connection limit does not care which leg a session belongs to.
 
+### A multihomed endpoint is on its segment's PEs, not on whoever reported it
+
+Found on a live fabric: tracing to an endpoint that hangs off `EVPN-CORE01-HRO1 ae48` answered
+`EVPN-CORE01-BER1`, with no access interface on either end of the line.
+
+Every leaf in an EVPN fabric reports a multihomed MAC with the Ethernet Segment as its active
+source, not with a port — so a row saying `esi 01:00:50:…` on BER1 is BER1 repeating what the
+fabric told it, and says nothing about where that segment is. The resolver treated it as an
+attachment on the reporting leaf, and among a dozen leaves saying the same thing the one with
+the lowest VTEP address won.
+
+An ESI row now resolves to the PEs that own the segment — the `netconf_evpn_esi` rows carrying
+a local LAG — which is also where the access interface comes from, so `ae36` and `ae48` appear
+on the line instead of `(?)`. Both legs of an all-active pair are candidates because unicast
+may use either; the designated forwarder is ranked first, since that ordering comes from the
+fabric rather than from whichever address sorts lower. A segment no monitored PE has a LAG for
+is no longer claimed by anyone: the MAC exists, where it attaches is unknown, and the trace
+says that instead of pointing at a leaf.
+
 ### Asking for one
 
 `netconf:trace` takes `--vni-to=`, and the Trace tab has a destination-VNI box beside the
