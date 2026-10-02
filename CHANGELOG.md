@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.6.0 – 2026-10-02
 
 Routed traces. Two endpoints in different VNIs used to end the trace with the gateways that
 have an IRB in both named and "inter-VNI tracing is not implemented" underneath. The trace now
@@ -106,6 +106,23 @@ release.
 `netconf:trace` takes `--vni-to=`, and the Trace tab has a destination-VNI box beside the
 existing one; a single `--vni` still restricts both ends as before. Neither is required — two
 endpoints that resolve to different VNIs are a routed flow whether or not anything was typed.
+
+### Current LibreNMS master
+
+Two changes in core after 26.9.1.1 broke the plugin. This release works with them and still
+with 26.7 and 26.9.
+
+- **RRD file names are objects now** (librenms#20649). `Rrd::name()` returns an `RrdPath` and
+  `Rrd::checkRrdExists()` accepts nothing else, so every metric write failed with
+  `checkRrdExists(): Argument #1 ($rrdpath) must be of type LibreNMS\RRD\RrdPath, string given`,
+  and the graphs reported the file as missing. The plugin now hands core back the value core
+  gave it and uses the string form only where rrdtool needs a path. `netconf:uninstall` no
+  longer calls the removed `Rrd::dirFromHost()`.
+- **phpseclib 4** (librenms#20677). Core now ships phpseclib 4, which renames the namespace.
+  The plugin requires `^3.0 || ^4.0` and uses whichever is installed. Before this, composer
+  refused to install the plugin next to a current core. On 4 a failed login reports which
+  methods were rejected but no longer quotes phpseclib's protocol messages, because 4 keeps
+  them private.
 
 ## 1.5.1 – 2026-09-28
 
