@@ -240,7 +240,8 @@ class Uninstaller
             array_filter(Rrd::getRrdFiles($hostname, 'netconf-'), self::isMetricRrd(...)),
             array_filter(Rrd::getRrdFiles($hostname, 'sensor-'), self::isSensorRrd(...)),
         );
-        $dir = Rrd::dirFromHost($hostname);
+        // Rrd::dirFromHost() is gone since librenms#20649; this is what it and RrdPath::fullPath() build
+        $dir = rtrim((string) LibrenmsConfig::get('rrd_dir'), '/') . '/' . Rrd::safeName(trim($hostname, '[]'));
 
         return array_values(array_unique(array_map(fn (string $file) => self::localRrdPath($file, $dir), $files)));
     }

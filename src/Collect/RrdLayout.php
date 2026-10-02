@@ -47,11 +47,15 @@ class RrdLayout
     /**
      * The data sources to write, in file order (name => type).
      *
+     * $file is what Rrd::name() returned: a path string up to LibreNMS 26.9, an RrdPath after
+     * (librenms#20649). checkRrdExists() wants exactly that type, so it is handed on unchanged;
+     * its string form is the path rrdtool is called with (relative to rrd_dir with rrdcached).
+     *
      * @param  array<string, string>  $desired  the mapping's RRD fields in YAML order
      * @param  array<string, string>|null  $stored  order of the last verified write, null when unknown
      * @return array<string, string>
      */
-    public function reconcile(string $file, array $desired, ?array $stored): array
+    public function reconcile(string|\Stringable $file, array $desired, ?array $stored): array
     {
         if ($stored !== null && array_diff_key($desired, $stored) === []) {
             return $stored;   // every wanted field already has its slot; extra slots keep receiving U
@@ -60,6 +64,7 @@ class RrdLayout
         if (! Rrd::checkRrdExists($file)) {
             return $desired;   // the store creates the file in this order
         }
+        $file = (string) $file;
 
         $current = $this->dataSources($file);
         if ($current === null) {

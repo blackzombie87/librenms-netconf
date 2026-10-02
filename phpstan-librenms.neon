@@ -13,3 +13,10 @@ parameters:
     bootstrapFiles:
         - dev/phpstan-librenms-bootstrap.php
     treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # Rrd::name() returns a string up to 26.9 and an RrdPath after librenms#20649, which is
+        # what checkRrdExists() then demands; the plugin hands that value on unchanged
+        -
+            identifier: argument.type
+            message: '#checkRrdExists\(\) expects LibreNMS\\RRD\\RrdPath, string\|Stringable given#'
+            reportUnmatched: false

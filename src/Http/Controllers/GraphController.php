@@ -36,7 +36,7 @@ class GraphController extends Controller
 
         $builder = new GraphBuilder($this->palette());
         foreach ($fields as $field) {
-            $builder->add($file, $field, $field, $sources[$field]);
+            $builder->add((string) $file, $field, $field, $sources[$field]);
         }
 
         return $this->render($request, $builder, sprintf('%s - %s', $device->displayName(), $metric->descr ?: $metric->metric_index), [$file]);
@@ -62,7 +62,7 @@ class GraphController extends Controller
                 continue;
             }
             $files[] = $file = Rrd::name($device->hostname, NetconfMetric::rrdName($row->definition, $row->mapping, $row->metric_index));
-            $builder->add($file, $data['field'], $row->metric_index, $sources[$data['field']]);
+            $builder->add((string) $file, $data['field'], $row->metric_index, $sources[$data['field']]);
         }
 
         return $this->render($request, $builder, sprintf('%s - %s/%s %s', $device->displayName(), $data['definition'], $data['mapping'], $data['field']), $files);
@@ -78,7 +78,7 @@ class GraphController extends Controller
 
         $builder = new GraphBuilder($this->palette());
         foreach ($fields as $field) {
-            $builder->add($file, $field, $field, $portMetric->types[$field] ?? 'GAUGE');
+            $builder->add((string) $file, $field, $field, $portMetric->types[$field] ?? 'GAUGE');
         }
 
         return $this->render($request, $builder, sprintf('%s - %s %s', $device->displayName(), $port !== null ? $port->ifName : 'port ' . $portMetric->port_id, $portMetric->mapping), [$file]);
@@ -108,7 +108,7 @@ class GraphController extends Controller
             }
             $files[] = $file = Rrd::name($device->hostname, NetconfPortMetric::rrdName((int) $row->port_id, $row->definition, $row->mapping));
             // ifName comes from the joined ports row, not from a column of this model
-            $builder->add($file, $data['field'], (string) $row->getAttribute('ifName'), $types[$data['field']] ?? 'GAUGE');
+            $builder->add((string) $file, $data['field'], (string) $row->getAttribute('ifName'), $types[$data['field']] ?? 'GAUGE');
         }
 
         return $this->render($request, $builder, sprintf('%s - %s/%s %s', $device->displayName(), $data['definition'], $data['mapping'], $data['field']), $files);
@@ -156,7 +156,7 @@ class GraphController extends Controller
     }
 
     /**
-     * @param  list<string>  $files
+     * @param  list<string|\Stringable>  $files  as Rrd::name() returned them (an RrdPath since librenms#20649)
      */
     private function render(Request $request, GraphBuilder $builder, string $title, array $files): Response
     {

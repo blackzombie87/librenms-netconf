@@ -405,8 +405,12 @@ namespace LibreNMS\RRD {
 namespace App\Facades {
     class Rrd
     {
-        /** @param  string|array<int, string|int>  $extra */
-        public static function name(string $host, string|array $extra): string
+        /**
+         * A path string up to LibreNMS 26.9, a LibreNMS\RRD\RrdPath after (librenms#20649).
+         *
+         * @param  string|array<int, string|int>  $extra
+         */
+        public static function name(string $host, string|array $extra): string|\Stringable
         {
             return '';
         }
@@ -417,7 +421,7 @@ namespace App\Facades {
             return '';
         }
 
-        public static function checkRrdExists(string $filename): bool
+        public static function checkRrdExists(string|\Stringable $filename): bool
         {
             return false;
         }
@@ -431,7 +435,7 @@ namespace App\Facades {
             return [];
         }
 
-        public static function dirFromHost(string $host): string
+        public static function safeName(string $name): string
         {
             return '';
         }
