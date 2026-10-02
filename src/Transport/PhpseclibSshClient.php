@@ -2,8 +2,6 @@
 
 namespace SafferIt\LibrenmsNetconf\Transport;
 
-use phpseclib3\Crypt\PublicKeyLoader;
-use phpseclib3\Net\SSH2;
 use SafferIt\LibrenmsNetconf\Transport\Contracts\ChannelInterface;
 use SafferIt\LibrenmsNetconf\Transport\Contracts\SshClientInterface;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\AuthenticationException;
@@ -13,14 +11,15 @@ use SafferIt\LibrenmsNetconf\Transport\Exceptions\TimeoutException;
 use Throwable;
 
 /**
- * SshClientInterface backed by phpseclib 3.
+ * SshClientInterface backed by phpseclib 3 or 4, whichever LibreNMS ships (see Phpseclib).
  *
  * Host keys are verified against an OpenSSH known_hosts file when the credentials carry
  * one (setting known_hosts); without it phpseclib accepts any server key.
  */
 class PhpseclibSshClient implements SshClientInterface
 {
-    private ?SSH2 $ssh = null;
+    /** @var \phpseclib3\Net\SSH2|\phpseclib4\Net\SSH2|null */
+    private ?object $ssh = null;
 
     private string $stderr = '';
 
@@ -50,7 +49,7 @@ class PhpseclibSshClient implements SshClientInterface
         $this->port = $credentials->port;
 
         try {
-            $ssh = new SSH2($credentials->host, $credentials->port, $connectTimeout);
+            $ssh = Phpseclib::ssh($credentials->host, $credentials->port, $connectTimeout);
             $ssh->enableQuietMode();
             $hostKey = $ssh->getServerPublicHostKey();   // runs the key exchange
         } catch (Throwable $e) {
@@ -83,7 +82,7 @@ class PhpseclibSshClient implements SshClientInterface
             }
         }
 
-        $errors = array_filter($ssh->getErrors());
+        $errors = Phpseclib::errors($ssh);
         $ssh->disconnect();
 
         throw new AuthenticationException(sprintf(
@@ -91,7 +90,7 @@ class PhpseclibSshClient implements SshClientInterface
             $this->target(),
             $credentials->username,
             implode(', ', $failures),
-            $errors ? '; ' . implode(', ', array_map('strval', $errors)) : ''
+            $errors ? '; ' . implode(', ', $errors) : ''
         ));
     }
 
@@ -165,9 +164,11 @@ class PhpseclibSshClient implements SshClientInterface
     }
 
     /**
+     * @param  \phpseclib3\Net\SSH2|\phpseclib4\Net\SSH2  $ssh
+     *
      * @throws HostKeyException
      */
-    private function verifyHostKey(SSH2 $ssh, Credentials $credentials): void
+    private function verifyHostKey(object $ssh, Credentials $credentials): void
     {
         $known = new KnownHosts((string) $credentials->knownHosts);
         $fail = function (string $message) use ($ssh): never {
@@ -202,7 +203,10 @@ class PhpseclibSshClient implements SshClientInterface
         };
     }
 
-    private function connection(): SSH2
+    /**
+     * @return \phpseclib3\Net\SSH2|\phpseclib4\Net\SSH2
+     */
+    private function connection(): object
     {
         if ($this->ssh === null) {
             throw new ConnectionException(($this->target() ?: 'ssh') . ': not connected');
@@ -217,9 +221,9 @@ class PhpseclibSshClient implements SshClientInterface
     }
 
     /**
-     * @return \phpseclib3\Crypt\Common\PrivateKey
+     * @return \phpseclib3\Crypt\Common\PrivateKey|\phpseclib4\Crypt\Common\PrivateKey
      */
-    private function loadKey(Credentials $credentials)
+    private function loadKey(Credentials $credentials): object
     {
         $file = (string) $credentials->keyFile;
         if (! is_readable($file)) {
@@ -229,7 +233,7 @@ class PhpseclibSshClient implements SshClientInterface
         $content = (string) file_get_contents($file);
 
         try {
-            return PublicKeyLoader::loadPrivateKey($content, ($credentials->keyPassphrase ?? '') !== '' ? $credentials->keyPassphrase : false);
+            return Phpseclib::loadPrivateKey($content, ($credentials->keyPassphrase ?? '') !== '' ? $credentials->keyPassphrase : null);
         } catch (Throwable $e) {
             throw new AuthenticationException("key file $file could not be loaded: " . $e->getMessage(), 0, $e);
         }

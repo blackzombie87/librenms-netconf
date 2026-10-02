@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "794e1ee6e22ae7ce6f4abe8b3aff0fcc",
+    "content-hash": "dc8389d8a5b626e4621949f88cc01bfb",
     "packages": [
         {
             "name": "librenms/plugin-interfaces",

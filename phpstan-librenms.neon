@@ -10,6 +10,9 @@ parameters:
         - src
     stubFiles:
         - stubs/librenms-overrides.stub.php
+    scanFiles:
+        # phpseclib 4 only from librenms#20677 on; a scanned file declares it where it is missing
+        - stubs/phpseclib4.stub.php
     bootstrapFiles:
         - dev/phpstan-librenms-bootstrap.php
     treatPhpDocTypesAsCertain: false

@@ -2,7 +2,6 @@
 
 namespace SafferIt\LibrenmsNetconf\Transport;
 
-use phpseclib3\Net\SSH2;
 use SafferIt\LibrenmsNetconf\Transport\Contracts\ChannelInterface;
 
 /**
@@ -12,7 +11,10 @@ class PhpseclibChannel implements ChannelInterface
 {
     private bool $open = true;
 
-    public function __construct(private SSH2 $ssh)
+    /**
+     * @param  \phpseclib3\Net\SSH2|\phpseclib4\Net\SSH2  $ssh  see Phpseclib
+     */
+    public function __construct(private object $ssh)
     {
     }
 
@@ -23,7 +25,7 @@ class PhpseclibChannel implements ChannelInterface
 
     public function readUntil(string $delimiter): string
     {
-        $data = $this->ssh->read($delimiter, SSH2::READ_SIMPLE);
+        $data = $this->ssh->read($delimiter, Phpseclib::READ_SIMPLE);
 
         return is_string($data) ? $data : '';
     }
