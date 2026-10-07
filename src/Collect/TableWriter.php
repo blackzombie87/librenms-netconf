@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 use SafferIt\LibrenmsNetconf\Extract\TableRow;
 use SafferIt\LibrenmsNetconf\Fabric\MacMobility;
+use SafferIt\LibrenmsNetconf\Support\DeadlockRetry;
 
 /**
  * Writes `tables:` rows to the netconf_evpn_* tables: one upsert per mapping and chunk
@@ -62,13 +63,40 @@ class TableWriter
             }
 
             $unique = array_merge(['device_id'], $mapping->keyColumns());
-            foreach (array_chunk($records, 200) as $chunk) {
-                DB::table($table)->upsert($chunk, $unique, $update);
+            // InnoDB locks the rows of an upsert in the order of its VALUES list; the device's
+            // own order differs from run to run, so two writers touching the same keys (a poll
+            // and a discovery of one device, the fabric resolver) take them crosswise and
+            // deadlock. A fixed order by key makes every writer queue up instead.
+            foreach (array_chunk(self::ordered($records, $mapping->keyColumns()), 200) as $chunk) {
+                DeadlockRetry::run(fn () => DB::table($table)->upsert($chunk, $unique, $update));
             }
             Log::debug(sprintf('  table %s: %d rows from %s/%s', $mapping->table, count($group), $group[0]->definition, $mapping->id));
         }
 
         return ['rows' => count($rows), 'tables' => count($tables)];
+    }
+
+    /**
+     * The records sorted by their key columns, one per key (the last one wins, as it would
+     * inside a single upsert statement).
+     *
+     * @param  list<array<string, mixed>>  $records
+     * @param  list<string>  $keyColumns
+     * @return list<array<string, mixed>>
+     */
+    public static function ordered(array $records, array $keyColumns): array
+    {
+        $byKey = [];
+        foreach ($records as $record) {
+            $key = [];
+            foreach ($keyColumns as $column) {
+                $key[] = (string) ($record[$column] ?? '');
+            }
+            $byKey[implode("\x1f", $key)] = $record;
+        }
+        ksort($byKey, SORT_STRING);
+
+        return array_values($byKey);
     }
 
     /**
@@ -128,8 +156,9 @@ class TableWriter
                     $stale[] = (int) $existing->id;
                 }
             }
+            sort($stale);
             foreach (array_chunk($stale, 500) as $ids) {
-                $deleted += DB::table(TableSchema::tableName($table))->whereIn('id', $ids)->delete();
+                $deleted += DeadlockRetry::run(fn () => DB::table(TableSchema::tableName($table))->whereIn('id', $ids)->delete());
             }
         }
 
@@ -167,7 +196,7 @@ class TableWriter
         $deleted = 0;
         foreach (array_unique($tables) as $table) {
             if (TableSchema::isWritable($table)) {
-                $deleted += DB::table(TableSchema::tableName($table))->where('device_id', $this->device->device_id)->delete();
+                $deleted += DeadlockRetry::run(fn () => DB::table(TableSchema::tableName($table))->where('device_id', $this->device->device_id)->delete());
             }
         }
 
@@ -178,7 +207,7 @@ class TableWriter
     {
         $deleted = 0;
         foreach (TableSchema::writable() as $table) {
-            $deleted += DB::table(TableSchema::tableName($table))->where('device_id', $this->device->device_id)->delete();
+            $deleted += DeadlockRetry::run(fn () => DB::table(TableSchema::tableName($table))->where('device_id', $this->device->device_id)->delete());
         }
 
         return $deleted;

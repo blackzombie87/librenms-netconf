@@ -18,6 +18,7 @@ use SafferIt\LibrenmsNetconf\Fabric\Checks\IssueSensor;
 use SafferIt\LibrenmsNetconf\Fabric\FabricResolver;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
 use SafferIt\LibrenmsNetconf\NetconfSettings;
+use SafferIt\LibrenmsNetconf\Support\DeadlockRetry;
 use SafferIt\LibrenmsNetconf\Transport\DeviceCredentials;
 use SafferIt\LibrenmsNetconf\Transport\Exceptions\TransportException;
 use SafferIt\LibrenmsNetconf\Transport\TransportFactory;
@@ -414,7 +415,8 @@ class NetconfService
      */
     private function storageFailed(Device $device, NetconfDeviceStatus $status, \Throwable $e, string $transport, array $names, CollectionResult $result, bool $discovery, float $start, int $failuresBefore): RunReport
     {
-        $error = 'storing the results failed: ' . $e->getMessage();
+        // a database error is logged without its statement: a table upsert carries every bound MAC and address
+        $error = 'storing the results failed: ' . DeadlockRetry::describe($e);
         $duration = microtime(true) - $start;
         $status->consecutive_failures = $failuresBefore + 1;
         $status->next_attempt = now()->addSeconds($this->backoff($status->consecutive_failures));
