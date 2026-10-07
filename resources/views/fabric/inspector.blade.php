@@ -55,6 +55,25 @@
                 {{-- FabricNodes::name() echoes an unknown key back, so an unmonitored far end
                      would head the panel as the literal string `far:198.19.9.254` --}}
                 @php($endpoint = fn (string $id) => str_starts_with($id, 'far:') ? substr($id, 4) . ' (unmonitored)' : $nodes->name($id))
+                @php($groupName = fn (string $key) => collect($eagle['groups'])->firstWhere('key', $key)['label'] ?? null)
+                @if (($e['shape'] ?? '') === 'bundle')
+                    {{-- every link between two sites, because the picture draws them as one line --}}
+                    @php($end = fn (string $id) => $groupName($id) ?? $endpoint($id))
+                    <h5 style="margin-top: 0;">{{ $end($e['a']) }} &harr; {{ $end($e['b']) }}
+                        <small class="text-muted">{{ $e['count'] }} link{{ $e['count'] === 1 ? '' : 's' }}@if ($e['down'] > 0), {{ $e['down'] }} not up @endif</small>
+                    </h5>
+                    <table class="table table-condensed" style="margin-bottom: 6px;">
+                        <tr><th>Link</th><th>Protocol</th><th>State</th><th>Ports</th></tr>
+                        @foreach ($e['links'] as $link)
+                            <tr>
+                                <td>{{ $nodes->name($link['a']) }} &harr; {{ $link['b'] === null ? ($link['b_label'] ?? 'unknown') : $nodes->name($link['b']) }}</td>
+                                <td>{{ $link['protocol'] }}</td>
+                                <td class="{{ ($link['up'] ?? null) === false ? 'text-danger' : (($link['up'] ?? null) === true ? 'text-success' : 'text-muted') }}">{{ $link['state'] ?? 'no session state' }}</td>
+                                <td><small>{{ $link['a_port'] ?? '' }} &harr; {{ $link['b_port'] ?? '' }}</small></td>
+                            </tr>
+                        @endforeach
+                    </table>
+                @else
                 <h5 style="margin-top: 0;">{{ $endpoint($e['a']) }} &harr; {{ $e['layer'] === 'underlay' && $e['kind'] === 'trunk' ? $e['b'] : $endpoint($e['b']) }}
                     <small class="text-muted">{{ $e['kind'] }}</small>
                 </h5>
@@ -64,6 +83,7 @@
                     @if ($e['kind'] === 'asymmetric') &mdash; only one of the two members lists the other. @endif
                     @if ($e['layer'] === 'esi') &mdash; <a href="{{ route('netconf.fabric', [$fabric['id'], 'esis']) }}">ESI tab</a>. @endif
                 </small></p>
+                @endif
             </div>
         @endforeach
 

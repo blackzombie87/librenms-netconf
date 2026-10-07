@@ -233,9 +233,25 @@ final class FabricPagesTest extends LibrenmsTestCase
         // the drag is in user units, and 4 screen px is the only screen-pixel number
         $this->assertStringContainsString('box.w / r.width', $page);
         $this->assertStringContainsString('THRESHOLD = 4', $page);
-        // and the client routes with the same numbers the server does
-        $this->assertStringContainsString('GUTTER = 28', $page);
+        // and the client routes with the same numbers the server does: the block the unit suite
+        // runs in node against GridRouter.php is on the page, and so is the gravity spring
+        $this->assertStringContainsString('BEGIN grid-router', $page);
+        $this->assertStringContainsString('USED_FACTOR = 4', $page);
         $this->assertStringContainsString('0.65 * velocity', $page);
+    }
+
+    public function testAllLinksIsAViewFlagTheToolbarShows(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric] = $this->fabricWithTwoPeLag();
+
+        $default = $this->get("/plugin/netconf/fabric/$fabric")->assertOk()->getContent();
+        $all = $this->get("/plugin/netconf/fabric/$fabric?links=1")->assertOk()->getContent();
+
+        // the toolbar says which one is on
+        $this->assertStringContainsString('>all links</a>', $default);
+        $this->assertStringNotContainsString('btn btn-default active" title="Draw every underlay link', $default);
+        $this->assertStringContainsString('btn btn-default active" title="Draw every underlay link', $all);
     }
 
     public function testTheEagleViewFocusesAMemberFromTheQueryString(): void

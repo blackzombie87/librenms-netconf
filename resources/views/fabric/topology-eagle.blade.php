@@ -19,6 +19,7 @@
                 <a class="btn btn-default {{ $view['outside'] ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['focus' => null, 'outside' => $view['outside'] ? null : 1]) }}">sessions out of the fabric ({{ $eg['counts']['outside'] }})</a>
             @endif
             <a class="btn btn-default {{ $view['attached'] !== null ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['focus' => null, 'attached' => $view['attached'] !== null ? null : 1]) }}">attached devices {{ $view['attached'] === null ? '' : '(' . count($view['attached']) . ')' }}</a>
+            <a class="btn btn-default {{ $view['links'] ? 'active' : '' }}" title="Draw every underlay link and every ESI-LAG pair on its own, instead of one line per pair of sites" href="{{ request()->fullUrlWithQuery(['focus' => null, 'links' => $view['links'] ? null : 1]) }}">all links</a>
         </span>
         <span class="pull-right btn-group btn-group-xs" role="group">
             <button type="button" class="btn btn-default" id="eagle-out" title="zoom out">&minus;</button>
@@ -74,6 +75,13 @@
         .netconf-eagle .eg-text { fill: #222; }
         .netconf-eagle .eg-muted { fill: #666; }
         .netconf-eagle .eg-caption { fill: #777; }
+        .netconf-eagle .eg-note { fill: #777; }
+        .netconf-eagle .eg-note-danger { fill: #d9534f; }
+        {{-- an edge label sits on the line it names: a halo in the page colour keeps it readable
+             where it crosses a neighbouring lane --}}
+        .netconf-eagle { --eg-halo: #ffffff; }
+        html.dark .netconf-eagle { --eg-halo: #2b3139; }
+        .netconf-eagle .eg-edge text { paint-order: stroke; stroke: var(--eg-halo); stroke-width: 3px; stroke-linejoin: round; }
         .netconf-eagle .eg-chip-text { fill: #444; }
         .netconf-eagle .eg-chip-danger { fill: #f7dcdb; }
         .netconf-eagle .eg-chip-warning { fill: #fcefdc; }
@@ -131,6 +139,8 @@
         html.dark .netconf-eagle .eg-text { fill: #e8e8e8; }
         html.dark .netconf-eagle .eg-muted { fill: #b5b5b5; }
         html.dark .netconf-eagle .eg-caption { fill: #c8c8c8; }
+        html.dark .netconf-eagle .eg-note { fill: #a8a8a8; }
+        html.dark .netconf-eagle .eg-note-danger { fill: #e87a76; }
         html.dark .netconf-eagle .eg-chip-text { fill: #e8e8e8; }
         html.dark .netconf-eagle .eg-chip-danger { fill: #4a2a2a; }
         html.dark .netconf-eagle .eg-chip-warning { fill: #4a3b24; }
@@ -155,15 +165,18 @@
                     {{-- the caption is cut to the box: a location is free text and the ones that
                          exist are long enough to run across the next compound --}}
                     <text class="eg-caption" x="{{ $g['x'] + 6 }}" y="{{ $g['y'] + 14 }}" font-size="11">{{ $g['collapsed'] ? '▸' : '▾' }} {{ $g['caption'] }}<title>{{ $g['label'] ?? 'no location' }}</title></text>
+                    @if (($g['note'] ?? '') !== '')
+                        <text class="eg-note {{ $g['note_class'] === 'danger' ? 'eg-note-danger' : '' }}" x="{{ $g['x'] + $g['w'] - 6 }}" y="{{ $g['y'] + 14 }}" font-size="9" text-anchor="end">{{ $g['note'] }}<title>links inside this site and its ESI-LAG pairs; the ones that are not up or degraded are drawn</title></text>
+                    @endif
                 </a>
             @endforeach
 
             @foreach ($eg['edges'] as $e)
-                <g class="eg-edge" data-focus="{{ $e['id'] }}" data-kind="{{ $e['kind'] }}" data-shape="{{ $e['shape'] }}" data-a="{{ $e['a'] }}" data-b="{{ $e['b'] }}" data-tier-a="{{ $e['tier_a'] }}" data-tier-b="{{ $e['tier_b'] }}" data-site-a="{{ $e['site_a'] }}" data-site-b="{{ $e['site_b'] }}">
+                <g class="eg-edge" data-focus="{{ $e['id'] }}" data-kind="{{ $e['kind'] }}" data-shape="{{ $e['shape'] }}" data-a="{{ $e['a'] }}" data-b="{{ $e['b'] }}" data-tier-a="{{ $e['tier_a'] }}" data-tier-b="{{ $e['tier_b'] }}" data-site-a="{{ $e['site_a'] }}" data-site-b="{{ $e['site_b'] }}"@if (isset($e['labels'])) data-labels='@json($e['labels'])'@endif>
                     <path d="{{ $e['path'] }}" fill="none" stroke-width="{{ $e['width'] }}" @if ($e['dash'] !== '') stroke-dasharray="{{ $e['dash'] }}" @endif class="{{ $e['strokeClass'] }} {{ $e['highlight'] ? 'eg-hl' : '' }}">
                         <title>{{ $e['title'] }}</title>
                     </path>
-                    @if (($e['label'] ?? '') !== '')
+                    @if (($e['label'] ?? '') !== '' || isset($e['labels']))
                         <text class="eg-muted" x="{{ $e['lx'] }}" y="{{ $e['ly'] }}" font-size="9" text-anchor="middle">{{ $e['label'] }}</text>
                     @endif
                 </g>
@@ -207,7 +220,7 @@
             <span><i class="eg-swatch-dash eg-key-overlay"></i> overlay</span>
             <span><i class="eg-swatch-dash eg-key-fault"></i> overlay fault</span>
             <span><i class="eg-swatch eg-key-esi"></i> ESI-LAG</span>
-            <span><i class="eg-swatch eg-key-trunk"></i> trunk</span>
+            <span><i class="eg-swatch eg-key-trunk"></i> trunk, or several links between two sites (thicker = more)</span>
         </div>
     </div>
     </div>
@@ -337,7 +350,7 @@
         // Constants below are EagleLayout's. A path the browser draws has to be one the server
         // would have drawn for the same rects, or a reload would jump.
         var CARD_W = 156, SITE_PAD = 10, SITE_HEADER = 20, MARGIN = 24;
-        var GUTTER = 28, CLEARANCE = 4, LANE_PITCH = 6, OUTER = 8, INSIDE_TOL = 1, EDGE_CHAR_W = 4.8;
+        var CLEARANCE = 4, INSIDE_TOL = 1, EDGE_CHAR_W = 4.8;
 
         var nodes = {}, groups = {}, links = [];
 
@@ -356,7 +369,7 @@
         Array.prototype.forEach.call(svg.querySelectorAll('.eg-site'), function (a) {
             var rect = a.querySelector('rect');
             groups[a.dataset.key] = {
-                el: a, rect: rect, caption: a.querySelector('text'),
+                el: a, rect: rect, caption: a.querySelector('.eg-caption'), note: a.querySelector('.eg-note'),
                 members: (a.dataset.members || '').split(' ').filter(Boolean),
                 hx: parseInt(a.dataset.homeX, 10), hy: parseInt(a.dataset.homeY, 10),
                 hw: parseInt(a.dataset.homeW, 10), hh: parseInt(a.dataset.homeH, 10),
@@ -369,8 +382,12 @@
                 el: g, path: g.querySelector('path'), text: g.querySelector('text'),
                 kind: g.dataset.kind, shape: g.dataset.shape,
                 a: g.dataset.a, b: g.dataset.b, siteA: g.dataset.siteA || null, siteB: g.dataset.siteB || null,
+                // a bundle carries its label in the long form and the short ones, in order
+                labels: (function () { try { return JSON.parse(g.dataset.labels || 'null') || []; } catch (x) { return []; } })(),
                 label: g.querySelector('text') ? g.querySelector('text').textContent : '',
             });
+            var added = links[links.length - 1];
+            if (added.labels.length) { added.label = added.labels[0]; }
         });
 
         function rectOf(id) {
@@ -387,7 +404,300 @@
             return g ? { x: g.x + g.w / 2, top: g.y, bottom: g.y + SITE_HEADER } : null;
         }
 
-        // ---- geometry, the same rules EagleLayout::route() applies
+        /* BEGIN grid-router */
+        // ---- the router: GridRouter.php, line for line. Integer coordinates and integer costs, the
+        // same expansion order and the same tie-break, because a drag runs this on the picture the
+        // server drew with that code and a line nobody touched must not move.
+        var GridRouter = (function () {
+            var C = 4, LANE_PITCH = 6, MAX_LANES = 16, BEND = 30, USED_FACTOR = 4, HUG_FACTOR = 4, TOL = 1;
+            var PORTS_X = 5, PORTS_Y = 3, PORT_INSET = 10, PORT_INSET_SIDE = 24;
+
+            function trunc(v) { return v < 0 ? Math.ceil(v) : Math.floor(v); }
+            function round(v) { return v < 0 ? -Math.round(-v) : Math.round(v); }
+
+            function between(rects, i, j, from, to, lo, hi, horizontal) {
+                for (var k = 0; k < rects.length; k++) {
+                    if (k === i || k === j) { continue; }
+                    var t = rects[k];
+                    if (horizontal) {
+                        if (t.x < to && t.x + t.w > from && t.y < hi && t.y + t.h > lo) { return true; }
+                    } else if (t.y < to && t.y + t.h > from && t.x < hi && t.x + t.w > lo) { return true; }
+                }
+                return false;
+            }
+            function lanes(set, start, end) {
+                if (end < start) { return; }
+                var n = Math.min(MAX_LANES, trunc((end - start) / LANE_PITCH) + 1);
+                var first = start + trunc((end - start - (n - 1) * LANE_PITCH) / 2);
+                for (var i = 0; i < n; i++) { set[first + i * LANE_PITCH] = true; }
+            }
+            function sortedKeys(set) {
+                return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+            }
+
+            function gridLines(rects, bounds) {
+                var xs = {}, ys = {};
+                var walls = [
+                    { x: bounds.x - 1, y: bounds.y, w: 1, h: bounds.h },
+                    { x: bounds.x + bounds.w, y: bounds.y, w: 1, h: bounds.h },
+                    { x: bounds.x, y: bounds.y - 1, w: bounds.w, h: 1 },
+                    { x: bounds.x, y: bounds.y + bounds.h, w: bounds.w, h: 1 },
+                ];
+                var all = rects.concat(walls);
+                for (var i = 0; i < all.length; i++) {
+                    for (var j = 0; j < all.length; j++) {
+                        if (i === j) { continue; }
+                        var a = all[i], b = all[j], lo, hi;
+                        if (a.x + a.w <= b.x) {
+                            lo = Math.max(a.y, b.y); hi = Math.min(a.y + a.h, b.y + b.h);
+                            if (hi > lo && !between(all, i, j, a.x + a.w, b.x, lo, hi, true)) { lanes(xs, a.x + a.w + C, b.x - C); }
+                        }
+                        if (a.y + a.h <= b.y) {
+                            lo = Math.max(a.x, b.x); hi = Math.min(a.x + a.w, b.x + b.w);
+                            if (hi > lo && !between(all, i, j, a.y + a.h, b.y, lo, hi, false)) { lanes(ys, a.y + a.h + C, b.y - C); }
+                        }
+                    }
+                }
+                return { xs: sortedKeys(xs), ys: sortedKeys(ys) };
+            }
+
+            function shared(used, line, a, b) {
+                var sum = 0, list = used[line] || [];
+                for (var i = 0; i < list.length; i++) {
+                    var overlap = Math.min(b, list[i][1]) - Math.max(a, list[i][0]);
+                    if (overlap > 0) { sum += overlap; }
+                }
+                return sum;
+            }
+            function spread(start, length, max, inset) {
+                var span = length - 2 * inset;
+                var n = Math.max(1, Math.min(max, trunc(Math.max(0, span) / 28) + 1));
+                if (n === 1) { return [start + trunc(length / 2)]; }
+                var out = [];
+                for (var i = 0; i < n; i++) { out.push(start + inset + trunc(span * i / (n - 1))); }
+                return out;
+            }
+            function sideOf(rect, p) {
+                if (p[0] >= rect.x + rect.w) { return 'right'; }
+                if (p[0] <= rect.x) { return 'left'; }
+                if (p[1] >= rect.y + rect.h) { return 'bottom'; }
+                return 'top';
+            }
+            function ends(rect, fixed, used) {
+                var ports = [], i;
+                if (fixed) {
+                    ports.push([fixed, sideOf(rect, fixed)]);
+                } else {
+                    var px = spread(rect.x, rect.w, PORTS_X, PORT_INSET), py = spread(rect.y, rect.h, PORTS_Y, PORT_INSET_SIDE);
+                    for (i = 0; i < px.length; i++) { ports.push([[px[i], rect.y], 'top']); ports.push([[px[i], rect.y + rect.h], 'bottom']); }
+                    for (i = 0; i < py.length; i++) { ports.push([[rect.x, py[i]], 'left']); ports.push([[rect.x + rect.w, py[i]], 'right']); }
+                }
+                var extraX = {}, extraY = {}, list = [];
+                ports.forEach(function (entry) {
+                    var port = entry[0], side = entry[1], x = port[0], y = port[1], node, dir;
+                    if (side === 'top') { node = [x, y - C]; dir = 0; }
+                    else if (side === 'right') { node = [x + C, y]; dir = 1; }
+                    else if (side === 'bottom') { node = [x, y + C]; dir = 2; }
+                    else { node = [x - C, y]; dir = 3; }
+                    extraX[x] = true; extraY[y] = true; extraX[node[0]] = true; extraY[node[1]] = true;
+                    var sh = dir % 2 === 0 ? shared(used, 'v:' + x, Math.min(y, node[1]), Math.max(y, node[1])) : shared(used, 'h:' + y, Math.min(x, node[0]), Math.max(x, node[0]));
+                    list.push({ port: port, node: node, dir: dir, cost: C + USED_FACTOR * sh });
+                });
+                return { ends: list, xs: Object.keys(extraX).map(Number), ys: Object.keys(extraY).map(Number) };
+            }
+            function uniqueSorted(list) {
+                var seen = {}, out = [];
+                list.forEach(function (v) { if (!seen[v]) { seen[v] = true; out.push(v); } });
+                return out.sort(function (a, b) { return a - b; });
+            }
+            function distance(x, y, r) {
+                return Math.max(r.x - x, 0, x - (r.x + r.w)) + Math.max(r.y - y, 0, y - (r.y + r.h));
+            }
+            function blockedSegment(axis, line, a, b, rects) {
+                for (var i = 0; i < rects.length; i++) {
+                    var r = rects[i];
+                    if (axis === 0) {
+                        if (line > r.y + TOL && line < r.y + r.h - TOL && a < r.x + r.w - TOL && b > r.x + TOL) { return true; }
+                    } else if (line > r.x + TOL && line < r.x + r.w - TOL && a < r.y + r.h - TOL && b > r.y + TOL) { return true; }
+                }
+                return false;
+            }
+            function hugging(axis, line, a, b, rects) {
+                var sum = 0;
+                for (var i = 0; i < rects.length; i++) {
+                    var r = rects[i];
+                    if (axis === 0) {
+                        if (line === r.y - C || line === r.y + r.h + C) { sum += Math.max(0, Math.min(b, r.x + r.w) - Math.max(a, r.x)); }
+                    } else if (line === r.x - C || line === r.x + r.w + C) { sum += Math.max(0, Math.min(b, r.y + r.h) - Math.max(a, r.y)); }
+                }
+                return sum;
+            }
+            function simplify(points) {
+                var out = [];
+                points.forEach(function (p) {
+                    var n = out.length;
+                    if (n > 0 && out[n - 1][0] === p[0] && out[n - 1][1] === p[1]) { return; }
+                    if (n > 1) {
+                        var a = out[n - 2], b = out[n - 1];
+                        if ((a[0] === b[0] && b[0] === p[0]) || (a[1] === b[1] && b[1] === p[1])) { out[n - 1] = p; return; }
+                    }
+                    out.push(p);
+                });
+                return out;
+            }
+            function facing(from, to) {
+                var dx = (to.x + to.w / 2) - (from.x + from.w / 2), dy = (to.y + to.h / 2) - (from.y + from.h / 2);
+                var mid = function (r, which) {
+                    if (which === 'right') { return [r.x + r.w, round(r.y + r.h / 2)]; }
+                    if (which === 'left') { return [r.x, round(r.y + r.h / 2)]; }
+                    if (which === 'bottom') { return [round(r.x + r.w / 2), r.y + r.h]; }
+                    return [round(r.x + r.w / 2), r.y];
+                };
+                if (Math.abs(dx) >= Math.abs(dy)) { return dx >= 0 ? [mid(from, 'right'), mid(to, 'left')] : [mid(from, 'left'), mid(to, 'right')]; }
+                return dy >= 0 ? [mid(from, 'bottom'), mid(to, 'top')] : [mid(from, 'top'), mid(to, 'bottom')];
+            }
+            function fallback(from, to, ports) {
+                var p = ports || facing(from, to), mid = round((p[0][1] + p[1][1]) / 2);
+                return simplify([p[0], [p[0][0], mid], [p[1][0], mid], p[1]]);
+            }
+
+            // a binary heap on (f, insertion order)
+            function Heap() { this.items = []; }
+            Heap.prototype.less = function (a, b) { return a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]); };
+            Heap.prototype.push = function (f, seq, state) {
+                var items = this.items, i = items.length;
+                items.push([f, seq, state]);
+                while (i > 0) {
+                    var p = (i - 1) >> 1;
+                    if (!this.less(items[i], items[p])) { break; }
+                    var t = items[i]; items[i] = items[p]; items[p] = t;
+                    i = p;
+                }
+            };
+            Heap.prototype.pop = function () {
+                var items = this.items;
+                if (!items.length) { return null; }
+                var top = items[0], last = items.pop();
+                if (items.length) {
+                    items[0] = last;
+                    var n = items.length, i = 0;
+                    while (true) {
+                        var l = 2 * i + 1, r = l + 1, m = i;
+                        if (l < n && this.less(items[l], items[m])) { m = l; }
+                        if (r < n && this.less(items[r], items[m])) { m = r; }
+                        if (m === i) { break; }
+                        var t = items[i]; items[i] = items[m]; items[m] = t;
+                        i = m;
+                    }
+                }
+                return top;
+            };
+
+            function route(from, to, obstacles, grid, used, ports) {
+                var blockers = obstacles.concat([from, to]);
+                var starts = ends(from, ports ? ports[0] : null, used);
+                var goals = ends(to, ports ? ports[1] : null, used);
+                var xs = uniqueSorted(grid.xs.concat(starts.xs, goals.xs));
+                var ys = uniqueSorted(grid.ys.concat(starts.ys, goals.ys));
+                var xIndex = {}, yIndex = {};
+                xs.forEach(function (v, i) { xIndex[v] = i; });
+                ys.forEach(function (v, i) { yIndex[v] = i; });
+                var nx = xs.length, ny = ys.length, total = nx * ny * 4;
+                var dxs = [0, 1, 0, -1], dys = [-1, 0, 1, 0];
+
+                var goalAt = {};
+                goals.ends.forEach(function (end, index) {
+                    var key = xIndex[end.node[0]] * ny + yIndex[end.node[1]];
+                    (goalAt[key] = goalAt[key] || []).push(index);
+                });
+
+                var heap = new Heap(), cost = {}, came = {}, startOf = {}, closed = {}, seq = 0;
+                var h = function (x, y) { return distance(x, y, to); };
+                starts.ends.forEach(function (end, index) {
+                    var state = (xIndex[end.node[0]] * ny + yIndex[end.node[1]]) * 4 + end.dir;
+                    if (cost[state] === undefined || end.cost < cost[state]) {
+                        cost[state] = end.cost;
+                        came[state] = -1;
+                        startOf[state] = index;
+                        heap.push(end.cost + h(end.node[0], end.node[1]), seq++, state);
+                    }
+                });
+
+                var memo = {};
+                var blocked = function (axis, line, a, b) {
+                    var key = axis + ':' + line + ':' + a + ':' + b;
+                    if (memo[key] === undefined) { memo[key] = blockedSegment(axis, line, a, b, blockers); }
+                    return memo[key];
+                };
+
+                var final = null, finalEnd = null, expanded = 0, item;
+                while ((item = heap.pop()) !== null) {
+                    var state = item[2];
+                    if (closed[state]) { continue; }
+                    closed[state] = true;
+                    if (state >= total) { finalEnd = goals.ends[state - total]; final = came[state]; break; }
+                    if (++expanded > 60000) { break; }
+                    var node = Math.floor(state / 4), dir = state % 4, g = cost[state];
+                    var ix = Math.floor(node / ny), iy = node % ny;
+
+                    var here = goalAt[node] || [];
+                    for (var gi = 0; gi < here.length; gi++) {
+                        var end = goals.ends[here[gi]];
+                        var ng0 = g + end.cost + (end.dir === (dir + 2) % 4 ? 0 : BEND);
+                        var goalState = total + here[gi];
+                        if (cost[goalState] === undefined || ng0 < cost[goalState]) {
+                            cost[goalState] = ng0; came[goalState] = state; heap.push(ng0, seq++, goalState);
+                        }
+                    }
+
+                    for (var d = 0; d < 4; d++) {
+                        if (d === (dir + 2) % 4) { continue; }
+                        var jx = ix + dxs[d], jy = iy + dys[d];
+                        if (jx < 0 || jy < 0 || jx >= nx || jy >= ny) { continue; }
+                        var a, b, sh;
+                        if (d % 2 === 0) {
+                            a = Math.min(ys[iy], ys[jy]); b = Math.max(ys[iy], ys[jy]);
+                            if (blocked(1, xs[ix], a, b)) { continue; }
+                            sh = shared(used, 'v:' + xs[ix], a, b) + HUG_FACTOR * hugging(1, xs[ix], a, b, blockers);
+                        } else {
+                            a = Math.min(xs[ix], xs[jx]); b = Math.max(xs[ix], xs[jx]);
+                            if (blocked(0, ys[iy], a, b)) { continue; }
+                            sh = shared(used, 'h:' + ys[iy], a, b) + HUG_FACTOR * hugging(0, ys[iy], a, b, blockers);
+                        }
+                        var ng = g + (b - a) + USED_FACTOR * sh + (d === dir ? 0 : BEND);
+                        var next = (jx * ny + jy) * 4 + d;
+                        if (cost[next] === undefined || ng < cost[next]) {
+                            cost[next] = ng; came[next] = state;
+                            heap.push(ng + h(xs[jx], ys[jy]), seq++, next);
+                        }
+                    }
+                }
+                if (final === null) { return fallback(from, to, ports); }
+
+                var points = [], at = final, startEnd;
+                while (true) {
+                    var nd = Math.floor(at / 4);
+                    points.push([xs[Math.floor(nd / ny)], ys[nd % ny]]);
+                    var parent = came[at];
+                    if (parent < 0) { startEnd = starts.ends[startOf[at]]; break; }
+                    at = parent;
+                }
+                points.reverse();
+                var path = simplify([startEnd.port].concat(points, [finalEnd.port]));
+                for (var i = 1; i < path.length; i++) {
+                    if (path[i][1] === path[i - 1][1] && path[i][0] !== path[i - 1][0]) {
+                        (used['h:' + path[i][1]] = used['h:' + path[i][1]] || []).push([Math.min(path[i][0], path[i - 1][0]), Math.max(path[i][0], path[i - 1][0])]);
+                    } else if (path[i][0] === path[i - 1][0] && path[i][1] !== path[i - 1][1]) {
+                        (used['v:' + path[i][0]] = used['v:' + path[i][0]] || []).push([Math.min(path[i][1], path[i - 1][1]), Math.max(path[i][1], path[i - 1][1])]);
+                    }
+                }
+                return path;
+            }
+            return { lines: gridLines, route: route, facing: facing };
+        })();
+        /* END grid-router */
+
+        // ---- geometry shared with EagleLayout: ports, clean paths, labels
         function side(r, which) {
             if (which === 'right') { return [r.x + r.w, Math.round(r.y + r.h / 2)]; }
             if (which === 'left') { return [r.x, Math.round(r.y + r.h / 2)]; }
@@ -427,73 +737,31 @@
             return true;
         }
         function inset(r, by) { return { x: r.x + by, y: r.y + by, w: Math.max(1, r.w - 2 * by), h: Math.max(1, r.h - 2 * by) }; }
-        function grow(r, by) { return { x: r.x - by, y: r.y - by, w: r.w + 2 * by, h: r.h + 2 * by }; }
 
+        // The routing context of the picture as it is now: what a line has to miss, the grid it
+        // may run on, and the spans the edges routed so far already took.
         function context() {
-            var boxes = [], loose = {}, group = {};
-            Object.keys(groups).forEach(function (k) { group[k] = { x: groups[k].x, y: groups[k].y, w: groups[k].w, h: groups[k].h }; boxes.push(group[k]); });
+            var all = [], loose = {}, group = {};
+            Object.keys(groups).forEach(function (k) { group[k] = { x: groups[k].x, y: groups[k].y, w: groups[k].w, h: groups[k].h }; all.push(group[k]); });
             Object.keys(nodes).forEach(function (id) {
                 var n = nodes[id];
-                if ((n.kind === 'member' || n.kind === 'far') && !n.site) { loose[id] = { x: n.x, y: n.y, w: n.w, h: n.h }; boxes.push(loose[id]); }
+                if ((n.kind === 'member' || n.kind === 'far') && !n.site) { loose[id] = { x: n.x, y: n.y, w: n.w, h: n.h }; all.push(loose[id]); }
             });
-            if (!boxes.length) { boxes.push({ x: 0, y: 0, w: W, h: H }); }
-            var left = Math.min.apply(null, boxes.map(function (r) { return r.x; }));
-            var top = Math.min.apply(null, boxes.map(function (r) { return r.y; }));
-            var right = Math.max.apply(null, boxes.map(function (r) { return r.x + r.w; }));
-            var bottom = Math.max.apply(null, boxes.map(function (r) { return r.y + r.h; }));
+            var left = all.length ? Math.min.apply(null, all.map(function (r) { return r.x; })) : 0;
+            var top = all.length ? Math.min.apply(null, all.map(function (r) { return r.y; })) : 0;
+            var right = all.length ? Math.max.apply(null, all.map(function (r) { return r.x + r.w; })) : W;
+            var bottom = all.length ? Math.max.apply(null, all.map(function (r) { return r.y + r.h; })) : H;
             var bounds = { x: Math.min(0, left - MARGIN), y: Math.min(0, top - MARGIN) };
             bounds.w = Math.max(W, right + MARGIN) - bounds.x;
             bounds.h = Math.max(H, bottom + MARGIN) - bounds.y;
-
-            // bands of compounds, then the channels between them
-            var keys = Object.keys(group).sort(function (a, b) {
-                var ca = group[a].y + group[a].h / 2, cb = group[b].y + group[b].h / 2;
-                return ca - cb || group[a].x - group[b].x || (a < b ? -1 : a > b ? 1 : 0);
-            });
-            var bands = [];
-            keys.forEach(function (key) {
-                var r = group[key], last = bands[bands.length - 1];
-                if (last && r.y < last.bottom && last.top < r.y + r.h) {
-                    last.keys.push(key); last.top = Math.min(last.top, r.y); last.bottom = Math.max(last.bottom, r.y + r.h);
-                } else {
-                    bands.push({ keys: [key], top: r.y, bottom: r.y + r.h });
-                }
-            });
-            bands.forEach(function (band) { band.keys.sort(function (a, b) { return group[a].x - group[b].x || (a < b ? -1 : 1); }); });
-
-            var all = boxes;
-            var blocked = function (from, to, axis) {
-                return all.some(function (r) { var c = axis === 'x' ? r.x + r.w / 2 : r.y + r.h / 2; return c > from && c < to; });
-            };
-            var vgaps = {}, hgaps = {};
-            bands.forEach(function (band, i) {
-                for (var j = 0; j + 1 < band.keys.length; j++) {
-                    var a = group[band.keys[j]], b = group[band.keys[j + 1]];
-                    var start = a.x + a.w + CLEARANCE, end = b.x - CLEARANCE;
-                    if (end - start < 2 || blocked(a.x + a.w, b.x, 'x')) { continue; }
-                    vgaps['v:' + i + ':' + band.keys[j]] = { start: start, end: end };
-                }
-            });
-            for (var i = 0; i + 1 < bands.length; i++) {
-                var start = bands[i].bottom + CLEARANCE, end = bands[i + 1].top - CLEARANCE;
-                if (end - start < 2 || blocked(bands[i].bottom, bands[i + 1].top, 'y')) { continue; }
-                hgaps['h:' + i] = { start: start, end: end };
-            }
-            return { group: group, loose: loose, bounds: bounds, ring: inset(bounds, OUTER), vgaps: vgaps, hgaps: hgaps, lanes: {} };
+            return { group: group, loose: loose, bounds: bounds, grid: GridRouter.lines(all, bounds), used: {} };
         }
 
-        function lane(start, end, k) {
-            var n = Math.max(1, Math.floor((end - start) / LANE_PITCH));
-            return n === 1 ? Math.round((start + end) / 2) : start + Math.floor(LANE_PITCH / 2) + (k % n) * LANE_PITCH;
+        function route(from, to, obstacles, ctx, fixed) {
+            return GridRouter.route(from, to, obstacles, ctx.grid, ctx.used, fixed || null);
         }
-        function ringCandidates(ps, pd, ring) {
-            return [
-                [ps, [ps[0], ring.y], [pd[0], ring.y], pd],
-                [ps, [ps[0], ring.y + ring.h], [pd[0], ring.y + ring.h], pd],
-                [ps, [ring.x, ps[1]], [ring.x, pd[1]], pd],
-                [ps, [ring.x + ring.w, ps[1]], [ring.x + ring.w, pd[1]], pd],
-            ];
-        }
+
+        // ---- inside one compound
         function onPerimeter(r, p) {
             if (p[1] <= r.y) { return p[0] - r.x; }
             if (p[0] >= r.x + r.w) { return r.w + p[1] - r.y; }
@@ -517,69 +785,6 @@
                 if (corners[at]) { out.push(corners[at]); }
             }
             return out;
-        }
-        function escape(port, rect, ring, obstacles) {
-            var l = rect.x, t = rect.y, r = rect.x + rect.w, b = rect.y + rect.h;
-            var point = { rt: [r, t], rb: [r, b], lb: [l, b], lt: [l, t] };
-            var rays = {
-                rt: [[r, ring.y], [ring.x + ring.w, t]],
-                rb: [[ring.x + ring.w, b], [r, ring.y + ring.h]],
-                lb: [[l, ring.y + ring.h], [ring.x, b]],
-                lt: [[ring.x, t], [l, ring.y]],
-            };
-            var from = port[0] >= r ? 'right' : port[0] <= l ? 'left' : port[1] >= b ? 'bottom' : 'top';
-            var order = from === 'right' ? ['rb', 'lb', 'lt', 'rt']
-                : from === 'bottom' ? ['lb', 'lt', 'rt', 'rb']
-                : from === 'left' ? ['lt', 'rt', 'rb', 'lb'] : ['rt', 'rb', 'lb', 'lt'];
-            var path = [port];
-            for (var i = 0; i < order.length; i++) {
-                path.push(point[order[i]]);
-                if (!pathClean(path, obstacles)) { return null; }
-                for (var j = 0; j < rays[order[i]].length; j++) {
-                    if (pathClean([point[order[i]], rays[order[i]][j]], obstacles)) { return path.concat([rays[order[i]][j]]); }
-                }
-            }
-            return null;
-        }
-
-        function route(from, to, obstacles, ctx, id, fixed) {
-            var p = fixed || ports(from, to);
-            var ps = p[0], pd = p[1];
-            var overlapY = Math.min(from.y + from.h, to.y + to.h) - Math.max(from.y, to.y) > 0;
-            var joins = function (gap, a, b) { return Math.min(a, b) < gap.start && gap.end < Math.max(a, b); };
-            var candidates = [];
-            if (overlapY) {
-                Object.keys(ctx.vgaps).forEach(function (key) {
-                    if (joins(ctx.vgaps[key], from.x + from.w / 2, to.x + to.w / 2)) { candidates.push({ gap: key, axis: 'x', spec: ctx.vgaps[key] }); }
-                });
-            } else {
-                Object.keys(ctx.hgaps).forEach(function (key) {
-                    if (joins(ctx.hgaps[key], from.y + from.h / 2, to.y + to.h / 2)) { candidates.push({ gap: key, axis: 'y', spec: ctx.hgaps[key] }); }
-                });
-            }
-            for (var i = 0; i < candidates.length; i++) {
-                var k = (ctx.lanes[candidates[i].gap] || []).length;
-                var at = lane(candidates[i].spec.start, candidates[i].spec.end, k);
-                var points = candidates[i].axis === 'x'
-                    ? [ps, [at, ps[1]], [at, pd[1]], pd]
-                    : [ps, [ps[0], at], [pd[0], at], pd];
-                if (pathClean(points, obstacles)) {
-                    ctx.lanes[candidates[i].gap] = (ctx.lanes[candidates[i].gap] || []).concat([id]);
-                    return { points: points, gap: candidates[i].gap, k: k };
-                }
-            }
-            var rings = [ctx.ring, inset(grow(ctx.bounds, GUTTER), OUTER)];
-            for (var r = 0; r < rings.length; r++) {
-                var options = ringCandidates(ps, pd, rings[r]);
-                for (var c = 0; c < options.length; c++) {
-                    if (pathClean(options[c], obstacles)) { return { points: options[c], gap: null, k: 0 }; }
-                }
-            }
-            var s = escape(ps, from, ctx.ring, obstacles), d = escape(pd, to, ctx.ring, obstacles);
-            if (s && d) {
-                return { points: s.concat(walk(ctx.ring, s[s.length - 1], d[d.length - 1]), d.slice().reverse()), gap: null, k: 0 };
-            }
-            return { points: ringCandidates(ps, pd, ctx.ring)[0], gap: null, k: 0 };
         }
 
         function padRoute(rect, from, to, siblings) {
@@ -612,16 +817,32 @@
             });
             return out;
         }
-        function labelOn(points, label) {
-            var best = null, longest = -1;
-            for (var i = 1; i < points.length; i++) {
-                var length = Math.abs(points[i][0] - points[i - 1][0]) + Math.abs(points[i][1] - points[i - 1][1]);
-                if (length > longest) { longest = length; best = [points[i - 1], points[i]]; }
-            }
-            if (!best) { return [0, 0, false]; }
-            return [Math.round((best[0][0] + best[1][0]) / 2), Math.round((best[0][1] + best[1][1]) / 2), longest >= label.length * EDGE_CHAR_W + 8];
+
+        // ---- labels: the middle of a segment that holds the text, not on top of another label
+        function labelRect(x, y, label) {
+            var w = Math.ceil(label.length * EDGE_CHAR_W) + 8;
+            return { x: x - Math.floor(w / 2), y: y - 9, w: w, h: 12 };
         }
-        function arcLift(dx) { return Math.round(20 + Math.sqrt(dx) * 2.5); }
+        function labelOn(points, label, taken) {
+            if (label === '') { return [0, 0, false]; }
+            var need = labelRect(0, 0, label).w, candidates = [], i;
+            for (i = 1; i < points.length; i++) {
+                var dx = Math.abs(points[i][0] - points[i - 1][0]), dy = Math.abs(points[i][1] - points[i - 1][1]);
+                var horizontal = dy === 0;
+                if (horizontal ? dx < need + 8 : dy < 30) { continue; }
+                candidates.push([(horizontal ? 100000 : 0) + dx + dy, i, Math.round((points[i][0] + points[i - 1][0]) / 2), Math.round((points[i][1] + points[i - 1][1]) / 2)]);
+            }
+            candidates.sort(function (a, b) { return (b[0] - a[0]) || (a[1] - b[1]); });
+            for (i = 0; i < candidates.length; i++) {
+                var rect = labelRect(candidates[i][2], candidates[i][3], label), clear = true;
+                for (var j = 0; j < (taken || []).length; j++) {
+                    var t = taken[j];
+                    if (rect.x < t.x + t.w + 2 && t.x < rect.x + rect.w + 2 && rect.y < t.y + t.h + 2 && t.y < rect.y + rect.h + 2) { clear = false; break; }
+                }
+                if (clear) { return [candidates[i][2], candidates[i][3], true]; }
+            }
+            return [0, 0, false];
+        }
 
         // ---- draw
         function moveNode(n) {
@@ -635,6 +856,8 @@
             if (g.caption) {
                 if (dx || dy) { g.caption.setAttribute('transform', 'translate(' + dx + ' ' + dy + ')'); } else { g.caption.removeAttribute('transform'); }
             }
+            // the note is right-aligned in the header, so it follows the box's right edge
+            if (g.note) { g.note.setAttribute('x', g.x + g.w - 6); g.note.setAttribute('y', g.y + 14); }
         }
         function resizeGroup(g) {
             var own = g.members.map(function (id) { return nodes[id]; }).filter(Boolean);
@@ -659,7 +882,13 @@
                 return nodes[id].site === site && nodes[id].kind === 'member' && id !== a && id !== b;
             }).map(function (id) { return { x: nodes[id].x, y: nodes[id].y, w: nodes[id].w, h: nodes[id].h }; });
         }
+        function centreDistance(a, b) {
+            return Math.abs(2 * a.x + a.w - 2 * b.x - b.w) + Math.abs(2 * a.y + a.h - 2 * b.y - b.h);
+        }
 
+        // One pass for the edges that need no router (arcs, brackets, a short connector, stubs), then
+        // the routed ones, the short ones first -- the order EagleLayout::applyRoutes() uses, because
+        // the order decides who gets the direct lane.
         function redraw() {
             Object.keys(nodes).forEach(function (id) {
                 var n = nodes[id];
@@ -670,70 +899,111 @@
             });
             Object.keys(groups).forEach(function (k) { moveGroup(groups[k]); });
 
-            var ctx = context();
+            var ctx = context(), taken = [], pending = [];
             links.slice().sort(function (a, b) {
                 return a.el.dataset.focus < b.el.dataset.focus ? -1 : a.el.dataset.focus > b.el.dataset.focus ? 1 : 0;
-            }).forEach(function (e) { drawEdge(e, ctx); });
+            }).forEach(function (e) {
+                var request = drawEdge(e, taken);
+                if (request) { request.edge = e; request.id = e.el.dataset.focus; pending.push(request); }
+            });
+            pending.sort(function (a, b) {
+                var d = centreDistance(a.from, a.to) - centreDistance(b.from, b.to);
+                return d || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+            });
+            pending.forEach(function (request) {
+                var points = request.pad
+                    ? padRoute(request.pad, request.from, request.to, request.siblings)
+                    : route(request.from, request.to, request.obstacles(ctx), ctx, request.ports);
+                request.edge.path.setAttribute('d', polyline(points));
+                place(request.edge, points, taken);
+            });
         }
 
-        function drawEdge(e, ctx) {
-            var id = e.el.dataset.focus;
+        // the label of a routed edge, where no other label is
+        function place(e, points, taken) {
+            if (!e.text) { return; }
+            var variants = e.labels.length ? e.labels : [e.label], at = [0, 0, false], shown = '';
+            for (var i = 0; i < variants.length; i++) {
+                at = labelOn(points, variants[i], taken);
+                if (at[2]) { shown = variants[i]; taken.push(labelRect(at[0], at[1], shown)); break; }
+            }
+            e.text.setAttribute('x', at[0]); e.text.setAttribute('y', at[1]);
+            e.text.textContent = shown;
+        }
+        // the label of an edge that is not routed: shown or not, in the place it has
+        function fixedLabel(e, x, y, show, taken) {
+            if (!e.text) { return; }
+            e.text.setAttribute('x', x); e.text.setAttribute('y', y);
+            e.text.textContent = show ? e.label : '';
+            if (show && e.label !== '') { taken.push(labelRect(x, y, e.label)); }
+        }
+
+        /**
+         * Draw an edge that needs no router and return null, or return what the router needs.
+         */
+        function drawEdge(e, taken) {
             var pa = anchorOf(e.a), pb = anchorOf(e.b);
-            if (!pa || !pb) { return; }
-            var setText = function (x, y, show) {
-                if (!e.text) { return; }
-                e.text.setAttribute('x', x); e.text.setAttribute('y', y);
-                e.text.textContent = show ? e.label : '';
-            };
+            if (!pa || !pb) { return null; }
 
             if (e.shape === 'hanger' || e.shape === 'stub') {
                 var target = e.shape === 'stub' ? [pa.x, pa.bottom + 20] : [pb.x, pb.top];
                 e.path.setAttribute('d', polyline([[pa.x, pa.bottom], target]));
-                return;
+                return null;
             }
             if (e.kind === 'overlay' || e.kind === 'asymmetric' || e.kind === 'missing') {
                 // exempt: a fault or a partial mesh is a mark, and a gutter would hide it
                 e.path.setAttribute('d', pa.top === pb.top
                     ? 'M' + pa.x + ' ' + pa.top + ' Q' + Math.round((pa.x + pb.x) / 2) + ' ' + (pa.top - Math.round(30 + Math.sqrt(Math.abs(pa.x - pb.x)) * 3)) + ' ' + pb.x + ' ' + pb.top
                     : polyline([[pa.x, pa.top < pb.top ? pa.bottom : pa.top], [pb.x, pa.top < pb.top ? pb.top : pb.bottom]]));
-                setText(Math.round((pa.x + pb.x) / 2), Math.min(pa.top, pb.top) - 8, e.label !== '');
-                return;
+                fixedLabel(e, Math.round((pa.x + pb.x) / 2), Math.min(pa.top, pb.top) - 8, e.label !== '', taken);
+                return null;
             }
-            if (e.kind === 'esi') { return drawEsi(e, pa, pb, ctx, setText); }
+            if (e.kind === 'esi') { return drawEsi(e, taken); }
 
-            var from = rectOf(e.a), to = e.kind === 'trunk' ? rectOf(e.b) : rectOf(e.b);
-            if (!from || !to) { return; }
+            var from = rectOf(e.a), to = rectOf(e.b);
+            if (!from || !to) { return null; }
 
             if (e.kind === 'trunk') {
                 var box = groups[e.b];
                 var fixed = [[Math.round(from.x + from.w / 2), from.y + from.h], [Math.round(box.x + box.w / 2), box.y]];
-                var blockers = obstaclesFor(ctx, [e.siteA, e.b], [e.a]);
-                var points = pathClean(fixed, blockers) ? fixed : route(from, to, blockers, ctx, id, fixed).points;
-                e.path.setAttribute('d', polyline(points));
-                var t = labelOn(points, e.label);
-                setText(t[0], t[1], t[2]);
-                return;
-            }
-
-            // same site and still side by side: the short arc over the cards, which is exempt
-            if (e.siteA && e.siteA === e.siteB) {
-                if (Math.min(from.y + from.h, to.y + to.h) - Math.max(from.y, to.y) >= 8) {
-                    var lift = arcLift(Math.abs(pa.x - pb.x));
-                    e.path.setAttribute('d', 'M' + pa.x + ' ' + pa.top + ' Q' + Math.round((pa.x + pb.x) / 2) + ' ' + (pa.top - lift) + ' ' + pb.x + ' ' + pb.top);
-                    setText(Math.round((pa.x + pb.x) / 2), Math.round(pa.top - lift / 2), e.label !== '');
-                    return;
+                var blockers = function (ctx) { return obstaclesFor(ctx, [e.siteA, e.b], [e.a]); };
+                // one straight stroke while nothing is in the way, else routed with the same end points
+                if (pathClean(fixed, obstaclesFor({ group: groupRects(), loose: looseRects() }, [e.siteA, e.b], [e.a]))) {
+                    e.path.setAttribute('d', polyline(fixed));
+                    var t = labelOn(fixed, e.label, taken);
+                    fixedLabel(e, t[0], t[1], t[2], taken);
+                    return null;
                 }
-                var pad = padRoute({ x: groups[e.siteA].x, y: groups[e.siteA].y, w: groups[e.siteA].w, h: groups[e.siteA].h }, from, to, siblingsOf(e.siteA, e.a, e.b));
-                e.path.setAttribute('d', polyline(pad));
-                var pt = labelOn(pad, e.label);
-                setText(pt[0], pt[1], pt[2]);
-                return;
+                return { from: from, to: to, ports: fixed, obstacles: blockers };
             }
 
-            var routed = route(from, to, obstaclesFor(ctx, [e.siteA, e.siteB], [e.a, e.b]), ctx, id);
-            e.path.setAttribute('d', polyline(routed.points));
-            var at = labelOn(routed.points, e.label);
-            setText(at[0], at[1], at[2] && !(routed.gap && routed.k > 0));
+            // inside one site: a short connector between two cards that face each other with
+            // nothing between, else the walk round the compound; never an arc
+            if (e.siteA && e.siteA === e.siteB) {
+                var siblings = siblingsOf(e.siteA, e.a, e.b), p = ports(from, to);
+                if ((p[0][0] === p[1][0] || p[0][1] === p[1][1]) && pathClean(p, siblings)) {
+                    e.path.setAttribute('d', polyline(p));
+                    if (e.text) { e.text.textContent = ''; }
+                    return null;
+                }
+                var group = { x: groups[e.siteA].x, y: groups[e.siteA].y, w: groups[e.siteA].w, h: groups[e.siteA].h };
+                return { from: from, to: to, pad: group, siblings: siblings, obstacles: null };
+            }
+
+            return { from: from, to: to, ports: null, obstacles: function (ctx) { return obstaclesFor(ctx, [e.siteA, e.siteB], [e.a, e.b]); } };
+        }
+        function groupRects() {
+            var out = {};
+            Object.keys(groups).forEach(function (k) { out[k] = { x: groups[k].x, y: groups[k].y, w: groups[k].w, h: groups[k].h }; });
+            return out;
+        }
+        function looseRects() {
+            var out = {};
+            Object.keys(nodes).forEach(function (id) {
+                var n = nodes[id];
+                if ((n.kind === 'member' || n.kind === 'far') && !n.site) { out[id] = { x: n.x, y: n.y, w: n.w, h: n.h }; }
+            });
+            return out;
         }
 
         /**
@@ -741,9 +1011,9 @@
          * shape is recomputed from the rects as they are now. A bracket the operator has pulled
          * apart stops being one rather than retargeting whatever card is underneath.
          */
-        function drawEsi(e, pa, pb, ctx, setText) {
+        function drawEsi(e, taken) {
             var from = rectOf(e.a), to = rectOf(e.b);
-            if (!from || !to) { return; }
+            if (!from || !to) { return null; }
             var L = from.x <= to.x ? from : to, R = from.x <= to.x ? to : from;
             var gap = R.x - (L.x + L.w);
             var overlap = Math.min(L.y + L.h, R.y + R.h) - Math.max(L.y, R.y);
@@ -754,8 +1024,8 @@
                 var bracket = [[L.x + L.w / 2, bottom], [L.x + L.w / 2, leg], [R.x + R.w / 2, leg], [R.x + R.w / 2, bottom]].map(function (p) { return [Math.round(p[0]), Math.round(p[1])]; });
                 if (pathClean(bracket, siblingsOf(e.siteA, e.a, e.b))) {
                     e.path.setAttribute('d', polyline(bracket));
-                    setText(Math.round((bracket[0][0] + bracket[3][0]) / 2), leg - 3, e.label.length * EDGE_CHAR_W <= Math.abs(bracket[0][0] - bracket[3][0]) - 8);
-                    return;
+                    fixedLabel(e, Math.round((bracket[0][0] + bracket[3][0]) / 2), leg - 3, e.label.length * EDGE_CHAR_W <= Math.abs(bracket[0][0] - bracket[3][0]) - 8, taken);
+                    return null;
                 }
             }
             if (sameSite) {
@@ -763,17 +1033,15 @@
                 var y = upper.y + upper.h + 12;
                 var segment = [[upper.x + upper.w / 2, upper.y + upper.h], [upper.x + upper.w / 2, y], [lower.x + lower.w / 2, y], [lower.x + lower.w / 2, lower.y]].map(function (p) { return [Math.round(p[0]), Math.round(p[1])]; });
                 var siblings = siblingsOf(e.siteA, e.a, e.b);
-                var points = pathClean(segment, siblings) ? segment
-                    : padRoute({ x: groups[e.siteA].x, y: groups[e.siteA].y, w: groups[e.siteA].w, h: groups[e.siteA].h }, from, to, siblings);
-                e.path.setAttribute('d', polyline(points));
-                var at = labelOn(points, e.label);
-                setText(at[0], at[1], at[2]);
-                return;
+                if (pathClean(segment, siblings)) {
+                    e.path.setAttribute('d', polyline(segment));
+                    var at = labelOn(segment, e.label, taken);
+                    fixedLabel(e, at[0], at[1], at[2], taken);
+                    return null;
+                }
+                return { from: from, to: to, pad: { x: groups[e.siteA].x, y: groups[e.siteA].y, w: groups[e.siteA].w, h: groups[e.siteA].h }, siblings: siblings, obstacles: null };
             }
-            var routed = route(from, to, obstaclesFor(ctx, [e.siteA, e.siteB], [e.a, e.b]), ctx, e.el.dataset.focus);
-            e.path.setAttribute('d', polyline(routed.points));
-            var label = labelOn(routed.points, e.label);
-            setText(label[0], label[1], label[2] && !(routed.gap && routed.k > 0));
+            return { from: from, to: to, ports: null, obstacles: function (ctx) { return obstaclesFor(ctx, [e.siteA, e.siteB], [e.a, e.b]); } };
         }
 
         // ================= the saved arrangement ============================================
@@ -867,8 +1135,16 @@
                 groups[grab.id].x = grab.startGroup[0] + d[0];
                 groups[grab.id].y = grab.startGroup[1] + d[1];
             }
-            redraw();
+            scheduleRedraw();
         });
+
+        // the router runs on every edge, so a burst of mouse events is one redraw per frame
+        var redrawQueued = false;
+        function scheduleRedraw() {
+            if (redrawQueued) { return; }
+            redrawQueued = true;
+            requestAnimationFrame(function () { redrawQueued = false; redraw(); });
+        }
 
         window.addEventListener('mouseup', function () {
             if (!grab) { return; }
@@ -898,10 +1174,11 @@
             var out = [];
             links.forEach(function (e) {
                 if (e.kind === 'esi' || e.kind === 'attached' || e.kind === 'overlay' || e.kind === 'asymmetric' || e.kind === 'missing') { return; }
-                if (e.kind === 'trunk') {
-                    // a trunk does not end on a card: it expands to the spine and every member
-                    // of the site it lands on, or the spine would never move
-                    (groups[e.b] ? groups[e.b].members : []).forEach(function (m) { if (nodes[m]) { out.push([e.a, m]); } });
+                // a trunk or a bundle does not end on a card: it expands to the members of the site
+                // (or the card) at each end, or the spine and the sites would never move
+                if (e.kind === 'trunk' || e.shape === 'bundle') {
+                    var left = groups[e.a] ? groups[e.a].members : [e.a], right = groups[e.b] ? groups[e.b].members : [e.b];
+                    left.forEach(function (l) { right.forEach(function (r) { if (nodes[l] && nodes[r]) { out.push([l, r]); } }); });
                     return;
                 }
                 if (nodes[e.a] && nodes[e.b]) { out.push([e.a, e.b]); }
