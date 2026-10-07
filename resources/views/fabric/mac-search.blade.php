@@ -1,4 +1,4 @@
-{{-- MAC search form + results: $q, $search (MacSearch::run()), $scope_note --}}
+{{-- MAC search form + results: $q, $search (MacSearch::run()), $scope_note. Inside a fabric page ($fabric is set) every link stays in that fabric's MACs tab; the global page links to itself. --}}
 <form method="get" class="form-inline" style="margin-bottom: 10px;">
     <input type="text" name="q" class="form-control" placeholder="MAC (any notation or prefix), IP address or VNI" value="{{ $q }}" style="width: 360px;" autofocus>
     <button type="submit" class="btn btn-primary">Search</button>
@@ -41,7 +41,7 @@
             <tbody>
                 @foreach ($search['rows'] as $r)
                     <tr class="{{ $r['is_duplicate'] ? 'danger' : '' }}">
-                        <td><a href="{{ route('netconf.evpn.mac', ['q' => $r['mac']]) }}"><code>{{ $r['mac'] }}</code></a></td>
+                        <td><a href="{{ isset($fabric['id']) ? route('netconf.fabric', [$fabric['id'], 'macs', 'q' => $r['mac']]) : route('netconf.evpn.mac', ['q' => $r['mac']]) }}"><code>{{ $r['mac'] }}</code></a></td>
                         <td class="text-right"><a href="{{ url()->current() }}?q={{ $r['vni'] }}">{{ $r['vni'] }}</a>@if ($r['instance'])<br><small class="text-muted">{{ $r['instance'] }}</small>@endif</td>
                         <td><small>@foreach ($r['ips'] as $ip)<a href="{{ url()->current() }}?q={{ $ip }}">{{ $ip }}</a>@if (! $loop->last), @endif @endforeach</small></td>
                         <td>@if ($r['device']){!! \LibreNMS\Util\Url::deviceLink($r['device']) !!}@else device {{ $r['device_id'] }}@endif</td>

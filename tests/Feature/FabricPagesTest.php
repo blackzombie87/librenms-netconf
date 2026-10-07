@@ -37,6 +37,23 @@ final class FabricPagesTest extends LibrenmsTestCase
         $this->get('/plugin/netconf/evpn/mac?q=00:11:22:33:44:55')->assertOk();
     }
 
+    public function testAMacLinkStaysInsideTheFabricThatShowedIt(): void
+    {
+        $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
+        [$fabric, $device] = $this->fabricWithVnis(1);
+        DB::table(TableSchema::tableName('mac'))->insert([
+            'device_id' => $device, 'vni' => 10010, 'mac_address' => '00095207565f', 'instance' => 'MACVRF-A',
+            'source' => 'ae2.0', 'source_type' => 'local', 'first_seen' => now(), 'last_seen' => now(),
+        ]);
+
+        // on the fabric's tab the MAC opens that tab again (header, tabs), on the global page the global search
+        $this->get("/plugin/netconf/fabric/$fabric/macs?q=00095207565f")->assertOk()
+            ->assertSee("/plugin/netconf/fabric/$fabric/macs?q=00%3A09%3A52%3A07%3A56%3A5f", false);
+        $this->get('/plugin/netconf/evpn/mac?q=00095207565f')->assertOk()
+            ->assertSee('/plugin/netconf/evpn/mac?q=00%3A09%3A52%3A07%3A56%3A5f', false)
+            ->assertDontSee("/plugin/netconf/fabric/$fabric/macs", false);
+    }
+
     public function testAdminRenamesAFabric(): void
     {
         $this->actingAs(User::factory()->admin()->create(['enabled' => 1]));
