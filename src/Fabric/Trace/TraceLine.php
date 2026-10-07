@@ -48,26 +48,34 @@ final class TraceLine
      * `false` for an interface means *do not print one* (the two sides of a gap where no
      * path is stored); `null` means *unknown*, which prints as `?`.
      *
+     * `hop` is the underlay hop that leaves the node towards the next one (null when the next
+     * node follows a gap, and on the last node) and `vni` the VNI of the leg it belongs to:
+     * the one-liner does not print them, the path diagram in the web UI draws from them, so
+     * both read the same order of nodes.
+     *
      * @param  list<array{vni: int|null, from: string|null, to: string|null, path: list<array<string, mixed>>, pivot: string|null}>  $legs
-     * @return list<array{address: string|null, in: string|false|null, out: string|false|null, pivot: string|null, gap: bool}>
+     * @return list<array{address: string|null, in: string|false|null, out: string|false|null, pivot: string|null, gap: bool, hop: array<string, mixed>|null, vni: int|null}>
      */
-    private static function chain(Endpoint $a, Endpoint $b, array $legs): array
+    public static function chain(Endpoint $a, Endpoint $b, array $legs): array
     {
         $chain = [];
-        $current = ['address' => $legs[0]['from'] ?? $a->address, 'in' => $a->ifname, 'out' => null, 'pivot' => null, 'gap' => false];
+        $current = ['address' => $legs[0]['from'] ?? $a->address, 'in' => $a->ifname, 'out' => null, 'pivot' => null, 'gap' => false, 'hop' => null, 'vni' => null];
 
         foreach ($legs as $i => $leg) {
             foreach ($leg['path'] as $hop) {
                 $current['out'] = $hop['a_ifname'] ?? null;
+                $current['hop'] = $hop;
+                $current['vni'] = $leg['vni'] ?? null;
                 $chain[] = $current;
-                $current = ['address' => (string) $hop['b'], 'in' => $hop['b_ifname'] ?? null, 'out' => null, 'pivot' => null, 'gap' => false];
+                $current = ['address' => (string) $hop['b'], 'in' => $hop['b_ifname'] ?? null, 'out' => null, 'pivot' => null, 'gap' => false, 'hop' => null, 'vni' => null];
             }
             if ($leg['path'] === [] && $leg['from'] !== $leg['to']) {
                 // two known nodes with nothing stored between them: say so rather than
                 // drawing a hop that was never seen
                 $current['out'] = false;
+                $current['vni'] = $leg['vni'] ?? null;
                 $chain[] = $current;
-                $current = ['address' => $leg['to'], 'in' => false, 'out' => null, 'pivot' => null, 'gap' => true];
+                $current = ['address' => $leg['to'], 'in' => false, 'out' => null, 'pivot' => null, 'gap' => true, 'hop' => null, 'vni' => null];
             }
             if ($i < count($legs) - 1) {
                 $current['pivot'] = $leg['pivot'];

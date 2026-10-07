@@ -65,14 +65,21 @@
             @endif
         </div>
         <div class="panel-body">
-            <pre style="white-space: pre-wrap; margin-bottom: 10px;">{{ $result['line'] }}</pre>
+            @include('netconf::fabric.trace-path', ['diagram' => \SafferIt\LibrenmsNetconf\Fabric\View\TracePathDiagram::build($result, fn (string $address) => $nodes->get($address))])
+            {{-- the one-liner is what the CLI prints; it stays here to copy into a ticket --}}
+            <details style="margin-bottom: 10px;">
+                <summary class="text-muted"><small>as text</small></summary>
+                <pre style="white-space: pre-wrap; margin-top: 6px;">{{ $result['line'] }}</pre>
+            </details>
 
             @if ($result['path'] !== [])
                 {{-- one row per underlay hop, grouped by leg: a bridged trace has one leg, a
                      routed one has the leg into the gateway and the leg out of it, with the
                      routing step itself as the row between them. --}}
+                <details>
+                <summary class="text-muted"><small>hops as a table</small></summary>
                 <table class="table table-condensed">
-                    <thead><tr><th>VNI</th><th>Hop</th><th>Out</th><th>In</th><th>Protocol</th><th>State</th><th>Traffic</th></tr></thead>
+                    <thead><tr><th>VNI</th><th>Hop</th><th>Out</th><th>In</th><th>Protocol</th><th>State</th></tr></thead>
                     <tbody>
                         @foreach ($result['legs'] as $leg)
                             @foreach ($leg['path'] as $hop)
@@ -83,7 +90,6 @@
                                     <td><code>{{ $hop['b_ifname'] ?? '?' }}</code></td>
                                     <td>{{ $hop['protocol'] }}@if (($hop['ecmp'] ?? 1) > 1) <span class="label label-warning">{{ $hop['ecmp'] }}-way ECMP</span>@endif</td>
                                     <td class="{{ $hop['up'] === false ? 'text-danger' : ($hop['up'] === true ? 'text-success' : 'text-muted') }}">{{ $hop['state'] ?? 'no session state' }}</td>
-                                    <td>@include('netconf::fabric.trace-graph', ['hop' => $hop])</td>
                                 </tr>
                             @endforeach
                             @if ($leg['pivot'] !== null)
@@ -93,12 +99,12 @@
                                     <td colspan="2"><code>{{ $leg['pivot'] }}</code></td>
                                     <td>irb</td>
                                     <td class="text-muted">L3 context {{ $result['routed']['context'] ?? 'unknown' }}</td>
-                                    <td></td>
                                 </tr>
                             @endif
                         @endforeach
                     </tbody>
                 </table>
+                </details>
                 @php($pathNodes = array_values(array_unique(array_merge(array_column($result['path'], 'a'), array_column($result['path'], 'b')))))
                 <p><small><a href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}?{{ http_build_query(['topo' => 'eagle', 'highlight' => array_values(array_filter(array_column($result['path'], 'link_key'))), 'through' => $pathNodes]) }}">show this path on the fabric picture</a></small></p>
             @endif

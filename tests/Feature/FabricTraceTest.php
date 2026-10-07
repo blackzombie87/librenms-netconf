@@ -26,6 +26,10 @@ final class FabricTraceTest extends LibrenmsTestCase
         $this->assertStringContainsString('(ge-0/0/38)[leaf-1](et-0/0/52.2121) &lt;-&gt; (et-0/0/52.2121)[leaf-2](et-0/0/50.2261) &lt;-&gt; (et-0/0/53.2261)[leaf-3](ge-0/0/28)', $page);
         $this->assertStringContainsString('Both endpoints are in the same VNI', $page);
         $this->assertStringContainsString('EVPN session', $page);
+        // the picture: three device cards, and the interfaces of a hop on the link between them
+        $this->assertSame(3, substr_count($page, 'nt-card nt-leaf'));
+        $this->assertStringContainsString('<code title="et-0/0/52.2121">et-0/0/52.2121</code>', $page);
+        $this->assertStringNotContainsString('<img class="nt-spark" alt="port 0"', $page);
         // the sources it consulted are on the page, including the empty ones
         $this->assertStringContainsString('core bridge tables (ports_fdb)', $page);
         $this->assertStringContainsString('EVPN MAC database', $page);
@@ -149,6 +153,7 @@ final class FabricTraceTest extends LibrenmsTestCase
         );
         $this->assertStringContainsString('routed on leaf-2', $page);
         $this->assertStringContainsString('L3 context master', $page);
+        $this->assertStringContainsString('nt-card nt-leaf nt-routes', $page);   // the routing step sits on leaf-2's card
         $this->assertStringContainsString('Routed between VNI 10010 and VNI 10020', $page);
         $this->assertStringNotContainsString('local switching', $page);
     }
