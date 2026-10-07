@@ -72,6 +72,12 @@ class NetconfTraceCommand extends Command
 
         $this->line('');
         $this->line('<info>' . $result['line'] . '</info>');
+        foreach ($result['branches'] ?? [] as $branch) {
+            $this->line('<info>' . $branch['line'] . '</info>');
+        }
+        if (($result['branches'] ?? []) !== []) {
+            $this->line('<comment>multihomed: an endpoint on an ESI-LAG is attached to every PE of its segment; each line above is one of the routes.</comment>');
+        }
         $this->line('');
 
         if (($result['routed']['gateway'] ?? null) !== null) {

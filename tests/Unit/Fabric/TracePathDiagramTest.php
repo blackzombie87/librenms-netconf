@@ -27,6 +27,19 @@ function diagramHop(string $a, string $aIf, string $b, string $bIf, array $extra
     ];
 }
 
+/**
+ * The items of a diagram that is one run (one route, one path).
+ *
+ * @param  array<string, mixed>  $diagram
+ * @return list<array<string, mixed>>
+ */
+function diagramItems(array $diagram): array
+{
+    expect($diagram['blocks'])->toHaveCount(1)->and($diagram['blocks'][0]['type'])->toBe('seq');
+
+    return $diagram['blocks'][0]['items'];
+}
+
 /** @return array{name: string, role: string, border: bool} */
 function diagramNode(string $address): array
 {
@@ -65,7 +78,7 @@ it('draws a bridged trace as endpoints, devices and the links between them', fun
     ]];
 
     $diagram = TracePathDiagram::build(diagramResult($legs), 'diagramNode');
-    $items = $diagram['items'];
+    $items = diagramItems($diagram);
 
     expect(array_map(fn ($i) => $i['type'] . ($i['type'] === 'link' ? ':' . $i['kind'] : ''), $items))->toBe([
         'endpoint', 'link:access', 'station', 'link:underlay', 'station', 'link:underlay', 'station', 'link:access', 'endpoint',
@@ -87,8 +100,8 @@ it('puts the routing step on the one gateway card the two legs share', function 
     ];
 
     $diagram = TracePathDiagram::build(diagramResult($legs, ['routed' => ['gateway' => '10.0.0.3', 'gateway_name' => 'GW1', 'context' => 'master']]), 'diagramNode');
-    $stations = array_values(array_filter($diagram['items'], fn ($i) => $i['type'] === 'station'));
-    $links = array_values(array_filter($diagram['items'], fn ($i) => $i['type'] === 'link' && $i['kind'] === 'underlay'));
+    $stations = array_values(array_filter(diagramItems($diagram), fn ($i) => $i['type'] === 'station'));
+    $links = array_values(array_filter(diagramItems($diagram), fn ($i) => $i['type'] === 'link' && $i['kind'] === 'underlay'));
 
     expect(array_column($stations, 'name'))->toBe(['LEAF1', 'GW1', 'LEAF2'])
         ->and($stations[1])->toMatchArray(['pivot' => 'irb.91 → irb.103', 'context' => 'master', 'role' => 'gateway', 'border' => true])
@@ -102,15 +115,15 @@ it('draws one device with an in and an out interface for local switching', funct
 
     $diagram = TracePathDiagram::build(diagramResult($legs), 'diagramNode');
 
-    expect(array_column($diagram['items'], 'type'))->toBe(['endpoint', 'link', 'station', 'link', 'endpoint'])
-        ->and($diagram['items'][2])->toMatchArray(['name' => 'LEAF1', 'in' => 'ae36.0', 'out' => 'ge-0/0/28'])
+    expect(array_column(diagramItems($diagram), 'type'))->toBe(['endpoint', 'link', 'station', 'link', 'endpoint'])
+        ->and(diagramItems($diagram)[2])->toMatchArray(['name' => 'LEAF1', 'in' => 'ae36.0', 'out' => 'ge-0/0/28'])
         ->and($diagram['overlays'])->toBe([]);
 });
 
 it('shows a gap where two known devices have no stored path between them', function () {
     $legs = [['vni' => 91, 'from' => '10.0.0.1', 'to' => '10.0.0.4', 'pivot' => null, 'path' => [], 'paths' => []]];
 
-    $items = TracePathDiagram::build(diagramResult($legs), 'diagramNode')['items'];
+    $items = diagramItems(TracePathDiagram::build(diagramResult($legs), 'diagramNode'));
     $gap = $items[3];
 
     expect(array_column($items, 'type'))->toBe(['endpoint', 'link', 'station', 'link', 'station', 'link', 'endpoint'])
@@ -119,18 +132,96 @@ it('shows a gap where two known devices have no stored path between them', funct
         ->and($items[4])->toMatchArray(['name' => 'LEAF2', 'gap' => true]);
 });
 
-it('marks a live hop, a WAN hop and lists the equal-cost alternatives of a leg', function () {
+it('marks a live hop and a WAN hop', function () {
     $hop = diagramHop('10.0.0.1', 'et-0/0/48.0', '10.0.0.4', 'et-0/0/52.0', ['live' => true, 'wan' => true]);
-    $other = diagramHop('10.0.0.1', 'et-0/0/49.0', '10.0.0.4', 'et-0/0/53.0');
-    $legs = [['vni' => 91, 'from' => '10.0.0.1', 'to' => '10.0.0.4', 'pivot' => null, 'path' => [$hop], 'paths' => [[$hop], [$other]]]];
+    $legs = [['vni' => 91, 'from' => '10.0.0.1', 'to' => '10.0.0.4', 'pivot' => null, 'path' => [$hop], 'paths' => [[$hop]]]];
+
+    $items = diagramItems(TracePathDiagram::build(diagramResult($legs), 'diagramNode'));
+
+    expect($items[3])->toMatchArray(['live' => true, 'wan' => true, 'tone' => 'wan']);
+});
+
+it('splits the picture where the underlay has two paths of the same length, and joins it again', function () {
+    $viaA = [diagramHop('10.0.0.1', 'et-0/0/1.0', '10.0.0.2', 'et-0/0/9.0'), diagramHop('10.0.0.2', 'et-0/0/8.0', '10.0.0.4', 'et-0/0/52.0')];
+    $viaB = [diagramHop('10.0.0.1', 'et-0/0/2.0', '10.0.0.3', 'et-0/0/9.0'), diagramHop('10.0.0.3', 'et-0/0/8.0', '10.0.0.4', 'et-0/0/53.0')];
+    $legs = [['vni' => 91, 'from' => '10.0.0.1', 'to' => '10.0.0.4', 'pivot' => null, 'path' => $viaA, 'paths' => [$viaA, $viaB]]];
 
     $diagram = TracePathDiagram::build(diagramResult($legs), 'diagramNode');
+    [$before, $split, $after] = $diagram['blocks'];
 
-    expect($diagram['items'][3])->toMatchArray(['live' => true, 'wan' => true, 'tone' => 'wan'])
-        ->and($diagram['alternatives'])->toBe([['vni' => 91, 'paths' => [
-            'LEAF1 (et-0/0/48.0) ↔ (et-0/0/52.0) LEAF2',
-            'LEAF1 (et-0/0/49.0) ↔ (et-0/0/53.0) LEAF2',
-        ]]]);
+    expect(array_column($diagram['blocks'], 'type'))->toBe(['seq', 'split', 'seq'])
+        // what both paths share: the endpoint, its access link and the first leaf
+        ->and(array_column($before['items'], 'type'))->toBe(['endpoint', 'link', 'station'])
+        ->and(array_column($after['items'], 'type'))->toBe(['station', 'link', 'endpoint'])
+        ->and(array_column($split['branches'], 'label'))->toBe(['via SPINE1', 'via GW1'])
+        ->and(array_column($split['branches'][0]['blocks'][0]['items'], 'type'))->toBe(['link', 'station', 'link'])
+        ->and($diagram['paths'])->toBe(2)
+        ->and($diagram['routes'])->toBe(1);
+});
+
+it('names a branch that is only a parallel link after its interfaces', function () {
+    $one = [diagramHop('10.0.0.1', 'et-0/0/1.0', '10.0.0.4', 'et-0/0/1.0')];
+    $two = [diagramHop('10.0.0.1', 'et-0/0/2.0', '10.0.0.4', 'et-0/0/2.0')];
+    $legs = [['vni' => 91, 'from' => '10.0.0.1', 'to' => '10.0.0.4', 'pivot' => null, 'path' => $one, 'paths' => [$one, $two]]];
+
+    $split = TracePathDiagram::build(diagramResult($legs), 'diagramNode')['blocks'][1];
+
+    expect(array_column($split['branches'], 'label'))->toBe(['et-0/0/1.0 ↔ et-0/0/1.0', 'et-0/0/2.0 ↔ et-0/0/2.0']);
+});
+
+it('draws an endpoint on an ESI-LAG as two routes that part at the host and meet at the destination', function () {
+    $direct = [diagramHop('10.0.0.1', 'et-0/0/48.0', '10.0.0.4', 'et-0/0/52.0')];
+    $other = [diagramHop('10.0.0.2', 'et-0/0/50.0', '10.0.0.4', 'et-0/0/53.0')];
+    $result = diagramResult([['vni' => 91, 'from' => '10.0.0.1', 'to' => '10.0.0.4', 'pivot' => null, 'path' => $direct, 'paths' => [$direct]]]);
+    $result['a'] = diagramEndpoint('192.0.2.4', '98:ee:cb:d0:5b:5b', 'ae36.0', ['esi' => '00:11:22:33:44:55:66:77:88:99', 'df' => true, 'address' => '10.0.0.1']);
+    $result['branches'] = [[
+        'a' => diagramEndpoint('192.0.2.4', '98:ee:cb:d0:5b:5b', 'ae36.0', ['esi' => '00:11:22:33:44:55:66:77:88:99', 'address' => '10.0.0.2']),
+        'b' => $result['b'],
+        'legs' => [['vni' => 91, 'from' => '10.0.0.2', 'to' => '10.0.0.4', 'pivot' => null, 'path' => $other, 'paths' => [$other]]],
+        'routed' => null,
+    ]];
+
+    $diagram = TracePathDiagram::build($result, 'diagramNode');
+    [$before, $split, $after] = $diagram['blocks'];
+
+    expect($diagram['routes'])->toBe(2)
+        ->and(array_column($before['items'], 'type'))->toBe(['endpoint'])
+        ->and(array_column($split['branches'], 'label'))->toBe(['via LEAF1 · DF', 'via SPINE1'])
+        // the destination and its access link are shared; the two ends of the tunnel are not
+        ->and(array_column($after['items'], 'type'))->toBe(['station', 'link', 'endpoint'])
+        ->and(array_column($diagram['overlays'], 'from_address'))->toBe(['10.0.0.1', '10.0.0.2']);
+});
+
+it('merges what branches share, however deep', function () {
+    $item = fn (string $key, string $type = 'station') => ['key' => $key, 'type' => $type];
+    // two ways to the first fork, then two ways to the second: four sequences, two nested splits
+    $sequences = [
+        [$item('s'), $item('l1', 'link'), $item('x'), $item('l3', 'link'), $item('z')],
+        [$item('s'), $item('l1', 'link'), $item('x'), $item('l4', 'link'), $item('z')],
+        [$item('s'), $item('l2', 'link'), $item('y'), $item('l3b', 'link'), $item('z')],
+    ];
+
+    $blocks = TracePathDiagram::factor($sequences);
+
+    expect(array_column($blocks, 'type'))->toBe(['seq', 'split', 'seq'])
+        ->and($blocks[1]['branches'])->toHaveCount(2)
+        // the first branch has the second fork inside it
+        ->and(array_column($blocks[1]['branches'][0]['blocks'], 'type'))->toBe(['seq', 'split'])
+        ->and(array_column($blocks[1]['branches'][1]['blocks'], 'type'))->toBe(['seq']);
+    // identical sequences are one
+    expect(TracePathDiagram::factor([$sequences[0], $sequences[0]]))->toBe([['type' => 'seq', 'items' => $sequences[0]]]);
+});
+
+it('keeps the first path of every leg once the combinations are too many to draw', function () {
+    $paths = [];
+    foreach (range(1, 4) as $n) {
+        $paths[] = [diagramHop('10.0.0.1', "et-0/0/$n.0", '10.0.0.4', "et-0/0/$n.0")];
+    }
+    $leg = fn (string $from, string $to) => ['vni' => 91, 'from' => $from, 'to' => $to, 'pivot' => null, 'path' => $paths[0], 'paths' => $paths];
+    // two legs of four paths are 16 combinations, over the cap of 8
+    $diagram = TracePathDiagram::build(diagramResult([$leg('10.0.0.1', '10.0.0.4'), $leg('10.0.0.4', '10.0.0.1')]), 'diagramNode');
+
+    expect($diagram['paths'])->toBe(1);
 });
 
 it('walks the same devices in the same order as the one-line form', function () {
@@ -144,7 +235,7 @@ it('walks the same devices in the same order as the one-line form', function () 
     $b = new SafferIt\LibrenmsNetconf\Fabric\Trace\Endpoint('y', 'ip', null, ['192.0.2.9'], 103, 1, null, null, 'ge-0/0/28', null, null, 'arp', []);
 
     $line = SafferIt\LibrenmsNetconf\Fabric\Trace\TraceLine::render($a, $b, $legs, $names);
-    $stations = array_column(array_filter(TracePathDiagram::build($result, 'diagramNode')['items'], fn ($i) => $i['type'] === 'station'), 'name');
+    $stations = array_column(array_filter(diagramItems(TracePathDiagram::build($result, 'diagramNode')), fn ($i) => $i['type'] === 'station'), 'name');
 
     $positions = array_map(fn ($name) => strpos($line, '[' . $name), $stations);
     $sorted = $positions;

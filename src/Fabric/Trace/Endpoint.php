@@ -59,6 +59,19 @@ final class Endpoint
     }
 
     /**
+     * The same attachment, with the Ethernet Segment it is a leg of and whether it is the DF.
+     * The IP/MAC table names the access interface but not the segment, which the MAC database
+     * does, so the two are put together after the fact.
+     */
+    public function withSegment(?string $esi, bool $df): self
+    {
+        return new self(
+            $this->query, $this->kind, $this->mac, $this->ips, $this->vni, $this->deviceId, $this->address, $this->name,
+            $this->ifname, $this->portId, $esi, $this->source, $this->evidence, $this->isDuplicate, $this->moves, $df,
+        );
+    }
+
+    /**
      * Whether this candidate says where the endpoint hangs, rather than only that it exists.
      *
      * An `esi` row on a leaf is *not* one: every leaf in the fabric reports a multihomed MAC

@@ -25,6 +25,12 @@
 - **The trace is a picture** instead of a line of text: cards for the endpoints and every device,
   links with the interfaces, VNI, protocol, state and traffic. The text form stays under *as
   text* and is what the CLI prints.
+- **The trace follows a host on an ESI-LAG to every PE of its segment** and draws every path of the
+  same length. A host the device's own IP/MAC table puts on one PE is also attached to the other PEs
+  of its segment (known from the MAC database), so the picture splits at the host and meets again
+  where the routes share a device, with the DF marked; the CLI prints one line per route. Equal-hop
+  paths and parallel links are branches of the picture too, instead of a text list. Not two PEs that
+  both claim a MAC locally: that is a duplicate and is warned about as before.
 - **Tunnels of an MX.** A router lists its remote tunnels as `Remote` (a switch says `Shared Remote`)
   and has only the per-instance entry of each, so its tunnel rows had no interface, port, mode or
   next-hop and the page drew an empty pill. The mapping reads both types and takes mode and

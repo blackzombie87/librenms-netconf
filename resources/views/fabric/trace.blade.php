@@ -57,6 +57,7 @@
         <div class="panel-heading">
             <strong>{{ ($result['mode'] ?? 'graph') === 'live' ? 'Live trace' : 'Trace' }}</strong>
             @if ($result['equal_paths'] > 1)<span class="label label-info">{{ $result['equal_paths'] }} equal-hop paths</span>@endif
+            @if (($result['branches'] ?? []) !== [])<span class="label label-info" title="an endpoint on an ESI-LAG is attached to every PE of its segment">{{ count($result['branches']) + 1 }} routes, multihomed</span>@endif
             @if ($result['local_switching'])<span class="label label-default">local switching, no VXLAN</span>@endif
             @if (($result['routed']['gateway'] ?? null) !== null)
                 <span class="label label-primary" title="inter-VNI: routed on this gateway">routed on {{ $result['routed']['gateway_name'] }}</span>
@@ -69,7 +70,8 @@
             {{-- the one-liner is what the CLI prints; it stays here to copy into a ticket --}}
             <details class="nt-more">
                 <summary>as text</summary>
-                <pre style="white-space: pre-wrap;">{{ $result['line'] }}</pre>
+                <pre style="white-space: pre-wrap;">{{ $result['line'] }}@foreach ($result['branches'] ?? [] as $branch)
+{{ $branch['line'] }}@endforeach</pre>
             </details>
 
             @if ($result['path'] !== [])
@@ -105,8 +107,17 @@
                     </tbody>
                 </table>
                 </details>
-                @php($pathNodes = array_values(array_unique(array_merge(array_column($result['path'], 'a'), array_column($result['path'], 'b')))))
-                <p class="nt-more"><a href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}?{{ http_build_query(['topo' => 'eagle', 'highlight' => array_values(array_filter(array_column($result['path'], 'link_key'))), 'through' => $pathNodes]) }}">show this path on the fabric picture</a></p>
+                {{-- the picture highlights every hop of every route, equal-hop alternatives included --}}
+                @php($hops = [])
+                @foreach (array_merge([$result], $result['branches'] ?? []) as $route)
+                    @foreach ($route['legs'] as $leg)
+                        @foreach (($leg['paths'] ?? []) === [] ? [$leg['path']] : $leg['paths'] as $path)
+                            @php($hops = array_merge($hops, $path))
+                        @endforeach
+                    @endforeach
+                @endforeach
+                @php($pathNodes = array_values(array_unique(array_merge(array_column($hops, 'a'), array_column($hops, 'b')))))
+                <p class="nt-more"><a href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}?{{ http_build_query(['topo' => 'eagle', 'highlight' => array_values(array_unique(array_filter(array_column($hops, 'link_key')))), 'through' => $pathNodes]) }}">show this path on the fabric picture</a></p>
             @endif
 
             @if ($result['warnings'] !== [])

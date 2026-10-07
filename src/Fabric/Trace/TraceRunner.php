@@ -22,6 +22,11 @@ use SafferIt\LibrenmsNetconf\Transport\TransportFactory;
  */
 final class TraceRunner
 {
+    /** PEs of one segment drawn per endpoint, and routes drawn per trace. */
+    public const MAX_LEGS = 4;
+
+    public const MAX_ROUTES = 4;
+
     public function __construct(
         private readonly int $fabricId,
         private readonly FabricNodes $nodes,
@@ -53,24 +58,26 @@ final class TraceRunner
             ];
         }
 
-        $routed = $this->routed($pickA, $pickB, $context);
-        $paths = [];
-        $walk = null;
-        if ($routed !== null) {
-            $walk = $live && $walker !== null ? $this->liveLegs($walker, $routed, $context) : null;
-        } elseif ($pickA->address !== null && $pickB->address !== null && $pickA->address !== $pickB->address) {
-            $paths = UnderlayPath::between($context['edges'], $pickA->address, $pickB->address);
-            if ($live && $walker !== null) {
-                $walk = $this->live($walker, $pickA->address, $pickB->address, $context);
-                if ($walk['hops'] !== []) {
-                    $paths = $walk['complete']
-                        ? [$walk['hops']]
-                        : [array_merge($walk['hops'], self::remainder($context, $walk, $pickB->address))];
+        // A multihomed endpoint hangs off every PE of its Ethernet Segment, and a packet to it
+        // may arrive on either: each pairing of a leg of A and a leg of B is a route of its own.
+        $legsA = self::attachments($a['candidates'], $pickA, $vniFrom);
+        $legsB = self::attachments($b['candidates'], $pickB, $vniTo ?? $vniFrom);
+        $routes = [];
+        foreach ($legsA as $endA) {
+            foreach ($legsB as $endB) {
+                if (count($routes) < self::MAX_ROUTES) {
+                    $routes[] = $this->route($endA, $endB, $context, $live, $walker);
                 }
             }
         }
 
-        $trace = FabricTrace::build($pickA, $pickB, $paths, $context, $routed);
+        $first = $routes[0];
+        $trace = FabricTrace::build($first['a'], $first['b'], $first['paths'], $context, $first['routed']);
+        $branches = [];
+        foreach (array_slice($routes, 1) as $route) {
+            $other = FabricTrace::build($route['a'], $route['b'], $route['paths'], $context, $route['routed']);
+            $branches[] = array_intersect_key($other, array_flip(['a', 'b', 'legs', 'path', 'equal_paths', 'line', 'routed', 'same_leaf', 'local_switching']));
+        }
 
         return $trace + [
             'ok' => true,
@@ -78,9 +85,87 @@ final class TraceRunner
             'to' => $to,
             'a_sources' => $a,
             'b_sources' => $b,
-            'walk' => $walk,
+            'walk' => $first['walk'],
             'mode' => $live ? 'live' : 'graph',
+            'attachments' => ['a' => array_map(fn (Endpoint $e) => $e->toArray(), $legsA), 'b' => array_map(fn (Endpoint $e) => $e->toArray(), $legsB)],
+            'branches' => $branches,
         ];
+    }
+
+    /**
+     * One route: the path between two attachments, from the stored graph or, in live mode,
+     * from the FIBs on the way.
+     *
+     * @param  array<string, mixed>  $context
+     * @return array{a: Endpoint, b: Endpoint, paths: list<list<array<string, mixed>>>, routed: array<string, mixed>|null, walk: array{hops: list<array<string, mixed>>, complete: bool, stopped: string|null}|null}
+     */
+    private function route(Endpoint $a, Endpoint $b, array $context, bool $live, ?LiveNextHop $walker): array
+    {
+        $routed = $this->routed($a, $b, $context);
+        $paths = [];
+        $walk = null;
+        if ($routed !== null) {
+            $walk = $live && $walker !== null ? $this->liveLegs($walker, $routed, $context) : null;
+        } elseif ($a->address !== null && $b->address !== null && $a->address !== $b->address) {
+            $paths = UnderlayPath::between($context['edges'], $a->address, $b->address);
+            if ($live && $walker !== null) {
+                $walk = $this->live($walker, $a->address, $b->address, $context);
+                if ($walk['hops'] !== []) {
+                    $paths = $walk['complete']
+                        ? [$walk['hops']]
+                        : [array_merge($walk['hops'], self::remainder($context, $walk, $b->address))];
+                }
+            }
+        }
+
+        return ['a' => $a, 'b' => $b, 'paths' => $paths, 'routed' => $routed, 'walk' => $walk];
+    }
+
+    /**
+     * The attachments of an endpoint: the one a trace picked, and the other PEs of its
+     * Ethernet Segment when it is a multihomed one. The segment is known from the EVPN MAC
+     * database (a MAC whose active source is `esi`), so a pick that came from the device's
+     * own IP/MAC table, which names the interface but not the segment, learns it here, and
+     * is only taken for multihomed when its own PE is one of the segment's.
+     *
+     * Two PEs that both claim the same MAC locally are not this: that is a duplicate or a
+     * move, and the trace says so rather than drawing two routes.
+     *
+     * @param  list<Endpoint>  $candidates
+     * @return list<Endpoint> the pick first, at most MAX_LEGS
+     */
+    public static function attachments(array $candidates, Endpoint $pick, ?int $vni = null): array
+    {
+        if ($pick->mac === null || $pick->address === null) {
+            return [$pick];
+        }
+        $legs = [];
+        foreach ($candidates as $candidate) {
+            if ($candidate->source !== Endpoint::SOURCE_EVPN_ESI || $candidate->mac !== $pick->mac || $candidate->address === null || $candidate->esi === null) {
+                continue;
+            }
+            if ($pick->vni !== null && $candidate->vni !== null && $candidate->vni !== $pick->vni) {
+                continue;
+            }
+            if ($vni !== null && $candidate->vni !== null && $candidate->vni !== $vni) {
+                continue;
+            }
+            $legs[$candidate->address] ??= $candidate;
+        }
+        // the pick's own PE has to be a leg of the segment, or the two are unrelated
+        if (! isset($legs[$pick->address])) {
+            return [$pick];
+        }
+
+        $first = $pick->esi === null ? $pick->withSegment($legs[$pick->address]->esi, $legs[$pick->address]->df) : $pick;
+        $out = [$first];
+        foreach ($legs as $address => $leg) {
+            if ($address !== $pick->address && count($out) < self::MAX_LEGS) {
+                $out[] = $leg;
+            }
+        }
+
+        return $out;
     }
 
     /**

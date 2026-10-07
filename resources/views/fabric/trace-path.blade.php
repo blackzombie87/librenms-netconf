@@ -15,7 +15,7 @@
             --nt-gateway: #337ab7; --nt-spine: #5bc0de; --nt-leaf: #5cb85c; --nt-host: #777777; --nt-esi: #f0ad4e;
             --nt-card: rgba(128, 128, 128, 0.08); --nt-edge: rgba(128, 128, 128, 0.45); --nt-muted: rgba(128, 128, 128, 0.95);
             --nt-pill: rgba(128, 128, 128, 0.16);
-            display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px 0; margin: 6px 0 14px;
+            display: flex; flex-wrap: wrap; align-items: center; gap: 14px 0; margin: 6px 0 14px;
         }
         html.dark .nt-path {
             --nt-up: #7dca7a; --nt-down: #e87a76; --nt-unknown: #aaaaaa; --nt-wan: #b794e0;
@@ -24,6 +24,7 @@
         }
         .nt-unit { display: flex; align-items: stretch; flex: 1 1 262px; min-width: 262px; }
         .nt-unit.nt-last { flex: 0 0 150px; min-width: 150px; }
+        .nt-unit.nt-bare { flex: 1 1 112px; min-width: 112px; }
         .nt-card {
             flex: 0 0 150px; width: 150px; box-sizing: border-box; padding: 8px 10px; border-radius: 4px;
             background: var(--nt-card); border: 1px solid var(--nt-edge); border-left: 4px solid var(--nt-unknown);
@@ -78,6 +79,12 @@
         .nt-state { color: var(--nt-tone); font-weight: 600; margin-top: 3px; }
         .nt-spark { display: block; margin: 4px auto 0; max-width: 100%; max-height: 40px; width: auto; height: auto; }
 
+        .nt-split {
+            flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 4px 8px;
+            border: 2px solid var(--nt-edge); border-top: 0; border-bottom: 0; border-radius: 10px;
+        }
+        .nt-branch-label { font-size: 10px; color: var(--nt-muted); margin: 0 0 2px 2px; text-transform: none; }
+        .nt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 0; }
         .nt-overlay { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; margin: 0 0 4px; }
         .nt-overlay .fa { color: var(--nt-muted); }
         .nt-note { font-size: 11px; color: var(--nt-muted); margin: 0 0 6px; }
@@ -107,86 +114,13 @@
     <p class="nt-note">The overlay is one hop per tunnel; the devices between its two ends carry it in the underlay.</p>
 @endif
 
-@php($items = $diagram['items'])
-@php($count = count($items))
 <div class="nt-path">
-    {{-- items alternate card, link, card, …; a unit is a card with the link after it --}}
-    @for ($i = 0; $i < $count; $i += 2)
-        @php($card = $items[$i])
-        @php($link = $items[$i + 1] ?? null)
-        <div class="nt-unit {{ $link === null ? 'nt-last' : '' }}">
-            @if ($card['type'] === 'endpoint')
-                <div class="nt-card nt-host {{ $card['duplicate'] ? 'nt-bad' : '' }}">
-                    <div class="nt-kind"><i class="fa fa-desktop fa-fw" aria-hidden="true"></i> {{ $card['role'] }}</div>
-                    <div class="nt-title">{!! str_replace('.', '.<wbr>', e($card['title'])) !!}</div>
-                    @foreach ($card['sub'] as $sub)<div class="nt-sub">{{ $sub }}</div>@endforeach
-                    <div class="nt-chips">
-                        @if ($card['vni'] !== null)<span class="nt-chip nt-vni">VNI {{ $card['vni'] }}</span>@endif
-                        @if ($card['duplicate'])<span class="nt-chip nt-warn" title="the MAC is learnt on more than one attachment">duplicate</span>@endif
-                        @if ($card['moves'] > 0)<span class="nt-chip nt-warn" title="the MAC changed its active source">{{ $card['moves'] }} move{{ $card['moves'] === 1 ? '' : 's' }}</span>@endif
-                    </div>
-                    <div class="nt-sub" style="margin-top: 5px;">found in {{ $card['source'] }}</div>
-                </div>
-            @else
-                <div class="nt-card nt-{{ $card['role'] }} {{ $card['pivot'] !== null ? 'nt-routes' : '' }}">
-                    <div class="nt-kind">{{ $card['role'] === 'unknown' ? 'device' : $card['role'] }}@if ($card['border']) &middot; border @endif</div>
-                    <div class="nt-title">{!! str_replace('.', '.<wbr>', e($card['name'])) !!}</div>
-                    @if ($card['address'] !== null && $card['address'] !== $card['name'])<div class="nt-sub">{{ $card['address'] }}</div>@endif
-                    @if ($card['pivot'] !== null)
-                        <div class="nt-pivot">
-                            <div class="nt-kind"><i class="fa fa-random fa-fw" aria-hidden="true"></i> routes</div>
-                            <div><span class="nt-if">{{ $card['pivot'] }}</span></div>
-                            <div class="nt-sub">L3 context {{ $card['context'] ?? 'unknown' }}</div>
-                        </div>
-                    @endif
-                    @if ($card['local'])
-                        <div class="nt-sub" style="margin-top: 5px;">local switching</div>
-                        <div><span class="nt-if">{{ $card['in'] }}</span> <i class="fa fa-long-arrow-right" aria-hidden="true"></i> <span class="nt-if">{{ $card['out'] }}</span></div>
-                    @endif
-                    @if ($card['gap'])<div class="nt-chips"><span class="nt-chip nt-warn">reached across a gap</span></div>@endif
-                </div>
-            @endif
-
-            @if ($link !== null)
-                <div class="nt-link nt-tone-{{ $link['tone'] }} {{ $link['kind'] === 'access' ? 'nt-access' : '' }}">
-                    <div class="nt-meta">
-                        @if ($link['kind'] === 'underlay')
-                            @if ($link['vni'] !== null)<span class="nt-chip nt-vni">VNI {{ $link['vni'] }}</span>@endif
-                            <span>{{ $link['protocol'] }}</span>
-                            @if ($link['ecmp'] > 1)<span class="nt-chip nt-warn">{{ $link['ecmp'] }}-way ECMP</span>@endif
-                            @if ($link['live'])<span class="nt-chip nt-live" title="read from this device's forwarding table">live</span>@endif
-                            @if ($link['wan'])<span class="nt-chip">WAN</span>@endif
-                        @elseif ($link['kind'] === 'access')
-                            <span class="nt-kind">access</span>
-                            @if ($link['esi'] !== null)<span class="nt-chip nt-esi" title="Ethernet segment {{ $link['esi'] }}">ESI{{ $link['df'] ? ' · DF' : '' }}</span>@endif
-                        @endif
-                    </div>
-                    <div class="nt-wire"></div>
-                    @if ($link['kind'] === 'underlay')
-                        <div class="nt-ifs"><span class="nt-if" title="{{ $link['left_if'] }}">{{ $link['left_if'] ?? '?' }}</span><span class="nt-if" title="{{ $link['right_if'] }}">{{ $link['right_if'] ?? '?' }}</span></div>
-                        <div class="nt-state">{{ $link['state'] ?? 'no session state' }}</div>
-                    @elseif ($link['kind'] === 'access')
-                        <div class="nt-ifs nt-one"><span class="nt-if" title="{{ $link['right_if'] }}">{{ $link['right_if'] ?? '?' }}</span></div>
-                    @else
-                        <div class="nt-state">{{ $link['state'] }}</div>
-                    @endif
-                    {{-- one graph for the link: the port on the near end; hovering it shows the periods --}}
-                    @if ($link['port_ids'] !== [])
-                        @php($portId = $link['port_ids'][0])
-                        @php($periods = array_map(fn ($from) => route('graph', ['type' => 'port_bits', 'id' => $portId, 'from' => $from, 'width' => 340, 'height' => 100, 'legend' => 'yes']), ['-1d', '-1w', '-1mo', '-1y']))
-                        <a href="{{ \LibreNMS\Util\Url::graphPageUrl('port_bits', ['id' => $portId]) }}">
-                            <img class="nt-spark" alt="port {{ $portId }}" data-src="{{ route('graph', ['type' => 'port_bits', 'id' => $portId, 'from' => '-1d', 'width' => 120, 'height' => 24, 'legend' => 'no']) }}" data-popup='@json($periods)'>
-                        </a>
-                    @endif
-                </div>
-            @endif
-        </div>
-    @endfor
+    @include('netconf::fabric.trace-blocks', ['blocks' => $diagram['blocks']])
 </div>
-
-@foreach ($diagram['alternatives'] as $alternative)
-    <details class="nt-more">
-        <summary>{{ count($alternative['paths']) }} equal-hop paths{{ $alternative['vni'] !== null ? ' in VNI ' . $alternative['vni'] : '' }}; the one above is the first</summary>
-        <ul>@foreach ($alternative['paths'] as $path)<li>{{ $path }}</li>@endforeach</ul>
-    </details>
-@endforeach
+@if ($diagram['routes'] > 1 || $diagram['paths'] > 1)
+    <p class="nt-note">
+        @if ($diagram['routes'] > 1){{ $diagram['routes'] }} routes: an endpoint on an ESI-LAG is attached to every PE of its segment and unicast may arrive on either. @endif
+        @if ($diagram['paths'] > $diagram['routes']){{ $diagram['paths'] }} paths in all: where the underlay has several of the same length the picture splits. @endif
+        The graph does not know which one a packet takes; <em>Trace live</em> asks each device's own forwarding table.
+    </p>
+@endif

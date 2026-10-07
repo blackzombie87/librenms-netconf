@@ -617,6 +617,16 @@ interface on both ends, the VNI, the protocol and its state, and a traffic graph
 A routed flow shows the routing step on the gateway's card, and a long path wraps onto further
 rows. The one-line form above is under *as text* for copying into a ticket.
 
+The picture splits where there is more than one way. A host on an ESI-LAG is attached to every PE
+of its segment (the DF is marked), so the path leaves the host on each of them and the branches
+meet again where they share a device; where the underlay has several paths of the same length
+(or parallel links between the same two devices) they are branches too, each named after the
+devices only it passes. The graph does not know which branch a packet takes. **Trace live** asks
+each device on the way for its own route to the far VTEP, which is the only thing that does, and
+returns the one next hop each FIB picks (with an ECMP count where it had a choice) instead of
+every candidate; for a multihomed host it walks each leg from its own PE, within the one budget of
+12 sessions per trace, and what it cannot reach it fills in from the stored graph and says so.
+
 Each endpoint is looked up in the device's own IP/MAC table, then in the EVPN MAC database,
 then in core's bridge tables, then in core ARP, and the answer names every source with what it
 returned — including the empty ones, and including whether MAC collection is off on the devices

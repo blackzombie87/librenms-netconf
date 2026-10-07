@@ -6,6 +6,8 @@ use App\Models\Device;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
+use SafferIt\LibrenmsNetconf\Fabric\Trace\TraceRunner;
+use SafferIt\LibrenmsNetconf\Fabric\View\FabricNodes;
 
 require_once __DIR__ . '/LibrenmsTestCase.php';
 
@@ -158,6 +160,36 @@ final class FabricTraceTest extends LibrenmsTestCase
         $this->assertStringNotContainsString('local switching', $page);
     }
 
+    public function testAnEndpointOnAnEsiLagIsTracedFromEveryPeOfItsSegment(): void
+    {
+        $this->actingAs(User::factory()->read()->create(['enabled' => 1]));
+        $fabric = $this->multihomedFabric();
+
+        $result = (new TraceRunner($fabric, FabricNodes::forFabric($fabric)))->run('198.51.100.4', '02:00:00:00:11:41');
+
+        // the pick is leaf-1, where the device's own IP/MAC table says the host is; the segment
+        // adds leaf-2 as a second leg, and leaf-1 learns the segment and that it is the DF
+        $this->assertTrue($result['ok']);
+        $this->assertSame(['192.0.2.61', '192.0.2.62'], array_column($result['attachments']['a'], 'address'));
+        $this->assertSame('00:11:22:33:44:55:66:77:88:99', $result['a']['esi']);
+        $this->assertTrue($result['a']['df']);
+        $this->assertCount(1, $result['branches']);
+        // leaf-1 reaches leaf-3 through leaf-2; leaf-2 is one hop from it
+        $this->assertCount(2, $result['path']);
+        $this->assertSame('192.0.2.62', $result['branches'][0]['a']['address']);
+        $this->assertCount(1, $result['branches'][0]['path']);
+        $this->assertStringContainsString('[leaf-2](', $result['branches'][0]['line']);
+
+        // the far host is on one PE: one leg, and as many routes as the near host has legs
+        $this->assertCount(1, $result['attachments']['b']);
+
+        $page = $this->get("/plugin/netconf/fabric/$fabric/trace?from=198.51.100.4&to=02:00:00:00:11:41")->assertOk()->getContent();
+        $this->assertStringContainsString('2 routes, multihomed', $page);
+        $this->assertStringContainsString('nt-split', $page);
+        $this->assertStringContainsString('via leaf-1', $page);
+        $this->assertStringContainsString('via leaf-2', $page);
+    }
+
     public function testTheCommandRoutesBetweenTwoVnisAndNamesTheGateway(): void
     {
         $fabric = $this->routedFabric();
@@ -198,6 +230,42 @@ final class FabricTraceTest extends LibrenmsTestCase
         foreach ([[$gateway, '192.0.2.63'], [$leaf3, '192.0.2.62']] as [$deviceId, $remote]) {
             DB::table(TableSchema::tableName('vni_vtep'))->insert(['device_id' => $deviceId, 'vni' => 10020, 'remote_vtep_ip' => $remote, 'last_seen' => $now]);
         }
+
+        return $fabric;
+    }
+
+    /**
+     * The three-leaf fabric with the first host on an ESI-LAG of leaf-1 and leaf-2: leaf-1's own
+     * IP/MAC table has it on ae2.0, the segment is in the ESI table of both PEs, and leaf-3
+     * reports the MAC with the segment as its source.
+     */
+    private function multihomedFabric(): int
+    {
+        $fabric = $this->threeLeafFabric();
+        $now = now();
+        $esi = '00:11:22:33:44:55:66:77:88:99';
+        $leaf = fn (int $n) => (int) DB::table(TableSchema::tableName('vtep'))->where('vtep_ip', "192.0.2.6$n")->value('device_id');
+
+        // the host is not local on leaf-1 any more: it is on the segment
+        DB::table(TableSchema::tableName('mac'))->where('device_id', $leaf(1))->delete();
+        DB::table(TableSchema::tableName('mac'))->insert([
+            'device_id' => $leaf(3), 'vni' => 10010, 'instance' => 'MACVRF-A', 'mac_address' => '020000001140',
+            'source_type' => 'esi', 'source' => $esi, 'source_device_id' => null, 'ip_addresses' => '["198.51.100.4"]',
+            'moves' => 0, 'is_duplicate' => 0, 'first_seen' => $now, 'last_seen' => $now,
+        ]);
+        foreach ([[1, 1, '192.0.2.62'], [2, 0, '192.0.2.61']] as [$n, $df, $peer]) {
+            DB::table(TableSchema::tableName('esi'))->insert([
+                'device_id' => $leaf($n), 'esi' => $esi, 'instance' => 'MACVRF-A', 'local_ifname' => 'ae2.0', 'mode' => 'all-active',
+                'status' => 'Resolved by IFL ae2.0', 'lag_status' => 'Up/Forwarding', 'is_df' => $df, 'df_ip' => '192.0.2.61',
+                'remote_vtep_ips' => json_encode([$peer]), 'last_seen' => $now,
+            ]);
+        }
+        DB::table(TableSchema::tableName('mac_ip'))->insert([
+            'device_id' => $leaf(1), 'bridge_domain' => 'VX10', 'ip_address' => '198.51.100.4', 'mac_address' => '020000001140',
+            'instance' => 'MACVRF-A', 'ifname' => 'ae2.0', 'last_seen' => $now,
+        ]);
+        // the bridge domain names the VNI through vlan_name
+        DB::table(TableSchema::tableName('vni'))->where('device_id', $leaf(1))->where('vni', 10010)->update(['vlan_name' => 'VX10']);
 
         return $fabric;
     }
