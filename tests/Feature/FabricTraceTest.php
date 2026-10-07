@@ -28,7 +28,7 @@ final class FabricTraceTest extends LibrenmsTestCase
         $this->assertStringContainsString('EVPN session', $page);
         // the picture: three device cards, and the interfaces of a hop on the link between them
         $this->assertSame(3, substr_count($page, 'nt-card nt-leaf'));
-        $this->assertStringContainsString('<code title="et-0/0/52.2121">et-0/0/52.2121</code>', $page);
+        $this->assertStringContainsString('<span class="nt-if" title="et-0/0/52.2121">et-0/0/52.2121</span>', $page);
         $this->assertStringNotContainsString('<img class="nt-spark" alt="port 0"', $page);
         // the sources it consulted are on the page, including the empty ones
         $this->assertStringContainsString('core bridge tables (ports_fdb)', $page);

@@ -67,17 +67,17 @@
         <div class="panel-body">
             @include('netconf::fabric.trace-path', ['diagram' => \SafferIt\LibrenmsNetconf\Fabric\View\TracePathDiagram::build($result, fn (string $address) => $nodes->get($address))])
             {{-- the one-liner is what the CLI prints; it stays here to copy into a ticket --}}
-            <details style="margin-bottom: 10px;">
-                <summary class="text-muted"><small>as text</small></summary>
-                <pre style="white-space: pre-wrap; margin-top: 6px;">{{ $result['line'] }}</pre>
+            <details class="nt-more">
+                <summary>as text</summary>
+                <pre style="white-space: pre-wrap;">{{ $result['line'] }}</pre>
             </details>
 
             @if ($result['path'] !== [])
                 {{-- one row per underlay hop, grouped by leg: a bridged trace has one leg, a
                      routed one has the leg into the gateway and the leg out of it, with the
                      routing step itself as the row between them. --}}
-                <details>
-                <summary class="text-muted"><small>hops as a table</small></summary>
+                <details class="nt-more">
+                <summary>hops as a table</summary>
                 <table class="table table-condensed">
                     <thead><tr><th>VNI</th><th>Hop</th><th>Out</th><th>In</th><th>Protocol</th><th>State</th></tr></thead>
                     <tbody>
@@ -106,7 +106,7 @@
                 </table>
                 </details>
                 @php($pathNodes = array_values(array_unique(array_merge(array_column($result['path'], 'a'), array_column($result['path'], 'b')))))
-                <p><small><a href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}?{{ http_build_query(['topo' => 'eagle', 'highlight' => array_values(array_filter(array_column($result['path'], 'link_key'))), 'through' => $pathNodes]) }}">show this path on the fabric picture</a></small></p>
+                <p class="nt-more"><a href="{{ route('netconf.fabric', [$fabric['id'], 'overview']) }}?{{ http_build_query(['topo' => 'eagle', 'highlight' => array_values(array_filter(array_column($result['path'], 'link_key'))), 'through' => $pathNodes]) }}">show this path on the fabric picture</a></p>
             @endif
 
             @if ($result['warnings'] !== [])
