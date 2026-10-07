@@ -26,11 +26,11 @@
                 <tr class="{{ $t['reverse'] === false ? 'warning' : '' }}">
                     <td>@include('netconf::fabric.node', ['node' => $nodes->get($t['remote_vtep_ip'])])</td>
                     <td>
-                        @if ($t['port']){!! \LibreNMS\Util\Url::portLink($t['port'], $t['ifname']) !!}@else<code>{{ $t['ifname'] }}</code>@endif
+                        @if ($t['port']){!! \LibreNMS\Util\Url::portLink($t['port'], $t['ifname']) !!}@elseif ($t['ifname'] !== null)<code>{{ $t['ifname'] }}</code>@else<span class="text-muted">&ndash;</span>@endif
                         @if ($t['ri_ifname'] && $t['ri_ifname'] !== $t['ifname'])<br><small class="text-muted">{{ $t['ri_ifname'] }}</small>@endif
                     </td>
-                    <td><small>{{ $t['mode'] }}</small></td>
-                    <td class="text-right"><small>{{ $t['nh_id'] }}</small></td>
+                    <td><small>{{ $t['mode'] ?? '' }}</small></td>
+                    <td class="text-right"><small>{{ $t['nh_id'] ?? '' }}</small></td>
                     <td class="text-right">{{ $t['mac_count'] ?? '' }}</td>
                     <td class="text-right">
                         @if ($t['port'])

@@ -74,7 +74,9 @@ final class TunnelMatrix
                 'device_id' => $deviceId,
                 'remote_vtep_ip' => $remote,
                 'remote_device_id' => $target,
-                'ifname' => $r['ifname'] ?? null,
+                // the kernel IFL; a device that does not list it (no `vtep` interface reply) still has
+                // the interface its instance entry names
+                'ifname' => $r['ifname'] ?? $r['ri_ifname'] ?? null,
                 'ri_ifname' => $r['ri_ifname'] ?? null,
                 'snmp_index' => $r['snmp_index'] ?? null,
                 'port_id' => $portId,

@@ -126,11 +126,13 @@ tables:
       remote_vtep_ip: string(../../remote-vtep-address)
       instance:       string(../../vtep-routing-instance-name)
 
-  # VXLAN tunnel per remote VTEP: the kernel vtep.N IFL and its snmp-index (= ifIndex of the ports row)
+  # VXLAN tunnel per remote VTEP: the kernel vtep.N IFL and its snmp-index (= ifIndex of the ports row).
+  # The remote type is `Shared Remote` on the EX/QFX switches and plain `Remote` on an MX; the
+  # source IFL (`Source`, `Shared Source`) does not contain the word.
   - id: tunnel
     table: tunnel
     command: vtep_if
-    rows: //physical-interface[name = 'vtep']/logical-interface[vtep-info/vtep-type = 'Shared Remote']
+    rows: //physical-interface[name = 'vtep']/logical-interface[contains(vtep-info/vtep-type, 'Remote')]
     columns:
       remote_vtep_ip: string(vtep-info/vtep-address)
       ifname:         string(name)
@@ -147,6 +149,8 @@ tables:
       mode:           string(remote-vtep-mode)
       nh_id:          number(remote-vtep-nh-id)
 
+  # the per-instance entry of the same tunnel. A switch lists it in the real block above as well,
+  # with the same mode and next-hop; an MX lists only this one, so it carries them too
   - id: tunnel-instance
     table: tunnel
     command: vtep_remote
@@ -154,3 +158,5 @@ tables:
     columns:
       remote_vtep_ip: string(remote-vtep-address)
       ri_ifname:      string(remote-vtep-interface-name)
+      mode:           string(remote-vtep-mode)
+      nh_id:          number(remote-vtep-nh-id)
