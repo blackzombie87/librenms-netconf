@@ -1,6 +1,6 @@
 <p class="text-muted">
     {{ $tunnels['total'] }} VXLAN tunnels from the monitored members, {{ $tunnels['with_port'] }} with a core port (traffic and errors)@if ($tunnels['asymmetric'] > 0), <span class="text-warning">{{ $tunnels['asymmetric'] }} without a tunnel back</span>@endif.
-    The kernel <code>vtep.N</code> IFL carries the per-tunnel counters; it only appears in core <code>ports</code> once SNMP discovery has picked it up (the Junos IF-MIB lists remote VTEP IFLs on some releases only).
+    The kernel <code>vtep.N</code> IFL carries the per-tunnel counters; it only appears in core <code>ports</code> once SNMP discovery has picked it up. A switch with <code>snmp filter-interfaces all-internal-interfaces</code> does not list its remote VTEP IFLs in SNMP at all.
 </p>
 @if ($tunnels['by_device'] === [])
     <p>No tunnels recorded yet.</p>

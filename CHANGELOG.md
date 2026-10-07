@@ -35,6 +35,11 @@
 - **Fix:** the tunnel-errors check read the discard counters from `ports`, which does not have
   them (core keeps them in `ports_statistics`), so a fabric whose tunnels had a core port could
   not finish a resolve. It reads them from the right table now.
+- **Tunnel traffic on an EX/QFX.** The remote `vtep.N` IFLs are missing from core's `ports` when the
+  switch has `snmp filter-interfaces all-internal-interfaces`: the agent does not list them (checked
+  with `show snmp mib walk ifName`; deleting the filter lists all of them under the `snmp-index`
+  the tunnel rows carry). Nothing to change in the plugin, which links them by ifIndex or name once
+  core has the ports; the README and the Tunnels tab say so.
 - README: why `validate.php` lists the plugin's migrations as extra, and what it switches off.
 
 ## 1.6.0 – 2026-10-02

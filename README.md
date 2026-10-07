@@ -482,6 +482,16 @@ The device attribute always wins over the setting, and nothing is collected whil
 *EVPN fabric view* setting is off. The per-queue counters (`netconf_queues`) work the same
 way, with the global default the other way round: off unless asked for.
 
+**Tunnel traffic and `all-internal-interfaces`.** Core can only show traffic and errors for a tunnel
+once it has the `vtep.N` IFL as a port. On an EX/QFX with `snmp filter-interfaces
+all-internal-interfaces` the agent leaves the remote VTEP IFLs out (only `vtep.32768`, the source,
+is listed), so the Tunnels tab shows the interface without a link and without graphs. Check with
+`show snmp mib walk ifName | match vtep` on the switch: the remote `vtep.N` have to be there, with
+the `snmp-index` the tunnel row carries. Deleting the filter brings them, and the other internal
+interfaces (`bme`, `em`, `pfe`, …) with them; core's `bad_ifname_regexp` hides those. The ports
+appear after the next discovery of the device, and the tunnels link on the next resolve. An MX
+has no such filter by default.
+
 ### EVPN multihoming peers as neighbours
 
 Every ESI-LAG of a leaf identifies its multihoming peer: the ESI is the same on both leaves
@@ -517,7 +527,7 @@ fabric has tabs:
 | BGP overlay | per member and peer: state and uptime (core `bgpPeers` with the evpn SAFI, or the plugin's `show bgp summary` rows), flaps, `bgp.evpn.0` prefix counts, EVPN route counts by type from `show evpn instance extensive`; a peer that other members have and one lacks is listed as *missing* |
 | VNIs | per VNI: VLAN tag per leaf (mismatch flagged), carriers, flood list with gaps and stale entries between monitored carriers, orphans, anycast IRBs, remote MACs; filter and issues-only switch |
 | ESI / multihoming | per Ethernet segment: every PE (monitored sides with LAG and resolution state, remote-only PEs), mode, DF/BDF, aliasing, LACP members not distributing, remote MACs; flags for single PE, DF disagreement, mode mismatch, LAG down, unresolved, aliasing off |
-| Tunnels | per member: `vtep.N` per remote VTEP with mode, next-hop, and — once core has discovered the IFL as a port — traffic, errors and a graph; reverse-tunnel check where the far end is monitored |
+| Tunnels | per member: `vtep.N` per remote VTEP with mode, next-hop, remote MACs, and — once core has discovered the IFL as a port — traffic, errors and a graph; reverse-tunnel check where the far end is monitored. Traffic needs the `vtep.N` IFLs in SNMP: with `set snmp filter-interfaces all-internal-interfaces` on the switch they are filtered out and the interface stays a plain label (see below) |
 | MACs | the MAC search scoped to the fabric |
 | Trace | source and destination to the full path through the fabric (below) |
 | Checks | the open issues of the consistency checks (below) with severity, message, involved devices, first and last seen; filter by severity, check and text; legend of every check |
