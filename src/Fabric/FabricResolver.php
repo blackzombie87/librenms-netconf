@@ -9,6 +9,7 @@ use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
 use SafferIt\LibrenmsNetconf\Fabric\Checks\FabricChecks;
 use SafferIt\LibrenmsNetconf\Fabric\Checks\IssueStore;
+use SafferIt\LibrenmsNetconf\Support\DeadlockRetry;
 use SafferIt\LibrenmsNetconf\Support\IpSort;
 
 /**
@@ -206,7 +207,12 @@ class FabricResolver
             $checks = $this->checks->run($now);
 
             return [$unknown, $esiLinks, $checks];
-        });
+        }, DeadlockRetry::ATTEMPTS);
+
+        // after the commit, not inside it: the MAC table is written by every leaf's poll, and
+        // holding its rows until the whole resolve ends is what let the two deadlock
+        $this->resolveMacSources($ipDevice);
+        $this->resolveTunnelMacCounts();
 
         return [
             'nodes' => count($graph->nodes()),
@@ -233,7 +239,7 @@ class FabricResolver
         $changed = DB::table(TableSchema::tableName('fabric_member'))->whereIn('vtep_ip', $addresses ?: [''])->where('pinned', 0)->delete();
         $changed += DB::table(TableSchema::tableName('vtep'))->where('device_id', $deviceId)->update(['device_id' => null, 'router_id' => null]);
         $changed += DB::table(TableSchema::tableName('underlay_link'))->where('a_device_id', $deviceId)->orWhere('b_device_id', $deviceId)->delete();
-        $changed += DB::table(TableSchema::tableName('mac'))->where('source_device_id', $deviceId)->update(['source_device_id' => null]);
+        $changed += $this->setMacDevice(DB::table(TableSchema::tableName('mac'))->where('source_device_id', $deviceId)->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all(), null);
         $changed += $this->links->forget($deviceId);
         $changed += $this->issues->forget($deviceId);
 
@@ -521,29 +527,50 @@ class FabricResolver
             $byName[(int) $port->device_id][(string) $port->ifName] = (int) $port->port_id;
         }
 
-        $tunnels = DB::table(TableSchema::tableName('tunnel'))->whereIn('device_id', $deviceIds)->whereNotNull('snmp_index')->get(['id', 'device_id', 'snmp_index', 'port_id']);
-        $this->setPortIds('tunnel', 'port_id', $tunnels, function ($tunnel) use ($byIndex) {
-            return $byIndex[(int) $tunnel->device_id][(int) $tunnel->snmp_index] ?? null;
+        // by the snmp-index of the kernel IFL, else by its name when the device did not report one
+        $tunnels = DB::table(TableSchema::tableName('tunnel'))->whereIn('device_id', $deviceIds)->where(fn ($q) => $q->whereNotNull('snmp_index')->orWhereNotNull('ifname'))->get(['id', 'device_id', 'snmp_index', 'ifname', 'port_id']);
+        $this->setPortIds('tunnel', 'port_id', $tunnels, function ($tunnel) use ($byIndex, $byName) {
+            return ($tunnel->snmp_index === null ? null : ($byIndex[(int) $tunnel->device_id][(int) $tunnel->snmp_index] ?? null))
+                ?? ($tunnel->ifname === null ? null : ($byName[(int) $tunnel->device_id][(string) $tunnel->ifname] ?? null));
         });
 
         $esis = DB::table(TableSchema::tableName('esi'))->whereIn('device_id', $deviceIds)->whereNotNull('local_ifname')->get(['id', 'device_id', 'local_ifname', 'local_port_id']);
         $this->setPortIds('esi', 'local_port_id', $esis, function ($esi) use ($byName) {
-            $name = (string) $esi->local_ifname;
-            $ports = $byName[(int) $esi->device_id] ?? [];
-
-            return $ports[$name] ?? $ports[preg_replace('/\.0$/', '', $name) ?? $name] ?? null;
+            return $this->portByName($byName[(int) $esi->device_id] ?? [], (string) $esi->local_ifname);
         });
 
         // the access port behind an IP/MAC binding; `ae36.0` is an IFL, `ae36` the port row
         $macIps = DB::table(TableSchema::tableName('mac_ip'))->whereIn('device_id', $deviceIds)->whereNotNull('ifname')->get(['id', 'device_id', 'ifname', 'port_id']);
         $this->setPortIds('mac_ip', 'port_id', $macIps, function ($row) use ($byName) {
-            $name = (string) $row->ifname;
-            $ports = $byName[(int) $row->device_id] ?? [];
-
-            return $ports[$name] ?? $ports[preg_replace('/\.\d+$/', '', $name) ?? $name] ?? null;
+            return $this->portByName($byName[(int) $row->device_id] ?? [], (string) $row->ifname);
         });
+    }
 
-        // remote MAC sources: only the addresses whose device changed are written
+    /**
+     * The port row for an interface name: a logical unit (`ae36.0`) belongs to the port row of
+     * its aggregate or physical interface (`ae36`), which is the one core graphs and links by;
+     * the unit's own row is the fallback for a device whose SNMP walk lists only that.
+     *
+     * @param  array<string, int>  $ports  ifName => port_id of one device
+     */
+    private function portByName(array $ports, string $name): ?int
+    {
+        $base = preg_replace('/\.\d+$/', '', $name) ?? $name;
+
+        return $ports[$base] ?? $ports[$name] ?? null;
+    }
+
+    /**
+     * mac.source_device_id from the remote VTEP address; only the addresses whose device
+     * changed are written. The rows are found without locking and updated by primary key in
+     * ascending order, in small batches: an UPDATE by `source` has no index to use, so it
+     * locks every row it scans and queues up behind (or deadlocks with) the leaf polls
+     * that upsert the same table.
+     *
+     * @param  array<string, int>  $ipDevice
+     */
+    private function resolveMacSources(array $ipDevice): void
+    {
         $clear = [];
         $assign = [];
         foreach (DB::table(TableSchema::tableName('mac'))->where('source_type', 'remote')->distinct()->get(['source', 'source_device_id']) as $row) {
@@ -559,9 +586,56 @@ class FabricResolver
             }
         }
         foreach ($assign + ($clear === [] ? [] : ['' => $clear]) as $deviceId => $sources) {
-            DB::table(TableSchema::tableName('mac'))->where('source_type', 'remote')->whereIn('source', $sources)
-                ->update(['source_device_id' => $deviceId === '' ? null : (int) $deviceId]);
+            foreach (array_chunk($sources, 200) as $part) {
+                $ids = DB::table(TableSchema::tableName('mac'))->where('source_type', 'remote')->whereIn('source', $part)->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all();
+                $this->setMacDevice($ids, $deviceId === '' ? null : (int) $deviceId);
+            }
         }
+    }
+
+    /**
+     * tunnel.mac_count: how many remote MACs each tunnel carries, from the MAC database of the
+     * device that owns it (the rows whose active source is the tunnel's remote VTEP). A device
+     * with no MAC rows at all is one that does not collect them, so its tunnels stay unknown
+     * rather than claiming none.
+     */
+    private function resolveTunnelMacCounts(): void
+    {
+        $mac = TableSchema::tableName('mac');
+        $counts = [];
+        foreach (DB::table($mac)->where('source_type', 'remote')->groupBy('device_id', 'source')->selectRaw('device_id, source, COUNT(*) as n')->get() as $row) {
+            $counts[(int) $row->device_id][(string) $row->source] = (int) $row->n;
+        }
+        $collecting = array_flip(DB::table($mac)->distinct()->pluck('device_id')->map(fn ($id) => (int) $id)->all());
+
+        $byCount = [];
+        foreach (DB::table(TableSchema::tableName('tunnel'))->get(['id', 'device_id', 'remote_vtep_ip', 'mac_count']) as $tunnel) {
+            $device = (int) $tunnel->device_id;
+            $want = isset($collecting[$device]) ? ($counts[$device][(string) $tunnel->remote_vtep_ip] ?? 0) : null;
+            $have = $tunnel->mac_count === null ? null : (int) $tunnel->mac_count;
+            if ($want !== $have) {
+                $byCount[$want ?? 'null'][] = (int) $tunnel->id;
+            }
+        }
+        foreach ($byCount as $count => $ids) {
+            sort($ids);
+            foreach (array_chunk($ids, 500) as $batch) {
+                DeadlockRetry::run(fn () => DB::table(TableSchema::tableName('tunnel'))->whereIn('id', $batch)->update(['mac_count' => $count === 'null' ? null : (int) $count]));
+            }
+        }
+    }
+
+    /**
+     * @param  list<int>  $ids  ascending
+     */
+    private function setMacDevice(array $ids, ?int $deviceId): int
+    {
+        $changed = 0;
+        foreach (array_chunk($ids, 500) as $batch) {
+            $changed += DeadlockRetry::run(fn () => DB::table(TableSchema::tableName('mac'))->whereIn('id', $batch)->update(['source_device_id' => $deviceId]));
+        }
+
+        return $changed;
     }
 
     /**
@@ -580,7 +654,9 @@ class FabricResolver
                 $byPort[$portId][] = (int) $row->id;
             }
         }
+        ksort($byPort);
         foreach ($byPort as $portId => $ids) {
+            sort($ids);
             DB::table(TableSchema::tableName($table))->whereIn('id', $ids)->update([$column => $portId]);
         }
     }

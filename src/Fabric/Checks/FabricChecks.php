@@ -155,12 +155,17 @@ final class FabricChecks
         }
         $portErrors = [];
         if ($portIds !== []) {
-            foreach (DB::table('ports')->whereIn('port_id', array_unique($portIds))->get(['port_id', 'ifInErrors_delta', 'ifOutErrors_delta', 'ifInDiscards_delta', 'ifOutDiscards_delta']) as $p) {
+            $portIds = array_values(array_unique($portIds));
+            // the error deltas are columns of `ports`; the discard deltas are in `ports_statistics`,
+            // one row per port that core has polled, so a port without one discarded nothing we know of
+            $discards = DB::table('ports_statistics')->whereIn('port_id', $portIds)->get(['port_id', 'ifInDiscards_delta', 'ifOutDiscards_delta'])->keyBy('port_id');
+            foreach (DB::table('ports')->whereIn('port_id', $portIds)->get(['port_id', 'ifInErrors_delta', 'ifOutErrors_delta']) as $p) {
+                $extra = $discards->get($p->port_id);
                 $portErrors[(int) $p->port_id] = [
                     'in_errors' => (int) $p->ifInErrors_delta,
                     'out_errors' => (int) $p->ifOutErrors_delta,
-                    'in_discards' => (int) $p->ifInDiscards_delta,
-                    'out_discards' => (int) $p->ifOutDiscards_delta,
+                    'in_discards' => (int) ($extra->ifInDiscards_delta ?? 0),
+                    'out_discards' => (int) ($extra->ifOutDiscards_delta ?? 0),
                 ];
             }
         }
