@@ -548,18 +548,27 @@ Above the picture, one sentence names the shape and says what it was concluded f
   lacks.
 
 On the cards: SNMP down, not monitored, monitored but without EVPN data, a degraded-ESI count,
-and a version that is not the fabric's majority. Between them, underlay links coloured **and**
-dashed by state (up solid, down dashed, no session state dotted, WAN its own pattern,
-cross-site solid in its own colour), and orange ESI-LAG brackets — anycast gateway segments on
-an `irb` unit are not ESI-LAGs and are not drawn as one. A link between two sites runs in the
-channel between the compounds and never across one it does not terminate on, and where several
-share a channel only the first labels it. Sessions from one spine — a stored one, or an
-unmonitored address several members peer with — to every member of a site are one stroke
-labelled "N up", with any session that is down or runs a different protocol set drawn beside
-it rather than exploding the site into a fan.
+and a version that is not the fabric's majority. Sites are laid out as a grid (the gateways
+above, the leaf sites three to a row, the ones that talk to each other next to each other), and
+what is drawn between them is what changes a decision:
+
+- **All the underlay links between two sites are one line**, labelled "N links", thicker the
+  more there are, coloured **and** dashed by state (up solid, any link down dashed red, no
+  session state dotted, WAN its own pattern). Clicking it lists every link with its ports and
+  state in the inspector. Lines run in the channels between the compounds, each on a lane of its
+  own, never across a compound they do not end on and never round the outside of the picture.
+- **A link inside a site is a number in the site's header** ("6 links · 7 ESIs, 3 degraded"),
+  and drawn only when it is not up. An ESI-LAG pair is drawn as an orange bracket when it is
+  degraded; the rest are counted in the header. Anycast gateway segments on an `irb` unit are
+  not ESI-LAGs and are not drawn as one.
+- **All links** in the toolbar draws every link and every pair on its own, as the picture used
+  to; a trace that runs over a link always shows it.
+- Sessions from one spine — a stored one, or an unmonitored address several members peer with —
+  to every member of a site are one stroke labelled "N up", with any session that is down or
+  runs a different protocol set drawn beside it rather than exploding the site into a fan.
 
 The toolbar collapses sites (a collapsed compound keeps its label and takes the worst state of
-what it hides), turns on the sessions out of the fabric (a border router's transit and IX
+what it hides), draws every link on its own, turns on the sessions out of the fabric (a border router's transit and IX
 peers, off by default), and turns on the devices attached to the ESI-LAGs, from core's own
 discovery rows. Clicking a card, a link or an ESI opens an inspector under the picture instead
 of leaving the page, and the selection is in the URL. An ESI panel carries the traffic of that
@@ -591,6 +600,12 @@ The **Trace** tab and `lnms netconf:trace` answer "how does this address reach t
 ```text
 IP-A (ge-0/0/38)[LEAF-A](et-0/0/52) <-> (et-0/0/53)[LEAF-B](ge-0/0/28) IP-B
 ```
+
+The web page draws the same path as a picture: a card for each endpoint (address, MAC, where it
+was found, VNI, ESI and DF) and for every device on the way, joined by links that carry the
+interface on both ends, the VNI, the protocol and its state, and a traffic graph of the ports.
+A routed flow shows the routing step on the gateway's card, and a long path wraps onto further
+rows. The one-line form above is under *as text* for copying into a ticket.
 
 Each endpoint is looked up in the device's own IP/MAC table, then in the EVPN MAC database,
 then in core's bridge tables, then in core ARP, and the answer names every source with what it
@@ -837,6 +852,28 @@ left for you to delete (rules on `netconf_metrics` fail once the table is gone).
 untouched: the SSH key and `known_hosts` files and the user definitions directory. To
 start over rather than uninstall, run `--purge`, then `plugin:enable netconf`, `migrate`
 and enable the devices again.
+
+### `validate.php` warns about "extra migrations"
+
+With the plugin installed, `./validate.php` shows a warning in the *Database* section:
+
+```
+WARN: Your database schema has extra migrations (2026_09_18_000001_create_netconf_device_status_table, …).
+If you just switched from the daily release to the stable release, your database is between releases.
+```
+
+This is expected and harmless. LibreNMS compares the `migrations` table with the files of its own
+`database/migrations/` directory and has no way for a plugin to register its migrations, so
+every plugin that ships tables shows up as "extra". The advice in the message (daily vs. stable
+release) does not apply here, and nothing needs to be done: `./lnms migrate` runs the plugin's
+migrations either way, and `netconf:uninstall --purge` removes the rows again.
+
+One side effect to know about: while that warning is shown, `validate.php` does not run the
+*schema structure* and *collation* checks for the whole installation (they only run on a
+schema LibreNMS considers current). Run them on a second installation without the plugin, or
+temporarily after `./lnms netconf:uninstall --purge`, if you need them. The plugin's tables
+(`netconf_*`) would be reported as "extra tables" by the structure check, with a `DROP TABLE`
+fix offered; **do not apply that fix**.
 
 ## Development
 

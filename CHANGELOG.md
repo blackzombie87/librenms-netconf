@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+- **Fewer deadlocks on `netconf_evpn_mac`.** A leaf's table rows are written in a fixed order
+  by key and each statement is repeated (up to four times, with a short pause) when InnoDB picks
+  it as the victim of a lock conflict. The fabric resolver no longer updates
+  `netconf_evpn_mac.source_device_id` inside its long transaction, and then only by primary
+  key; the transaction itself is retried as a whole. A failed write is logged with its SQLSTATE
+  and driver message, not with the statement and every bound MAC and address.
+- **ESI-LAG traffic graphs.** An ESI-LAG (and an IP/MAC binding) is linked to the aggregate port
+  `ae36`, not to its logical unit `ae36.0`, so the aggregated graph sums ports that carry
+  counters. The links heal on the next fabric resolve.
+- **MAC addresses on a fabric's MACs tab** open that tab again (fabric header and tabs stay),
+  instead of the global search page.
+- **The fabric picture is readable.** Sites are laid out as a grid, the ones that talk to each
+  other side by side. All the underlay links between two sites are one line ("4 links", thicker
+  the more there are, dashed red when one is down) instead of one per pair of devices; a link
+  inside a site is a number in its header and is drawn only when it is not up; an ESI pair is
+  drawn when it is degraded. *All links* in the toolbar (`?links=1`) draws everything as before.
+  Routing is a new grid router (`GridRouter`): lanes in every channel, a lane taken by one edge
+  costs the next one, nothing runs round the outside of the picture, and labels no longer sit on
+  top of each other. The browser runs the same algorithm after a drag, and a unit test checks that
+  the two draw the same paths.
+- **The trace is a picture** instead of a line of text: cards for the endpoints and every device,
+  links with the interfaces, VNI, protocol, state and traffic. The text form stays under *as
+  text* and is what the CLI prints.
+- **Tunnels of an MX.** A router lists its remote tunnels as `Remote` (a switch says `Shared Remote`)
+  and has only the per-instance entry of each, so its tunnel rows had no interface, port, mode or
+  next-hop and the page drew an empty pill. The mapping reads both types and takes mode and
+  next-hop from the instance entry too; a tunnel finds its core port by name when the device gave
+  no ifIndex; the MACs column is filled from the device's MAC database (blank, not 0, where the
+  device collects none). Checked against a capture of an MX204 on 23.4R2 (addresses replaced in
+  the fixtures).
+- **Fix:** the tunnel-errors check read the discard counters from `ports`, which does not have
+  them (core keeps them in `ports_statistics`), so a fabric whose tunnels had a core port could
+  not finish a resolve. It reads them from the right table now.
+- README: why `validate.php` lists the plugin's migrations as extra, and what it switches off.
+
 ## 1.6.0 – 2026-10-02
 
 Routed traces. Two endpoints in different VNIs used to end the trace with the gateways that
