@@ -111,7 +111,7 @@ class SensorWriter
             $current = $value->value;
             $previous = $sensor->sensor_current === null ? null : (float) $sensor->sensor_current;
             $class = $value->mapping->class;
-            $unit = \LibreNMS\Enum\Sensor::tryFrom($class)?->unit() ?? '';
+            $unit = self::unit($class);
 
             $datastore->put($this->device, 'sensor', [
                 'sensor_class' => $class,
@@ -254,5 +254,16 @@ class SensorWriter
         }
 
         return null;
+    }
+
+    /**
+     * The unit of a sensor class, '' for an unknown one. The enum is LibreNMS\Enum\SensorType
+     * from librenms#20764 on and LibreNMS\Enum\Sensor before.
+     */
+    private static function unit(string $class): string
+    {
+        $enum = enum_exists(\LibreNMS\Enum\SensorType::class) ? \LibreNMS\Enum\SensorType::class : \LibreNMS\Enum\Sensor::class;
+
+        return $enum::tryFrom($class)?->unit() ?? '';
     }
 }

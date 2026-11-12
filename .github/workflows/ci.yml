@@ -74,8 +74,9 @@ jobs:
       - run: vendor/bin/pest
 
   # Feature suite (tests/Feature, phpunit.feature.xml): needs a LibreNMS installation and its
-  # testing database. Pinned to a LibreNMS tag on purpose - bump it deliberately, a plugin
-  # that breaks against a newer core should fail here and not on someone's poller.
+  # testing database. Pinned to LibreNMS tags on purpose - bump them deliberately - plus
+  # master, which daily-updating installs run: a plugin that breaks against a newer core
+  # should fail here and not on someone's poller.
   # First green run 2026-09-22 (40 tests); dev/README.md keeps the Docker recipe for the
   # live checks that need a real device.
   feature:
@@ -84,10 +85,19 @@ jobs:
     name: Feature tests (LibreNMS ${{ matrix.librenms }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        # the oldest core the plugin is kept working on (what the development container runs)
-        # and the current release: the seams this plugin uses live in both
-        librenms: ['26.7.0', '26.9.1.1']
+        # the oldest core the plugin is kept working on (what the development container runs),
+        # the releases since, and master: daily-updating installs run master, and its module,
+        # graph and Laravel 13 changes broke every lnms call before 1.6.1. master needs PHP 8.4.
+        librenms: ['26.7.0', '26.9.1.1', '26.10.2', 'master']
+        php: ['8.3']
+        include:
+          - librenms: master
+            php: '8.4'
+        exclude:
+          - librenms: master
+            php: '8.3'
     env:
       LIBRENMS_PATH: ${{ github.workspace }}/librenms
     services:
@@ -116,7 +126,7 @@ jobs:
           path: librenms
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: ${{ matrix.php }}
           extensions: dom, libxml, openssl, mysqlnd, pdo_mysql, gd, bcmath, intl, zip, snmp
           coverage: none
       # RrdLayoutTest skips without rrdtool, and phpunit.feature.xml fails the run on a skip
@@ -167,6 +177,8 @@ jobs:
       - name: Static analysis against this LibreNMS
         working-directory: plugin
         run: composer analyse:librenms
+      # LibreNMS's phpunit, not the plugin's: the suite runs inside LibreNMS's autoloader, and
+      # on master (PHPUnit 12) the plugin's PHPUnit 11 cannot drive LibreNMS's copy
       - name: Run the feature suite
         working-directory: plugin
-        run: vendor/bin/phpunit -c phpunit.feature.xml
+        run: ../librenms/vendor/bin/phpunit -c phpunit.feature.xml

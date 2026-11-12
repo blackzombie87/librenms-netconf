@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Log;
 use LibreNMS\Interfaces\Data\DataStorageInterface;
 use LibreNMS\Interfaces\Module;
 use LibreNMS\Interfaces\Plugins\PluginManagerInterface;
+use LibreNMS\Enum\PollingMethodType;
 use LibreNMS\OS;
-use LibreNMS\Polling\ConnectivityHelper;
 use LibreNMS\Polling\ModuleStatus;
 use SafferIt\LibrenmsNetconf\Collect\MetricWriter;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
@@ -34,6 +34,12 @@ use SafferIt\LibrenmsNetconf\NetconfSettings;
  * enable_by_default setting); the usual device "Modules" tab toggles apply on top.
  *
  * No SNMP requirement: NETCONF-only devices (snmp_disable) work as long as they are up.
+ *
+ * Two module APIs are served: up to LibreNMS 26.10 shouldPoll()/shouldDiscover() receive the
+ * ModuleStatus and a ConnectivityHelper; from librenms#20992 on they receive the OS only (the
+ * core checks the module status itself) and pollingMethods() is asked instead. The trailing
+ * optional parameters keep the signatures compatible with both interfaces; the removed
+ * ConnectivityHelper is typed mixed so its class is never named.
  */
 class Netconf implements Module
 {
@@ -45,14 +51,25 @@ class Netconf implements Module
         return [];
     }
 
-    public function shouldDiscover(OS $os, ModuleStatus $status, ConnectivityHelper $connectivity): bool
+    /**
+     * Offered on every device whatever it is polled with: NETCONF has its own SSH session and
+     * is not one of the core polling methods.
+     *
+     * @return list<PollingMethodType>
+     */
+    public function pollingMethods(Device $device): array
     {
-        return $this->should($os, $status, $connectivity, false);
+        return array_values(array_filter(PollingMethodType::cases(), fn (PollingMethodType $type) => $type !== PollingMethodType::Unknown));
     }
 
-    public function shouldPoll(OS $os, ModuleStatus $status, ConnectivityHelper $connectivity): bool
+    public function shouldDiscover(OS $os, ?ModuleStatus $status = null, mixed $connectivity = null): bool
     {
-        return $this->should($os, $status, $connectivity, true);
+        return $this->should($os, $status, false);
+    }
+
+    public function shouldPoll(OS $os, ?ModuleStatus $status = null, mixed $connectivity = null): bool
+    {
+        return $this->should($os, $status, true);
     }
 
     public function discover(OS $os): void
@@ -137,9 +154,10 @@ class Netconf implements Module
         return $dump;
     }
 
-    private function should(OS $os, ModuleStatus $status, ConnectivityHelper $connectivity, bool $poll): bool
+    private function should(OS $os, ?ModuleStatus $status, bool $poll): bool
     {
-        if (! $status->isEnabled() || ! $connectivity->isAvailable()) {
+        // the device status is what ConnectivityHelper::isAvailable() returned before librenms#20992
+        if (($status !== null && ! $status->isEnabled()) || ! $os->getDevice()->status) {
             return false;
         }
 

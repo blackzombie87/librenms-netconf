@@ -4,10 +4,10 @@ namespace SafferIt\LibrenmsNetconf\Tests\Feature;
 
 use App\Models\Device;
 use App\Plugins\PluginManager;
+use Illuminate\Support\Facades\Schema;
 use LibreNMS\Interfaces\Plugins\PluginManagerInterface;
 use LibreNMS\Modules\Netconf;
 use LibreNMS\OS;
-use LibreNMS\Polling\ConnectivityHelper;
 use LibreNMS\Polling\ModuleStatus;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Models\NetconfDeviceStatus;
@@ -19,6 +19,9 @@ require_once __DIR__ . '/LibrenmsTestCase.php';
  * reachable device with credentials is polled and discovered; a device that is down, a
  * disabled module, a disabled plugin or missing credentials stop both; the back-off stops
  * polling only; SNMP is not required.
+ *
+ * Called the way LibreNMS from librenms#20992 on calls it (no ConnectivityHelper); the
+ * ModuleStatus is passed as well, which is what 26.10 and older hand over.
  */
 final class ModuleScheduleTest extends LibrenmsTestCase
 {
@@ -26,15 +29,19 @@ final class ModuleScheduleTest extends LibrenmsTestCase
     {
         $module = new Netconf;
         $should = fn (Device $device, ?ModuleStatus $status = null) => [
-            $module->shouldPoll($this->os($device), $status ?? new ModuleStatus(true), new ConnectivityHelper($device)),
-            $module->shouldDiscover($this->os($device), $status ?? new ModuleStatus(true), new ConnectivityHelper($device)),
+            $module->shouldPoll($this->os($device), $status ?? new ModuleStatus(true)),
+            $module->shouldDiscover($this->os($device), $status ?? new ModuleStatus(true)),
         ];
 
         // enabled, up, with credentials: both
         $this->assertSame([true, true], $should($this->device()));
 
-        // SNMP disabled on the device changes nothing: the module talks NETCONF only
-        $this->assertSame([true, true], $should($this->device(['snmp_disable' => 1])));
+        // SNMP disabled on the device changes nothing: the module talks NETCONF only (from
+        // librenms#20992 on there is no snmp_disable column, a device just has no snmp method)
+        if (Schema::hasColumn('devices', 'snmp_disable')) {
+            $this->assertSame([true, true], $should($this->device(['snmp_disable' => 1])));
+        }
+        $this->assertSame([true, true], [$module->shouldPoll($this->os($this->device())), $module->shouldDiscover($this->os($this->device()))]);
 
         // the device is down
         $this->assertSame([false, false], $should($this->device(['status' => 0])));

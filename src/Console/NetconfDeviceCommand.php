@@ -88,7 +88,7 @@ class NetconfDeviceCommand extends Command
 
         try {
             $devices = DeviceSelection::resolve($this->option('group'), $this->option('os'));
-            $input = $this->input();
+            $input = $this->changes();
             if ($input === null) {
                 return self::FAILURE;
             }
@@ -132,7 +132,7 @@ class NetconfDeviceCommand extends Command
      *
      * @return array<string, mixed>|null
      */
-    private function input(): ?array
+    private function changes(): ?array
     {
         $input = [
             'enabled' => $this->option('enable') ? '1' : ($this->option('disable') ? '0' : null),
@@ -169,7 +169,7 @@ class NetconfDeviceCommand extends Command
 
     private function applyChanges(Device $device): bool
     {
-        $input = $this->input();
+        $input = $this->changes();
         if ($input === null) {
             return false;
         }

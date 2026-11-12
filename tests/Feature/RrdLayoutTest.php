@@ -51,7 +51,7 @@ final class RrdLayoutTest extends LibrenmsTestCase
     public function testTheFileOrderWinsAndMissingDataSourcesAreAdded(): void
     {
         $file = $this->file('netconf-test');
-        $this->rrd(['create', (string) $file, '--step', '300', 'DS:received:GAUGE:600:U:U', 'DS:active:GAUGE:600:U:U', 'RRA:AVERAGE:0.5:1:12']);
+        $this->rrd(['create', $this->onDisk($file), '--step', '300', 'DS:received:GAUGE:600:U:U', 'DS:active:GAUGE:600:U:U', 'RRA:AVERAGE:0.5:1:12']);
         $layout = $this->layout();
 
         // YAML order differs from the file: the file wins, so values keep their slot
@@ -61,7 +61,7 @@ final class RrdLayoutTest extends LibrenmsTestCase
         // a new field in the definition is appended to the file and to the order
         $order = $layout->reconcile($file, ['active' => 'GAUGE', 'received' => 'GAUGE', 'accepted' => 'GAUGE'], null);
         $this->assertSame(['received', 'active', 'accepted'], array_keys($order));
-        $this->assertStringContainsString('ds[accepted]', (string) $this->rrd(['info', (string) $file]));
+        $this->assertStringContainsString('ds[accepted]', (string) $this->rrd(['info', $this->onDisk($file)]));
         $this->assertStringContainsString('2 file(s) verified, 1 data source(s) added, 0 rrdtool call(s) failed', (string) $layout->summary());
 
         // the stored order covers every wanted field: no rrdtool call at all
@@ -78,7 +78,7 @@ final class RrdLayoutTest extends LibrenmsTestCase
 
         // a file rrdtool cannot read: the last known order is kept, nothing is invented
         $broken = $this->file('broken');
-        file_put_contents((string) $broken, 'not an rrd');
+        file_put_contents($this->onDisk($broken), 'not an rrd');
         $stored = ['drops' => 'COUNTER', 'errors' => 'COUNTER'];
         $this->assertSame($stored, $layout->reconcile($broken, $desired + ['late' => 'GAUGE'], $stored));
         $this->assertStringContainsString('failed', (string) $layout->summary());
@@ -87,6 +87,12 @@ final class RrdLayoutTest extends LibrenmsTestCase
     private function file(string $name): string|\Stringable
     {
         return Rrd::name(self::HOST, $name);
+    }
+
+    /** The file on disk: Rrd::name()'s string form is relative to rrd_dir from librenms#20479 on */
+    private function onDisk(string|\Stringable $file): string
+    {
+        return str_starts_with((string) $file, '/') ? (string) $file : $this->dir . '/' . $file;
     }
 
     private function layout(): RrdLayout

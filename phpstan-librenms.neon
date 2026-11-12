@@ -23,3 +23,25 @@ parameters:
             identifier: argument.type
             message: '#checkRrdExists\(\) expects LibreNMS\\RRD\\RrdPath, string\|Stringable given#'
             reportUnmatched: false
+        # each LibreNMS has one of the two graph APIs (librenms#21118) and one of the two names
+        # of the sensor enum (librenms#20764); the code picks the one present at runtime
+        -
+            identifier: class.notFound
+            path: src/Support/CoreGraph.php
+            reportUnmatched: false
+        -
+            identifier: staticMethod.notFound
+            message: '#Rrd::graph\(\)#'
+            path: src/Support/CoreGraph.php
+            reportUnmatched: false
+        -
+            identifier: class.notFound
+            message: '#LibreNMS\\Enum\\Sensor(Type)? not found#'
+            path: src/Collect/SensorWriter.php
+            reportUnmatched: false
+        # Laravel 13 LibreNMS: larastan types Plugin::$settings from the column, not the array
+        # cast; core assigns arrays the same way (PluginManager::setSettings())
+        -
+            identifier: assign.propertyType
+            message: '#Plugin::\$settings \(string\|null\) does not accept#'
+            reportUnmatched: false

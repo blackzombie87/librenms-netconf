@@ -116,7 +116,7 @@ Users come from LibreNMS's factory with `enabled => 1` (the default is a disable
 ## Pre-tag checklist
 
 The `feature` job of `.github/workflows/ci.yml` runs steps 1–4 on every push, against every core
-in its `librenms` matrix (26.7.0 and 26.9.1.1 as of 2026-09-24; first green run 2026-09-22 with
+in its `librenms` matrix (26.7.0, 26.9.1.1, 26.10.2 and master as of 2026-11-12; first green run 2026-09-22 with
 40 tests); before a tag they still run by hand here, and steps 5–7 only exist here because they
 need the fixtures directory, a real device, or a production-shaped installation:
 

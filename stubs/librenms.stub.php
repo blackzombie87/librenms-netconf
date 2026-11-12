@@ -283,7 +283,19 @@ namespace LibreNMS\Enum {
         case Error = 5;
     }
 
+    /** Up to 26.9, renamed to SensorType in librenms#20764 */
     enum Sensor: string
+    {
+        case Count = 'count';
+        case State = 'state';
+
+        public function unit(): string
+        {
+            return '';
+        }
+    }
+
+    enum SensorType: string
     {
         case Count = 'count';
         case State = 'state';
@@ -337,9 +349,12 @@ namespace LibreNMS\Interfaces {
         /** @return list<string> */
         public function dependencies(): array;
 
-        public function shouldDiscover(\LibreNMS\OS $os, \LibreNMS\Polling\ModuleStatus $status, \LibreNMS\Polling\ConnectivityHelper $connectivity): bool;
+        /** @return list<\LibreNMS\Enum\PollingMethodType> */
+        public function pollingMethods(\App\Models\Device $device): array;
 
-        public function shouldPoll(\LibreNMS\OS $os, \LibreNMS\Polling\ModuleStatus $status, \LibreNMS\Polling\ConnectivityHelper $connectivity): bool;
+        public function shouldDiscover(\LibreNMS\OS $os): bool;
+
+        public function shouldPoll(\LibreNMS\OS $os): bool;
 
         public function discover(\LibreNMS\OS $os): void;
 
@@ -377,13 +392,14 @@ namespace LibreNMS\Polling {
             return true;
         }
     }
+}
 
-    class ConnectivityHelper
+namespace LibreNMS\Enum {
+    enum PollingMethodType: string
     {
-        public function isAvailable(): bool
-        {
-            return true;
-        }
+        case Icmp = 'icmp';
+        case Snmp = 'snmp';
+        case Unknown = 'unknown';
     }
 }
 
@@ -456,6 +472,7 @@ namespace LibreNMS\Enum {
 }
 
 namespace LibreNMS\Data\Graphing {
+    /** Up to 26.10, App\Data\Graphing\GraphParameters from librenms#21118 on */
     class GraphParameters
     {
         public readonly \LibreNMS\Enum\ImageFormat $imageFormat;
@@ -482,6 +499,57 @@ namespace LibreNMS\Data\Graphing {
         {
             return [];
         }
+    }
+}
+
+namespace App\Data\Graphing {
+    readonly class GraphParameters
+    {
+        public \LibreNMS\Enum\ImageFormat $imageFormat;
+
+        public int $width;
+
+        public int $height;
+
+        /** @param  array<string, mixed>  $input */
+        public function __construct(array $input)
+        {
+            $this->imageFormat = \LibreNMS\Enum\ImageFormat::Svg;
+            $this->width = 0;
+            $this->height = 0;
+        }
+
+        public function visible(string $element): bool
+        {
+            return true;
+        }
+    }
+
+    readonly class GraphOptions
+    {
+    }
+}
+
+namespace App\Graphs\Rrd {
+    class RrdOptionsBuilder
+    {
+        public function __construct(\App\Data\Graphing\GraphParameters $params)
+        {
+        }
+
+        /** @return array<int, string> */
+        public function build(string $title, \App\Data\Graphing\GraphOptions $options): array
+        {
+            return [];
+        }
+    }
+}
+
+namespace LibreNMS\RRD\Backend {
+    interface RrdBackendInterface
+    {
+        /** @param  array<int, string>  $options */
+        public function graph(array $options, ?string $timezone = null): string;
     }
 }
 

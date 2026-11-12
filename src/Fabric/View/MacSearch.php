@@ -5,6 +5,7 @@ namespace SafferIt\LibrenmsNetconf\Fabric\View;
 use App\Models\Device;
 use App\Models\Port;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use SafferIt\LibrenmsNetconf\Collect\NetconfService;
 use SafferIt\LibrenmsNetconf\Definitions\DeviceFacts;
 use SafferIt\LibrenmsNetconf\Definitions\TableSchema;
@@ -90,10 +91,18 @@ final class MacSearch
             );
         }
         if ($fdb !== null) {
-            $result['fdb'] = $fdb->join('ports', 'ports.port_id', '=', 'ports_fdb.port_id')
-                ->leftJoin('vlans', 'vlans.vlan_id', '=', 'ports_fdb.vlan_id')
-                ->orderBy('ports_fdb.mac_address')->limit($limit)
-                ->get(['ports_fdb.device_id', 'ports_fdb.mac_address', 'ports_fdb.port_id', 'ports.ifName', 'vlans.vlan_vlan', 'vlans.vlan_name', 'ports_fdb.updated_at'])
+            // the fdb row names its VLAN by number from librenms 2026_11_04 on (ports_fdb.vlan),
+            // by the vlans row id before (ports_fdb.vlan_id)
+            $fdb->join('ports', 'ports.port_id', '=', 'ports_fdb.port_id');
+            if (Schema::hasColumn('ports_fdb', 'vlan')) {
+                $fdb->leftJoin('vlans', fn ($join) => $join->on('vlans.device_id', '=', 'ports_fdb.device_id')->on('vlans.vlan_vlan', '=', 'ports_fdb.vlan'));
+                $vlan = 'ports_fdb.vlan as vlan_vlan';
+            } else {
+                $fdb->leftJoin('vlans', 'vlans.vlan_id', '=', 'ports_fdb.vlan_id');
+                $vlan = 'vlans.vlan_vlan';
+            }
+            $result['fdb'] = $fdb->orderBy('ports_fdb.mac_address')->limit($limit)
+                ->get(['ports_fdb.device_id', 'ports_fdb.mac_address', 'ports_fdb.port_id', 'ports.ifName', $vlan, 'vlans.vlan_name', 'ports_fdb.updated_at'])
                 ->map(fn ($r) => (array) $r)->all();
         }
         if ($arp !== null) {

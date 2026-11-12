@@ -10,9 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
-use LibreNMS\Data\Graphing\GraphParameters;
 use SafferIt\LibrenmsNetconf\Models\NetconfMetric;
 use SafferIt\LibrenmsNetconf\Models\NetconfPortMetric;
+use SafferIt\LibrenmsNetconf\Support\CoreGraph;
 use SafferIt\LibrenmsNetconf\Support\GraphBuilder;
 
 /**
@@ -160,7 +160,7 @@ class GraphController extends Controller
      */
     private function render(Request $request, GraphBuilder $builder, string $title, array $files): Response
     {
-        $params = new GraphParameters([
+        $graph = CoreGraph::make([
             'type' => 'netconf_metric',
             'from' => $request->query('from', '-1d'),
             'to' => $request->query('to'),
@@ -173,34 +173,29 @@ class GraphController extends Controller
 
         $missing = array_filter($files, fn ($f) => ! Rrd::checkRrdExists($f));
         if ($builder->count() === 0 || $missing !== []) {
-            return $this->errorImage($params, $builder->count() === 0 ? 'No data' : 'RRD missing');
-        }
-
-        $options = [...$params->toRrdOptions(), ...$builder->options($title, $builder->isRate() ? 'per second' : null)];
-        if (! $params->visible('legend')) {
-            $options[] = '--no-legend';
+            return $this->errorImage($graph, $builder->count() === 0 ? 'No data' : 'RRD missing');
         }
 
         try {
-            $image = Rrd::graph($options);
+            $image = $graph->draw($title, $builder->options($title, $builder->isRate() ? 'per second' : null));
         } catch (\Throwable $e) {
             report($e);
 
-            return $this->errorImage($params, 'Error');
+            return $this->errorImage($graph, 'Error');
         }
 
         return response($image, 200, [
-            'Content-Type' => $params->imageFormat->contentType(),
+            'Content-Type' => $graph->contentType(),
             'Cache-Control' => 'private, max-age=60',
         ]);
     }
 
-    private function errorImage(GraphParameters $params, string $text): Response
+    private function errorImage(CoreGraph $graph, string $text): Response
     {
         $svg = sprintf(
             '<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><rect width="100%%" height="100%%" fill="#f5f5f5"/><text x="50%%" y="50%%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#888">%s</text></svg>',
-            $params->width,
-            $params->height,
+            $graph->width(),
+            $graph->height(),
             htmlspecialchars($text)
         );
 

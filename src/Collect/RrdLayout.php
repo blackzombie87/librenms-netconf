@@ -49,7 +49,7 @@ class RrdLayout
      *
      * $file is what Rrd::name() returned: a path string up to LibreNMS 26.9, an RrdPath after
      * (librenms#20649). checkRrdExists() wants exactly that type, so it is handed on unchanged;
-     * its string form is the path rrdtool is called with (relative to rrd_dir with rrdcached).
+     * rrdtool is called with path().
      *
      * @param  array<string, string>  $desired  the mapping's RRD fields in YAML order
      * @param  array<string, string>|null  $stored  order of the last verified write, null when unknown
@@ -64,7 +64,7 @@ class RrdLayout
         if (! Rrd::checkRrdExists($file)) {
             return $desired;   // the store creates the file in this order
         }
-        $file = (string) $file;
+        $file = $this->path($file);
 
         $current = $this->dataSources($file);
         if ($current === null) {
@@ -83,6 +83,20 @@ class RrdLayout
         $this->stats['added'] += count($add);
 
         return $order;
+    }
+
+    /**
+     * The path rrdtool is called with: relative to rrd_dir with rrdcached, else the full path.
+     * An RrdPath's string form is relative from librenms#20479 on, also without rrdcached, and
+     * rrdtool runs here without rrd_dir as its working directory.
+     */
+    private function path(string|\Stringable $file): string
+    {
+        if ($this->rrdcached === '' && $file instanceof \Stringable && method_exists($file, 'fullPath')) {
+            return (string) $file->fullPath();
+        }
+
+        return (string) $file;
     }
 
     /**
