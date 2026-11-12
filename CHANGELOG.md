@@ -1,7 +1,17 @@
 # Changelog
 
-## Unreleased
+## 1.7.0 – 2026-11-12
 
+- **Works with LibreNMS master after the polling-methods and Laravel 13 changes.** Every
+  `lnms` call died with "Declaration of LibreNMS\Modules\Netconf::shouldDiscover() must be
+  compatible": `Module::shouldPoll()/shouldDiscover()` take the OS only since librenms#20992 and
+  the module now also answers `pollingMethods()` (every method: NETCONF is none of them). The
+  extra parameters are optional, so 26.10 and older keep working. Also fixed for master:
+  `lnms netconf:device` clashed with Laravel 13's public `Command::input()`; the plugin graphs
+  use the graph API of librenms#21118 (`App\Data\Graphing\GraphParameters`, the rrd backend);
+  the sensor unit comes from `SensorType` (librenms#20764, already in 26.10); the MAC search
+  joins `ports_fdb.vlan` (2026_11_04 migration); the RRD layout check hands rrdtool the full
+  path now that an RrdPath's string form is relative (librenms#20479).
 - **Fewer deadlocks on `netconf_evpn_mac`.** A leaf's table rows are written in a fixed order
   by key and each statement is repeated (up to four times, with a short pause) when InnoDB picks
   it as the victim of a lock conflict. The fabric resolver no longer updates
