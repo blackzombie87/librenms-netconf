@@ -39,6 +39,12 @@ parameters:
             message: '#LibreNMS\\Enum\\Sensor(Type)? not found#'
             path: src/Collect/SensorWriter.php
             reportUnmatched: false
+        # pollingMethods() is only asked by cores from librenms#20992 on, the ones with the enum
+        -
+            identifier: class.notFound
+            message: '#LibreNMS\\Enum\\PollingMethodType#'
+            path: src/Modules/Netconf.php
+            reportUnmatched: false
         # Laravel 13 LibreNMS: larastan types Plugin::$settings from the column, not the array
         # cast; core assigns arrays the same way (PluginManager::setSettings())
         -
